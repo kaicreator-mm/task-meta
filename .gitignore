@@ -2,3 +2,4 @@ node_modules/
 .obs/
 .task-meta/
 *.log
+!test/fixtures/**
