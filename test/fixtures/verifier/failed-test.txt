@@ -1,0 +1,15 @@
+v24.21.0
+== lint ==
+== typecheck ==
+== test ==
+✔ case one (1.2ms)
+✖ case bad (0.4ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 19
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+!! test 未通过 — task-done 前必须修复
+task-check: 未通过
