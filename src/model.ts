@@ -81,6 +81,21 @@ export interface MetricValue {
   epistemic: Epistemic;
   coverage: Coverage;
   source_refs: string[];
+  /** v5 per-metric source identity (ADS v4.16 §16.7). Required to project into ads/github/v5. */
+  identity?: MetricIdentity;
+}
+
+export interface MetricIdentity {
+  metric_id: string;
+  observation_id: string;
+  logical_call_ref: string;
+  physical_attempt_ref: string;
+  adapter_id: string;
+  /** Raw provider routing is withheld from public projections; null unless cleared. */
+  provider_run_ref: string | null;
+  measurement_kind: "COUNTER_DELTA" | "CUMULATIVE_SNAPSHOT" | "GAUGE" | "UNKNOWN";
+  window_id: string;
+  source_revision: number;
 }
 
 export type VerifierStatus = "PASS" | "FAIL" | "PARTIAL" | "NOT_RUN" | "UNKNOWN";
@@ -101,10 +116,18 @@ export interface VerifierOutcome {
 export interface CostObservation {
   value: number | null;
   currency: string | null;
-  basis: "BILLED" | "ESTIMATED" | "UNKNOWN";
+  /** PROVIDER_REPORTED exists only in ads/github/v5; a v4 projection must refuse it. */
+  basis: "BILLED" | "PROVIDER_REPORTED" | "ESTIMATED" | "UNKNOWN";
   pricing_basis: string | null;
   epistemic: Epistemic;
   source_refs: string[];
+  /** v5 accounting refs; required by v5 when basis is BILLED. */
+  accounting?: {
+    accounting_ref: string | null;
+    economic_scope_ref: string | null;
+    billing_window_ref: string | null;
+    cost_category: string | null;
+  };
 }
 
 export type AttemptBinding = "CANONICAL_DISPATCH" | "COLLECTOR_ONLY" | "UNKNOWN";
@@ -149,4 +172,136 @@ export interface ManifestPointer {
   ref: string;
   sha256: string;
   access: "PROJECT_PRIVATE" | "RESTRICTED";
+}
+
+// ---- v0.1 R2: private diagnostic records (#11 #15 #16 #17). Never projected to GitHub
+// unless the effective ADS report schema has a field for them. ----
+
+/** #11: terminal classification. STRICT_TERMINAL_SUCCESS needs every required check passed on the exact subject. */
+export type OutcomeClass =
+  | "STRICT_TERMINAL_SUCCESS"
+  | "PARTIAL_PROGRESS"
+  | "TERMINAL_FAILURE"
+  | "BLOCKED"
+  | "UNVERIFIED";
+
+/** #11: externally observed quality qualifier of a verifier (oracle revision, contamination, challenge…). */
+export interface VerifierQualifier {
+  kind: string;
+  value: string | null;
+  epistemic: Epistemic;
+  source_ref: string | null;
+  limits: string[];
+}
+
+/** #11: one independent verifier execution, as observed. Agent self-report never produces one. */
+export interface VerifierRecord {
+  verifier_id: string;
+  verifier_version: string | null;
+  contract_ref: string | null;
+  subject_sha: string | null;
+  /** Bounded, path-free environment facts (e.g. node major version). */
+  environment: Record<string, string>;
+  required_scope: string[];
+  checked: string[];
+  failed: string[];
+  skipped: string[];
+  unchecked: string[];
+  cases: {
+    total: number | null;
+    passed: number | null;
+    failed: number | null;
+    skipped: number | null;
+    epistemic: Epistemic;
+  };
+  exit_code: number | null;
+  /** CURRENT only when subject_sha equals the attempt's witnessed source_sha. */
+  currentness: "CURRENT" | "STALE" | "UNKNOWN";
+  qualifiers: VerifierQualifier[];
+  source_refs: string[];
+  epistemic: Epistemic;
+}
+
+export interface VerifierAssessment {
+  outcome_class: OutcomeClass;
+  records: VerifierRecord[];
+  conflicts: string[];
+  limits: string[];
+}
+
+/** #15: one source state the attempt touched. Never synthesized for uncommitted work. */
+export interface VersionState {
+  version_id: string;
+  sha: string | null;
+  parents: string[] | null;
+  first_seen_at: string | null;
+  observed_in: string[];
+  observability: "COMMITTED" | "INCOMPLETE" | "UNKNOWN";
+  epistemic: Epistemic;
+}
+
+export type TransitionKind = "ADVANCE" | "NO_CHANGE" | "REVISIT" | "INCOMPLETE" | "UNKNOWN";
+
+/** #15: one run segment's before→after source change. */
+export interface Transition {
+  transition_id: string;
+  from_version: string | null;
+  to_version: string | null;
+  run_segment_ref: string;
+  started_at: string | null;
+  finished_at: string | null;
+  change: {
+    files_changed: number | null;
+    insertions: number | null;
+    deletions: number | null;
+    diff_digest: string | null;
+  };
+  verifier_refs: string[];
+  kind: TransitionKind;
+  epistemic: Epistemic;
+  limits: string[];
+}
+
+export interface VersionLineage {
+  versions: VersionState[];
+  transitions: Transition[];
+  revisits: { version_id: string; transition_ids: string[] }[];
+  limits: string[];
+}
+
+export type LabelKind =
+  | "ACTION_CATEGORY"
+  | "EDIT_MAGNITUDE"
+  | "LOOP_CLUSTER"
+  | "REVISIT_CANDIDATE"
+  | "STRATEGY_SHIFT_CANDIDATE"
+  | "FAILURE_CLASS_CANDIDATE";
+
+/** #16: append-only derived label with labeler provenance; never overrides verifier/GitHub truth. */
+export interface Label {
+  label_id: string;
+  target_ref: string;
+  kind: LabelKind;
+  value: string;
+  epistemic: Epistemic;
+  confidence: number | null;
+  labeler: { name: string; version: string; rules_digest: string };
+  evidence_refs: string[];
+  supersedes: string | null;
+}
+
+/** #17: derived diagnostic aggregate with explicit denominator. Private unless ADS has a field. */
+export interface DiagnosticAggregate {
+  name: string;
+  numerator: number | null;
+  denominator: number | null;
+  unit: string;
+  coverage: Coverage;
+  epistemic: Epistemic;
+  derivation: string;
+  source_refs: string[];
+  comparability: "COMPARABLE" | "INSUFFICIENT_COMPARABLE_EVIDENCE" | "UNKNOWN";
+  limits: string[];
+  /** Public field reference when the effective ADS schema has one; null = NOT_PUBLISHABLE. */
+  publication_field: string | null;
 }
