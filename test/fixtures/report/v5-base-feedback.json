@@ -1,0 +1,53 @@
+{
+  "schema": "ads/github/v5",
+  "kind": "report",
+  "data": {
+    "report_id": "t01-001",
+    "revision": 1,
+    "publisher_namespace": "collector:example",
+    "report_kind": "EXPERIENCE_USE_FEEDBACK",
+    "subject": {
+      "repository": "kaicreator-mm/ai-development-standard",
+      "issue_ref": "https://github.com/kaicreator-mm/ai-development-standard/issues/1265",
+      "task_ref": "#1265",
+      "attempt_ref": "attempt:source-01",
+      "attempt_binding": "COLLECTOR_ONLY",
+      "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "ads_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "ads_profile": "ads/github/v5:report",
+      "currentness": {
+        "state": "CURRENT",
+        "source_refs": [],
+        "limits": []
+      },
+      "publisher_source_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "source_status": "PINNED",
+      "source_currentness": "CURRENT",
+      "source_reason": null,
+      "collector_observation_refs": []
+    },
+    "actor": {
+      "role": "builder",
+      "operator_kind": "other",
+      "operator_id": "t01-fixture",
+      "session_ref": "t01-source",
+      "transport_actor": null
+    },
+    "observed_at": "2026-10-22T12:00:00Z",
+    "source_refs": [],
+    "limits": [],
+    "supersedes": null,
+    "publication": {
+      "classification": "PUBLISHABLE",
+      "clearance_ref": "source-authority:example",
+      "projection_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "publisher_source_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "ads_subject_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "experience_ref": "experience:1",
+    "procedure_revision": "v1",
+    "phase": "PRESENTED",
+    "epistemic": "OBSERVED",
+    "verifier_refs": []
+  }
+}

@@ -1,0 +1,3 @@
+lint ok
+tests failed
+EXIT=2

@@ -1,0 +1,5 @@
+lint ok
+typecheck ok
+tests ok
+task-check: 全绿
+EXIT=0
