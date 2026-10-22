@@ -1,0 +1,1 @@
+task-check: DOCS_ONLY — 纯文档 diff 免本地门禁(无代码可验;远程 CI 非该类内容的验证依据,无需等待)
