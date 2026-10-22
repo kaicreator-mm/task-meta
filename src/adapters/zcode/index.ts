@@ -1,4 +1,10 @@
-import { buildAttemptSummary, dedupeObservations, latestRevisions } from "../../correlate.ts";
+import {
+  buildAttemptSummary,
+  dedupeObservations,
+  latestRevisions,
+  sortRunSegments,
+  witnessedHead,
+} from "../../correlate.ts";
 import type {
   ActorRef,
   AttemptSummary,
@@ -25,7 +31,10 @@ export interface ZcodeRunInput {
   observed_at: string;
   headless?: string;
   modelIo?: string;
+  /** Single run.txt (same as runRecords with one element). */
   runRecord?: string;
+  /** All run.txt segments of a (possibly resumed) session. */
+  runRecords?: string[];
   gateLog?: string;
   /** Explicit commit the gate log is bound to; when absent the run record's head_after is used. */
   gateSha?: string;
@@ -125,8 +134,12 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
   if (foreign > 0) limits.push(`${foreign} model_io line(s) from other sessions ignored`);
   const rejected = parsedIo?.rejected ?? [];
 
-  const run = input.runRecord !== undefined ? parseRunRecord(input.runRecord) : null;
-  const gateSubject = input.gateSha ?? run?.head_after ?? null;
+  const runTexts = [
+    ...(input.runRecord !== undefined ? [input.runRecord] : []),
+    ...(input.runRecords ?? []),
+  ];
+  const runs = sortRunSegments(runTexts.map((t) => parseRunRecord(t)));
+  const gateSubject = input.gateSha ?? witnessedHead(runs) ?? null;
   const gate = parseGateLog(input.gateLog ?? "", gateSubject);
   if (input.gateLog !== undefined && gate.exitCode === 0 && !gate.greenMarker) {
     limits.push("gate log has EXIT=0 but no task-check green marker");
@@ -158,8 +171,14 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
     raw.push(o);
   }
 
-  if (run && (run.started_at || run.finished_at || run.exit_code !== null)) {
-    const o = skeleton(`run:${sessionId}`, "RUN_BOUNDARY", taskRef, sessionId);
+  for (const [idx, run] of runs.entries()) {
+    if (!(run.started_at || run.finished_at || run.exit_code !== null)) continue;
+    const o = skeleton(
+      runs.length === 1 ? `run:${sessionId}` : `run:${sessionId}:${idx + 1}`,
+      "RUN_BOUNDARY",
+      taskRef,
+      sessionId,
+    );
     o.started_at = run.started_at;
     o.completed_at = run.finished_at;
     if (run.started_at && run.finished_at) {
@@ -217,7 +236,7 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
     observations,
     headless,
     modelIoSupplied: parsedIo !== null,
-    run,
+    runs,
     gate: gate.outcome,
     rejectedCount: rejected.length,
     duplicates: first.duplicates,

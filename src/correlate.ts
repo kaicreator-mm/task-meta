@@ -99,7 +99,8 @@ export interface SummaryInput {
   headless: HeadlessResult | null;
   /** True when a model-io rollout was supplied. */
   modelIoSupplied: boolean;
-  run: RunRecord | null;
+  /** Run segments (resumed sessions have several); order is irrelevant, they are sorted here. */
+  runs: RunRecord[];
   gate: VerifierOutcome;
   rejectedCount: number;
   duplicates: number;
@@ -139,6 +140,52 @@ function sumField(
   return { value: any ? sum : null, partial: any && missing };
 }
 
+/** Slack for second-precision run.txt timestamps against millisecond rollout times. */
+const WINDOW_SLACK_MS = 2000;
+
+/** A finished segment has a finish time; an unfinished one (controller died) has none. */
+export function isFinished(r: RunRecord): boolean {
+  return r.finished_at !== null;
+}
+
+/** Non-empty run records sorted by start time (unknown start last, stable). */
+export function sortRunSegments(runs: RunRecord[]): RunRecord[] {
+  return runs
+    .filter(
+      (r) =>
+        r.started_at !== null ||
+        r.finished_at !== null ||
+        r.exit_code !== null ||
+        r.head_after !== null,
+    )
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => {
+      const ta = a.r.started_at ? Date.parse(a.r.started_at) : Number.POSITIVE_INFINITY;
+      const tb = b.r.started_at ? Date.parse(b.r.started_at) : Number.POSITIVE_INFINITY;
+      return ta === tb ? a.i - b.i : ta < tb ? -1 : 1;
+    })
+    .map((x) => x.r);
+}
+
+/** Indexes i>=1 where head_before(i) is not exactly head_after(i-1) (unknown counts as broken). */
+function brokenChainIndexes(segs: RunRecord[]): number[] {
+  const out: number[] = [];
+  for (let i = 1; i < segs.length; i++) {
+    const prev = segs[i - 1] as RunRecord;
+    const cur = segs[i] as RunRecord;
+    if (!prev.head_after || !cur.head_before || prev.head_after !== cur.head_before) out.push(i);
+  }
+  return out;
+}
+
+/** The commit the attempt is known to have reached (see buildAttemptSummary). */
+export function witnessedHead(runs: RunRecord[]): string | null {
+  const segs = sortRunSegments(runs);
+  const last = segs[segs.length - 1];
+  if (last && isFinished(last)) return last.head_after;
+  return [...segs].reverse().find((sg) => isFinished(sg) && sg.head_after)?.head_after ?? null;
+}
+
 export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
   const sid = input.sessionId;
   const headlessRef = `zcode:session:${sid}`;
@@ -153,12 +200,8 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
     input.observations.filter((o) => o.kind === "TOOL_CALL").map((o) => o.observation_id),
   ).size;
   const haveModelIo = effectiveReqs.length > 0;
-  const haveRun =
-    input.run !== null &&
-    (input.run.started_at !== null ||
-      input.run.finished_at !== null ||
-      input.run.exit_code !== null ||
-      input.run.head_after !== null);
+  const segs = sortRunSegments(input.runs);
+  const haveRun = segs.length > 0;
 
   let mismatch = false;
   if (
@@ -252,20 +295,58 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
     }
   }
 
-  let runWall: number | null = null;
-  if (input.run?.started_at && input.run.finished_at) {
-    const d = Date.parse(input.run.finished_at) - Date.parse(input.run.started_at);
-    if (d >= 0) runWall = d;
+  const finishedWindows: Array<[number, number]> = [];
+  for (const sg of segs) {
+    if (!isFinished(sg) || !sg.started_at || !sg.finished_at) continue;
+    finishedWindows.push([Date.parse(sg.started_at), Date.parse(sg.finished_at)]);
   }
-  metrics.push(metric("run_wall_ms", runWall, "ms", "OBSERVED", "COMPLETE", [runRef]));
+  const runWall = finishedWindows.length > 0 ? unionIntervalMs(finishedWindows) : null;
+  const unfinished = segs.filter((sg) => !isFinished(sg)).length;
+  const brokenAt = brokenChainIndexes(segs);
+  let outside = 0;
+  if (haveModelIo && haveRun) {
+    // Unfinished segments are open-ended: the controller died, the work still belongs to them.
+    const windows: Array<[number, number]> = segs
+      .filter((sg) => sg.started_at)
+      .map((sg) => [
+        Date.parse(sg.started_at as string),
+        sg.finished_at ? Date.parse(sg.finished_at) : Number.POSITIVE_INFINITY,
+      ]);
+    for (const r of effectiveReqs) {
+      const s = r.started_at ? Date.parse(r.started_at) : Number.NaN;
+      const e = r.completed_at ? Date.parse(r.completed_at) : Number.NaN;
+      if (Number.isNaN(s) || Number.isNaN(e)) continue;
+      if (!windows.some(([ws, we]) => s >= ws - WINDOW_SLACK_MS && e <= we + WINDOW_SLACK_MS)) {
+        outside += 1;
+      }
+    }
+  }
+  const runComplete = haveRun && unfinished === 0 && brokenAt.length === 0 && outside === 0;
+  metrics.push(
+    metric("run_wall_ms", runWall, "ms", "OBSERVED", runComplete ? "COMPLETE" : "PARTIAL", [
+      runRef,
+    ]),
+  );
   if (!haveRun) limits.push("run record missing; run boundary and source SHA unknown");
+  if (unfinished > 0) limits.push(`${unfinished} run segment(s) without finish record`);
+  for (const i of brokenAt) limits.push(`run segment head chain broken at ${i}`);
+  if (outside > 0) limits.push(`${outside} model request(s) outside recorded run segments`);
 
   let capture: Coverage;
   if (!h && !haveModelIo) capture = "UNKNOWN";
-  else if (h && haveModelIo && haveRun && !degraded) capture = "COMPLETE";
+  else if (h && haveModelIo && haveRun && !degraded && runComplete) capture = "COMPLETE";
   else capture = "PARTIAL";
 
-  const sourceSha = input.run?.head_after ?? null;
+  const last = segs[segs.length - 1];
+  let sourceSha: string | null = null;
+  if (last && isFinished(last)) sourceSha = last.head_after;
+  else {
+    const witnessed = [...segs].reverse().find((sg) => isFinished(sg) && sg.head_after);
+    sourceSha = witnessed?.head_after ?? null;
+    if (last && witnessed) {
+      limits.push("latest run segment unfinished; source_sha is the last witnessed head");
+    }
+  }
   const observationRefs: string[] = [];
   if (h) observationRefs.push(headlessRef);
   if (haveModelIo) observationRefs.push(modelIoRef);

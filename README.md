@@ -38,3 +38,8 @@ the readback is a read-only `gh api` call). stdout is one JSON line
 
 Exit codes: 0 DRY_RUN/PUBLISHED/ALREADY_PUBLISHED, 1 failure, 2 usage, 3 privacy guard,
 4 conflicting revision 1, 5 store verification, 6 report not representable, 7 CONFLICT/NOT_PUBLISHED.
+
+`--run` is repeatable: a resumed ZCode session has one `run.txt` per segment. Segments are
+sorted by start time; `run_wall_ms` is the union of finished segments, `source_sha` the last
+finished segment's `head_after`, and an unfinished segment, a broken head chain or model
+requests outside all segment windows make the capture PARTIAL with a specific limit.

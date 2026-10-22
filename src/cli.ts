@@ -63,7 +63,7 @@ function optionsFrom(argv: string[]) {
       headless: { type: "string" },
       "model-io": { type: "string" },
       "zcode-rollout-dir": { type: "string" },
-      run: { type: "string" },
+      run: { type: "string", multiple: true },
       "gate-log": { type: "string" },
       "gate-sha": { type: "string" },
       store: { type: "string" },
@@ -171,7 +171,10 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     }
   }
   if (modelIo !== undefined) input.modelIo = modelIo;
-  if (v.run !== undefined) input.runRecord = await readText(v.run, "run record");
+  if (v.run !== undefined) {
+    input.runRecords = [];
+    for (const f of v.run) input.runRecords.push(await readText(f, "run record"));
+  }
   if (v["gate-log"] !== undefined) {
     input.gateLog = await readText(v["gate-log"], "gate log");
     input.gateSha = v["gate-sha"] as string;
