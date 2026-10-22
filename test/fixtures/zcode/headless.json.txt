@@ -1,0 +1,28 @@
+AI SDK Warning System: synthetic warning line
+{
+  "sessionId": "sess-synth-0001",
+  "traceId": "trace-1",
+  "turnId": "turn-1",
+  "response": "SENTINEL_RESPONSE_c0de final answer",
+  "usage": {
+    "source": "provider",
+    "modelRequestCount": 3,
+    "inputTokens": 4000,
+    "outputTokens": 270,
+    "totalTokens": 4270,
+    "cacheReadTokens": 2300,
+    "cacheWriteTokens": 200,
+    "reasoningTokens": 0,
+    "webFetchRequests": 0,
+    "webSearchRequests": 0
+  },
+  "eventCount": 42,
+  "projection": {
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "SENTINEL_PROJECTION_77ee"
+      }
+    ]
+  }
+}
