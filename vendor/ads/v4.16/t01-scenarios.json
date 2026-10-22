@@ -1,0 +1,311 @@
+{
+  "schema": "ads/v416-t01-fixtures/v1",
+  "scope": "candidate-source-schema-only; native GitHub/revision/ACL not proven",
+  "cases": [
+    {
+      "id": "C01_v5_summary_allowed",
+      "base": "summary",
+      "mutations": [],
+      "valid": true
+    },
+    {
+      "id": "C01_v4_marker_rejected",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "schema",
+          "value": "ads/github/v4"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C01_v3_work_item_rejected",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "kind",
+          "value": "work_item"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C01_unknown_root_rejected",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "extra",
+          "value": 1
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C06_unpinned_observed",
+      "base": "summary",
+      "mutations": [],
+      "valid": true
+    },
+    {
+      "id": "C06_unpinned_canonical_refused",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "data.subject.attempt_binding",
+          "value": "CANONICAL_DISPATCH"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C06_unpinned_current_refused",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "data.subject.source_currentness",
+          "value": "CURRENT"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C06_unpinned_fake_source_refused",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "data.subject.source_sha",
+          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C06_unpinned_verifier_pass_refused",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "data.verifier.status",
+          "value": "PASS"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C06_unpinned_verifier_sha_refused",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "data.verifier.subject_sha",
+          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C06_unpinned_no_reason_refused",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "data.subject.source_reason",
+          "value": null
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C06_unpinned_no_collector_ref_refused",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "data.subject.collector_observation_refs",
+          "value": []
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C06_publisher_null_refused",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "data.subject.publisher_source_sha",
+          "value": null
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C07_pinned_notice_allowed",
+      "base": "correction",
+      "mutations": [],
+      "valid": true
+    },
+    {
+      "id": "C07_notice_source_null_refused",
+      "base": "correction",
+      "mutations": [
+        {
+          "path": "data.subject.source_sha",
+          "value": null
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C07_notice_publisher_null_refused",
+      "base": "correction",
+      "mutations": [
+        {
+          "path": "data.notice_publisher_source_sha",
+          "value": null
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C07_target_original_null_allowed",
+      "base": "correction",
+      "mutations": [
+        {
+          "path": "data.target.target_source_sha",
+          "value": null
+        }
+      ],
+      "valid": true
+    },
+    {
+      "id": "C08_late_verified_association_allowed",
+      "base": "associated",
+      "mutations": [],
+      "valid": true
+    },
+    {
+      "id": "C08_rev1_association_refused",
+      "base": "associated",
+      "mutations": [
+        {
+          "path": "data.revision",
+          "value": 1
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C08_unpinned_association_refused",
+      "base": "associated",
+      "mutations": [
+        {
+          "path": "data.subject.source_status",
+          "value": "UNPINNED"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C09_cross_v4_profile_refused",
+      "base": "correction",
+      "mutations": [
+        {
+          "path": "data.target.ads_profile",
+          "value": "ads/github/v4:report"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C09_no_native_comment_refused",
+      "base": "correction",
+      "mutations": [
+        {
+          "path": "data.target.comment_id",
+          "remove": true
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C09_wrong_digest_shape_refused",
+      "base": "correction",
+      "mutations": [
+        {
+          "path": "data.target.data_digest",
+          "value": "xyz"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C10_private_projection_refused",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "data.publication.classification",
+          "value": "RESTRICTED"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C10_missing_clearance_refused",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "data.publication.clearance_ref",
+          "remove": true
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C10_secret_extra_field_refused",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "data.private_trace",
+          "value": "secret"
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C06_feedback_pinned_allowed",
+      "base": "feedback",
+      "mutations": [],
+      "valid": true
+    },
+    {
+      "id": "C06_feedback_null_refused",
+      "base": "feedback",
+      "mutations": [
+        {
+          "path": "data.subject.source_sha",
+          "value": null
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C10_cost_source_identity_missing_refused",
+      "base": "summary",
+      "mutations": [
+        {
+          "path": "data.cost.accounting_ref",
+          "remove": true
+        }
+      ],
+      "valid": false
+    },
+    {
+      "id": "C09_report_extra_kind_refused",
+      "base": "correction",
+      "mutations": [
+        {
+          "path": "data.report_kind",
+          "value": "CLAIM"
+        }
+      ],
+      "valid": false
+    }
+  ]
+}

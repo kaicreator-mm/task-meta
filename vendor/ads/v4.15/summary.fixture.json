@@ -1,0 +1,117 @@
+{
+  "schema": "ads/github/v4",
+  "kind": "report",
+  "data": {
+    "report_id": "report:42:execution",
+    "revision": 1,
+    "publisher_namespace": "task-meta:example-org/example-repo",
+    "subject": {
+      "repository": "example-org/example-repo",
+      "issue_ref": "https://github.com/example-org/example-repo/issues/42",
+      "task_ref": "task:42",
+      "attempt_ref": "attempt:42:1",
+      "attempt_binding": "COLLECTOR_ONLY",
+      "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "ads_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "ads_profile": "ads/github/v4:report",
+      "currentness": {
+        "state": "CURRENT",
+        "source_refs": [
+          "github:native:subject-readback"
+        ],
+        "limits": []
+      }
+    },
+    "actor": {
+      "role": "builder",
+      "operator_kind": "codex",
+      "operator_id": "codex:example",
+      "session_ref": "example:attempt:1",
+      "transport_actor": null
+    },
+    "observed_at": "2026-10-21T10:00:00Z",
+    "source_refs": [
+      "github:source:attempt-42"
+    ],
+    "limits": [
+      "Illustrative offline contract fixture; no real runtime/publication proven."
+    ],
+    "supersedes": null,
+    "report_kind": "EXECUTION_SUMMARY",
+    "capture_coverage": "PARTIAL",
+    "metrics": [
+      {
+        "name": "model_input_tokens",
+        "value": null,
+        "unit": "token",
+        "epistemic": "UNKNOWN",
+        "coverage": "UNKNOWN",
+        "source_refs": [],
+        "currentness": {
+          "state": "UNKNOWN",
+          "source_refs": [],
+          "limits": [
+            "Provider measurement unavailable"
+          ]
+        }
+      }
+    ],
+    "cost": {
+      "value": null,
+      "currency": null,
+      "basis": "UNKNOWN",
+      "pricing_basis": null,
+      "epistemic": "UNKNOWN",
+      "source_refs": [],
+      "currentness": {
+        "state": "UNKNOWN",
+        "source_refs": [],
+        "limits": [
+          "No trusted billing source"
+        ]
+      }
+    },
+    "aggregation": {
+      "mode": "LEAF_ATTEMPTS_ONLY",
+      "attempt_refs": [
+        "attempt:42:1"
+      ],
+      "excluded_attempt_refs": [],
+      "limits": [
+        "No parent plus child double count"
+      ]
+    },
+    "verifier": {
+      "subject_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_refs": [
+        "github:ci:run:7"
+      ],
+      "checked": [
+        "schema-shape"
+      ],
+      "failed": [],
+      "skipped": [
+        "external-E2E"
+      ],
+      "unchecked": [
+        "native-resource-fence"
+      ],
+      "coverage": "PARTIAL",
+      "epistemic": "OBSERVED",
+      "currentness": {
+        "state": "CURRENT",
+        "source_refs": [
+          "github:native:subject-readback"
+        ],
+        "limits": []
+      }
+    },
+    "manifest_ref": "object:private/task42/attempt1/r1/manifest.json",
+    "manifest_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "manifest_access": "PROJECT_PRIVATE",
+    "learning": {
+      "state": "NONE_MATERIAL",
+      "source_refs": []
+    }
+  }
+}

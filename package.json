@@ -1,0 +1,24 @@
+{
+  "name": "task-meta",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Passive, source-qualified Agent Task execution evidence collector and ADS GitHub report writer",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.2",
+    "@types/node": "24.19.2",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,998 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kaicreator-mm.github.io/ai-development-standard/schemas/github/v4.15/report.schema.json",
+  "title": "ADS v4.15 report-only observational envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "kind",
+    "data"
+  ],
+  "properties": {
+    "schema": {
+      "const": "ads/github/v4"
+    },
+    "kind": {
+      "const": "report"
+    },
+    "data": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/summary"
+        },
+        {
+          "$ref": "#/$defs/feedback"
+        },
+        {
+          "$ref": "#/$defs/correction"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "epistemic": {
+      "enum": [
+        "OBSERVED",
+        "SELF_REPORTED",
+        "INFERRED",
+        "UNKNOWN"
+      ]
+    },
+    "coverage": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "UNKNOWN"
+      ]
+    },
+    "refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "currentness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "source_refs",
+        "limits"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "CURRENT",
+            "STALE",
+            "UNKNOWN"
+          ]
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "limits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "operator_kind",
+        "operator_id",
+        "session_ref",
+        "transport_actor"
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operator_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operator_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "session_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transport_actor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "issue_ref",
+        "task_ref",
+        "attempt_ref",
+        "attempt_binding",
+        "source_sha",
+        "ads_revision",
+        "ads_profile",
+        "currentness"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[^/\\s]+/[^/\\s]+$"
+        },
+        "issue_ref": {
+          "type": "string",
+          "pattern": "^https://github\\.com/[^/\\s]+/[^/\\s]+/issues/[1-9][0-9]*$"
+        },
+        "task_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt_binding": {
+          "enum": [
+            "CANONICAL_DISPATCH",
+            "COLLECTOR_ONLY",
+            "UNKNOWN"
+          ]
+        },
+        "source_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "ads_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "ads_profile": {
+          "const": "ads/github/v4:report"
+        },
+        "currentness": {
+          "$ref": "#/$defs/currentness"
+        }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "value",
+        "unit",
+        "epistemic",
+        "coverage",
+        "source_refs",
+        "currentness"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "epistemic": {
+          "$ref": "#/$defs/epistemic"
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/refs"
+        },
+        "currentness": {
+          "$ref": "#/$defs/currentness"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "epistemic": {
+                "const": "UNKNOWN"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "currency",
+        "basis",
+        "pricing_basis",
+        "epistemic",
+        "source_refs",
+        "currentness"
+      ],
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z]{3}$"
+        },
+        "basis": {
+          "enum": [
+            "BILLED",
+            "ESTIMATED",
+            "UNKNOWN"
+          ]
+        },
+        "pricing_basis": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "epistemic": {
+          "$ref": "#/$defs/epistemic"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/refs"
+        },
+        "currentness": {
+          "$ref": "#/$defs/currentness"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "basis": {
+                "const": "UNKNOWN"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "null"
+              },
+              "epistemic": {
+                "const": "UNKNOWN"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "value": {
+                "type": "number"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "pricing_basis": {
+                "type": "string",
+                "minLength": 1
+              },
+              "epistemic": {
+                "enum": [
+                  "OBSERVED",
+                  "SELF_REPORTED",
+                  "INFERRED"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "currency",
+              "pricing_basis"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "basis": {
+                "const": "BILLED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "epistemic": {
+                "const": "OBSERVED"
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "verifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject_sha",
+        "source_refs",
+        "checked",
+        "failed",
+        "skipped",
+        "unchecked",
+        "coverage",
+        "epistemic",
+        "currentness"
+      ],
+      "properties": {
+        "subject_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/refs"
+        },
+        "checked": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "failed": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "unchecked": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "epistemic": {
+          "$ref": "#/$defs/epistemic"
+        },
+        "currentness": {
+          "$ref": "#/$defs/currentness"
+        }
+      }
+    },
+    "supersedes": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "revision",
+            "data_digest",
+            "comment_ref"
+          ],
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "data_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "comment_ref": {
+              "type": "string",
+              "pattern": "^https://github\\.com/[^/\\s]+/[^/\\s]+/issues/[1-9][0-9]*#issuecomment-[1-9][0-9]*$"
+            }
+          }
+        }
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_id",
+        "revision",
+        "publisher_namespace",
+        "report_kind",
+        "subject",
+        "actor",
+        "observed_at",
+        "source_refs",
+        "limits",
+        "supersedes",
+        "capture_coverage",
+        "metrics",
+        "cost",
+        "aggregation",
+        "verifier",
+        "manifest_ref",
+        "manifest_sha256",
+        "manifest_access",
+        "learning"
+      ],
+      "properties": {
+        "report_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "publisher_namespace": {
+          "type": "string",
+          "minLength": 1
+        },
+        "report_kind": {
+          "const": "EXECUTION_SUMMARY"
+        },
+        "subject": {
+          "$ref": "#/$defs/subject"
+        },
+        "actor": {
+          "$ref": "#/$defs/actor"
+        },
+        "observed_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/refs"
+        },
+        "limits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "supersedes": {
+          "$ref": "#/$defs/supersedes"
+        },
+        "capture_coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/metric"
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "cost": {
+          "$ref": "#/$defs/cost"
+        },
+        "aggregation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "attempt_refs",
+            "excluded_attempt_refs",
+            "limits"
+          ],
+          "properties": {
+            "mode": {
+              "const": "LEAF_ATTEMPTS_ONLY"
+            },
+            "attempt_refs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "excluded_attempt_refs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 0,
+              "uniqueItems": true
+            },
+            "limits": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 0,
+              "uniqueItems": true
+            }
+          }
+        },
+        "verifier": {
+          "$ref": "#/$defs/verifier"
+        },
+        "manifest_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifest_access": {
+          "enum": [
+            "PROJECT_PRIVATE",
+            "RESTRICTED"
+          ]
+        },
+        "learning": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "source_refs"
+          ],
+          "properties": {
+            "state": {
+              "enum": [
+                "NONE_MATERIAL",
+                "REFERENCED",
+                "UNKNOWN"
+              ]
+            },
+            "source_refs": {
+              "$ref": "#/$defs/refs"
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "revision": {
+                "const": 1
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "supersedes": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "supersedes": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "learning": {
+                "properties": {
+                  "state": {
+                    "const": "REFERENCED"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "learning": {
+                "properties": {
+                  "source_refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "learning": {
+                "properties": {
+                  "source_refs": {
+                    "maxItems": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "feedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_id",
+        "revision",
+        "publisher_namespace",
+        "report_kind",
+        "subject",
+        "actor",
+        "observed_at",
+        "source_refs",
+        "limits",
+        "supersedes",
+        "publisher_source_sha",
+        "ads_subject_sha",
+        "experience_ref",
+        "procedure_revision",
+        "phase",
+        "epistemic",
+        "verifier_refs"
+      ],
+      "properties": {
+        "report_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "publisher_namespace": {
+          "type": "string",
+          "minLength": 1
+        },
+        "report_kind": {
+          "const": "EXPERIENCE_USE_FEEDBACK"
+        },
+        "subject": {
+          "$ref": "#/$defs/subject"
+        },
+        "actor": {
+          "$ref": "#/$defs/actor"
+        },
+        "observed_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/refs"
+        },
+        "limits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "supersedes": {
+          "$ref": "#/$defs/supersedes"
+        },
+        "publisher_source_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "ads_subject_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "experience_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "procedure_revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "phase": {
+          "enum": [
+            "PRESENTED",
+            "ACCEPTED",
+            "APPLIED",
+            "SKIPPED",
+            "INDEPENDENTLY_CHECKED",
+            "OBSERVED_EFFECT"
+          ]
+        },
+        "epistemic": {
+          "$ref": "#/$defs/epistemic"
+        },
+        "verifier_refs": {
+          "$ref": "#/$defs/refs"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "revision": {
+                "const": 1
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "supersedes": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "supersedes": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "INDEPENDENTLY_CHECKED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "verifier_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              "epistemic": {
+                "const": "OBSERVED"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "verifier_refs": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "correction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_id",
+        "revision",
+        "publisher_namespace",
+        "report_kind",
+        "subject",
+        "actor",
+        "observed_at",
+        "source_refs",
+        "limits",
+        "supersedes",
+        "target",
+        "reason",
+        "notice"
+      ],
+      "properties": {
+        "report_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "publisher_namespace": {
+          "type": "string",
+          "minLength": 1
+        },
+        "report_kind": {
+          "const": "EXECUTION_CORRECTION"
+        },
+        "subject": {
+          "$ref": "#/$defs/subject"
+        },
+        "actor": {
+          "$ref": "#/$defs/actor"
+        },
+        "observed_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/refs"
+        },
+        "limits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "supersedes": {
+          "$ref": "#/$defs/supersedes"
+        },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "comment_ref",
+            "report_id",
+            "revision",
+            "report_kind",
+            "publisher_namespace",
+            "issue_ref",
+            "task_ref",
+            "data_digest"
+          ],
+          "properties": {
+            "comment_ref": {
+              "type": "string",
+              "pattern": "^https://github\\.com/[^/\\s]+/[^/\\s]+/issues/[1-9][0-9]*#issuecomment-[1-9][0-9]*$"
+            },
+            "report_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "report_kind": {
+              "enum": [
+                "EXECUTION_SUMMARY",
+                "EXPERIENCE_USE_FEEDBACK"
+              ]
+            },
+            "publisher_namespace": {
+              "type": "string",
+              "minLength": 1
+            },
+            "issue_ref": {
+              "type": "string",
+              "pattern": "^https://github\\.com/[^/\\s]+/[^/\\s]+/issues/[1-9][0-9]*$"
+            },
+            "task_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "data_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "notice": {
+          "enum": [
+            "REVOKE",
+            "REDACT",
+            "DISPUTE"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "revision": {
+                "const": 1
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "supersedes": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "supersedes": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
