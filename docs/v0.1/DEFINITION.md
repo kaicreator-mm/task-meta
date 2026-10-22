@@ -166,3 +166,16 @@ All R2 records are stored as manifest objects (`verifier`, `lineage`, `labels`,
 | T8 version lineage (#15) | R2-0 | `src/lineage/*` |
 | T9 labels + aggregates (#16 #17 #9) | T7, T8 | `src/labels/*`, `src/aggregates/*` |
 | T10 CLI integration + real E2E R2 | T6–T9 | `src/cli.ts`, real dh-i1264 rerun incl. lineage/labels, evidence |
+
+### 8.4 R2 status
+
+Implemented: v5 producer with pin guard (candidate pins refuse `--publish`, exit 2) and clearance HOLD (exit 8);
+verifier assessment (#11, multiple `--gate-log file[@sha]`, mtime-inferred subject as INFERRED); lineage from
+run segments + read-only `--git-dir` (#15); rule labels v1 (#16); diagnostic aggregates (#17); Bash
+`input_class`. The manifest carries seven roles. The legacy single-gate path no longer decides the verdict.
+
+Real run (domain-harness #1264, 8 segments, dry run): 209 model requests, 207 tool calls, 7 committed versions
+(6 ADVANCE, 1 NO_CHANGE, 1 INCOMPLETE), 207 action labels (28.5% UNKNOWN), 3 test-rerun clusters, outcome_class
+PARTIAL_PROGRESS (gate subjects only INFERRED; one log inside the unfinished segment). v4 rerun was byte-idempotent;
+privacy sweep clean. v5 (candidate pin) exits 6 for this attempt because v5 has no PARTIAL verifier status; with an
+operator-stated `@sha` binding it renders. Not run: live publication, Tally reader, billed cost, ADS v4.16 main adoption.
