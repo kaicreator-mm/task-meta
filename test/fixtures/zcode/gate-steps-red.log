@@ -1,0 +1,6 @@
+v24.21.0
+== lint ==
+== typecheck ==
+!! typecheck 未通过
+task-check: 未通过
+EXIT=1
