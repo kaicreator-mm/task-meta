@@ -66,7 +66,15 @@ export interface ObservationRecord {
   completed_at: string | null;
   duration_ms: number | null;
   model: { provider_id: string | null; model_id: string | null } | null;
-  tool: { call_id: string; name: string } | null;
+  tool: {
+    call_id: string;
+    name: string;
+    /**
+     * Privacy-safe class of the tool input (Bash only today): a fixed enum derived at
+     * ingress from the command; the command text itself is never stored.
+     */
+    input_class?: string;
+  } | null;
   usage: TokenUsage | null;
   status: string | null;
   /** Per-field provenance for every non-identity field that has a value. */

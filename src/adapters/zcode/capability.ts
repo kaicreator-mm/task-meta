@@ -32,6 +32,17 @@ export const ZCODE_CAPABILITY: SourceCapabilityProfile = {
       epistemic: "OBSERVED",
       notes: "Only id and name, taken from model responses; arguments are dropped.",
     },
+    tool_input_class: {
+      supported: true,
+      epistemic: "INFERRED",
+      notes:
+        "Bash command class (fixed enum) derived at ingress by prefix rules; command text is dropped.",
+    },
+    experience_exposure: {
+      supported: false,
+      epistemic: "UNKNOWN",
+      notes: "ZCode does not expose which experience/recommendations were shown to the agent.",
+    },
     tool_timing: {
       supported: false,
       epistemic: "UNKNOWN",
