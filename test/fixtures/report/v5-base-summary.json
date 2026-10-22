@@ -1,0 +1,94 @@
+{
+  "schema": "ads/github/v5",
+  "kind": "report",
+  "data": {
+    "report_id": "t01-001",
+    "revision": 1,
+    "publisher_namespace": "collector:example",
+    "report_kind": "EXECUTION_SUMMARY",
+    "subject": {
+      "repository": "kaicreator-mm/ai-development-standard",
+      "issue_ref": "https://github.com/kaicreator-mm/ai-development-standard/issues/1265",
+      "task_ref": "#1265",
+      "attempt_ref": "attempt:source-01",
+      "attempt_binding": "COLLECTOR_ONLY",
+      "source_sha": null,
+      "ads_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "ads_profile": "ads/github/v5:report",
+      "currentness": {
+        "state": "UNKNOWN",
+        "source_refs": [],
+        "limits": []
+      },
+      "publisher_source_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "source_status": "UNPINNED",
+      "source_currentness": "UNKNOWN",
+      "source_reason": "No immutable execution bytes",
+      "collector_observation_refs": ["public:qualified-collector-observation"]
+    },
+    "actor": {
+      "role": "builder",
+      "operator_kind": "other",
+      "operator_id": "t01-fixture",
+      "session_ref": "t01-source",
+      "transport_actor": null
+    },
+    "observed_at": "2026-10-22T12:00:00Z",
+    "source_refs": [],
+    "limits": [],
+    "supersedes": null,
+    "publication": {
+      "classification": "PUBLISHABLE",
+      "clearance_ref": "source-authority:example",
+      "projection_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "capture_coverage": "UNKNOWN",
+    "metrics": [],
+    "cost": {
+      "value": null,
+      "currency": null,
+      "basis": "UNKNOWN",
+      "pricing_basis": null,
+      "epistemic": "UNKNOWN",
+      "source_refs": [],
+      "currentness": {
+        "state": "UNKNOWN",
+        "source_refs": [],
+        "limits": []
+      },
+      "accounting_ref": null,
+      "economic_scope_ref": null,
+      "billing_window_ref": null,
+      "cost_category": null
+    },
+    "aggregation": {
+      "mode": "LEAF_ATTEMPTS_ONLY",
+      "attempt_refs": ["attempt:source-01"],
+      "excluded_attempt_refs": [],
+      "limits": []
+    },
+    "verifier": {
+      "subject_sha": null,
+      "source_refs": [],
+      "checked": [],
+      "failed": [],
+      "skipped": [],
+      "unchecked": [],
+      "coverage": "UNKNOWN",
+      "epistemic": "UNKNOWN",
+      "currentness": {
+        "state": "UNKNOWN",
+        "source_refs": [],
+        "limits": []
+      },
+      "status": "NOT_RUN"
+    },
+    "manifest_ref": "private:manifest",
+    "manifest_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "manifest_access": "PROJECT_PRIVATE",
+    "learning": {
+      "state": "NONE_MATERIAL",
+      "source_refs": []
+    }
+  }
+}
