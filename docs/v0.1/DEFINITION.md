@@ -1,4 +1,4 @@
-# task-meta v0.1 — Product + L2 definition and Task DAG
+﻿# task-meta v0.1 — Product + L2 definition and Task DAG
 
 Status: **FROZEN for v0.1 implementation by user instruction (2026-10-23)**.
 Consolidates task-meta #10 (PRD R0), #13 (L2 candidate), #14 (ADS pin), #11
@@ -139,7 +139,7 @@ Therefore v0.1 R2:
   `publication`.
 - Profile selection: `--profile v5` requires `--ads-pin <sha>`. Pin = vendored candidate
   `3041a1b` ⇒ CANDIDATE: dry run only, `--publish` refused. Pin = an ADS **main** SHA listed
-  in `vendor/ads/ADOPTION.json` ⇒ v5 allowed to publish. Default profile stays v4 until
+  in `config/ads-adoption.json` ⇒ v5 allowed to publish. Default profile stays v4 until
   that file lists an adopted main SHA, then flips to v5 (one-line change, tested).
 - Never downcast v5→v4 or mix profiles for one report identity.
 
@@ -161,7 +161,7 @@ All R2 records are stored as manifest objects (`verifier`, `lineage`, `labels`,
 | Task | Depends on | Delivers |
 | --- | --- | --- |
 | R2-0 | — | this section + `src/model.ts` R2 types (controller) |
-| T6 v5 producer + pin guard | R2-0 | `src/report/*`, `src/correlate.ts` metric identity, `vendor/ads/ADOPTION.json` |
+| T6 v5 producer + pin guard | R2-0 | `src/report/*`, `src/correlate.ts` metric identity, `config/ads-adoption.json` |
 | T7 verifier semantics (#11) | R2-0 | `src/verifier/*` |
 | T8 version lineage (#15) | R2-0 | `src/lineage/*` |
 | T9 labels + aggregates (#16 #17 #9) | T7, T8 | `src/labels/*`, `src/aggregates/*` |

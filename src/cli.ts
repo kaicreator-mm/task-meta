@@ -9,9 +9,11 @@ import { assertNoForbiddenContent } from "./privacy.ts";
 import { GhCliClient, type GitHubClient, publishReport } from "./publish/index.ts";
 import {
   buildReportDocument,
+  loadAdoption,
   type ReportProfile,
   renderReportComment,
   reportDataDigest,
+  resolveProfile,
   UnrepresentableError,
 } from "./report/index.ts";
 import { EvidenceStore, NotFoundError } from "./store/index.ts";
@@ -32,12 +34,14 @@ export const EXIT = {
   STORE_VERIFY: 5,
   UNREPRESENTABLE: 6,
   NOT_PUBLISHED: 7,
+  HELD: 8,
 } as const;
 
 const USAGE = `usage: collect --repo <owner/name> --issue <n> --headless <file>
                [--model-io <file> | --zcode-rollout-dir <dir>] [--run <file>]
                [--gate-log <file> --gate-sha <40hex>] --store <dir> --out <report.md>
-               [--operator-id zcode] [--role builder] [--profile v4|v5] [--publish]`;
+               [--operator-id zcode] [--role builder] [--profile v4|v5] [--publish]
+               [--ads-pin <sha>] [--clearance-ref <ref>] [--publisher-source-sha <40hex>]`;
 
 class UsageError extends Error {}
 class Failure extends Error {
@@ -72,6 +76,9 @@ function optionsFrom(argv: string[]) {
       role: { type: "string" },
       profile: { type: "string" },
       publish: { type: "boolean" },
+      "ads-pin": { type: "string" },
+      "clearance-ref": { type: "string" },
+      "publisher-source-sha": { type: "string" },
     },
   });
   return { values, positionals };
@@ -138,8 +145,21 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
   if (v["model-io"] !== undefined && v["zcode-rollout-dir"] !== undefined) {
     throw new UsageError("--model-io and --zcode-rollout-dir are mutually exclusive");
   }
-  const profile = v.profile ?? "v4";
-  if (profile !== "v4" && profile !== "v5") throw new UsageError("--profile must be v4 or v5");
+  if (v.profile !== undefined && v.profile !== "v4" && v.profile !== "v5") {
+    throw new UsageError("--profile must be v4 or v5");
+  }
+  const resolution = resolveProfile({
+    ...(v.profile !== undefined ? { profile: v.profile as ReportProfile } : {}),
+    ...(v["ads-pin"] !== undefined ? { adsPin: v["ads-pin"] } : {}),
+    publish: v.publish === true,
+    adoption: loadAdoption(),
+  });
+  if (!resolution.ok) throw new UsageError(`${resolution.code}: ${resolution.message}`);
+  const profile = resolution.profile;
+  const publisherSha = v["publisher-source-sha"];
+  if (profile === "v5" && (publisherSha === undefined || !SHA_RE.test(publisherSha))) {
+    throw new UsageError("--profile v5 requires --publisher-source-sha <40 lowercase hex>");
+  }
 
   const headless = await readText(v.headless as string, "headless");
   const input: ZcodeRunInput = {
@@ -248,12 +268,34 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     );
   }
 
+  const clearance = v["clearance-ref"];
+  if (profile === "v5" && (clearance === undefined || clearance === "")) {
+    // No source-owner clearance: the evidence is stored but nothing is rendered for posting.
+    out(
+      `${JSON.stringify({
+        outcome: "HELD",
+        reason: "PUBLICATION_CLEARANCE_REQUIRED",
+        attempt_ref: attemptRef,
+        manifest: pointer,
+        capture_coverage: summary.capture_coverage,
+      })}
+`,
+    );
+    return EXIT.HELD;
+  }
   let doc: ReturnType<typeof buildReportDocument>;
   try {
     doc = buildReportDocument(summary, pointer, {
-      profile: profile as ReportProfile,
+      profile,
       revision: 1,
       supersedes: null,
+      ...(profile === "v5"
+        ? {
+            publisherSourceSha: publisherSha as string,
+            publication: { clearance_ref: clearance as string },
+            adsRevision: resolution.adsRevision,
+          }
+        : {}),
     });
   } catch (e) {
     if (e instanceof UnrepresentableError) {
