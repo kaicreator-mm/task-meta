@@ -27,6 +27,8 @@ export interface ZcodeRunInput {
   modelIo?: string;
   runRecord?: string;
   gateLog?: string;
+  /** Explicit commit the gate log is bound to; when absent the run record's head_after is used. */
+  gateSha?: string;
 }
 
 export interface ZcodeCollection {
@@ -124,7 +126,8 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
   const rejected = parsedIo?.rejected ?? [];
 
   const run = input.runRecord !== undefined ? parseRunRecord(input.runRecord) : null;
-  const gate = parseGateLog(input.gateLog ?? "", run?.head_after ?? null);
+  const gateSubject = input.gateSha ?? run?.head_after ?? null;
+  const gate = parseGateLog(input.gateLog ?? "", gateSubject);
   if (input.gateLog !== undefined && gate.exitCode === 0 && !gate.greenMarker) {
     limits.push("gate log has EXIT=0 but no task-check green marker");
   }
@@ -173,7 +176,7 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
 
   if (gate.exitCode !== null) {
     const o = skeleton(
-      `verifier:${sessionId}:${run?.head_after ?? "unbound"}`,
+      `verifier:${sessionId}:${gateSubject ?? "unbound"}`,
       "VERIFIER_RESULT",
       taskRef,
       sessionId,

@@ -298,3 +298,14 @@ test("privacy: collected output contains no forbidden content; raw fixtures do",
   // and the raw run.txt text carries an absolute path the guard flags
   assert.ok(findForbiddenContent({ line: "C:\\Users\\someone\\wt" }).length > 0);
 });
+
+test("gateSha binds the gate log explicitly, independent of run.txt head_after", () => {
+  const other = "a".repeat(40);
+  const r = collectZcodeRun(base({ gateSha: other }));
+  assert.equal(r.summary.verifier.subject_sha, other);
+  assert.equal(r.summary.source_sha, HEAD_AFTER);
+  assert.ok(r.observations.some((o) => o.observation_id.endsWith(`:${other}`)));
+  assert.equal(collectZcodeRun(base()).summary.verifier.subject_sha, HEAD_AFTER);
+  const noRun = collectZcodeRun({ ...without({ runRecord: null }), gateSha: other });
+  assert.equal(noRun.summary.verifier.status, "PASS");
+});
