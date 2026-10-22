@@ -1,0 +1,96 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { ADS_V4_REVISION, ADS_V5_REVISION, type ReportProfile } from "./types.ts";
+
+export interface AdoptionEntry {
+  ads_version: string;
+  main_sha: string;
+  report_schema_blob: string;
+  profile: "v5";
+}
+
+export interface Adoption {
+  note?: string;
+  adopted: AdoptionEntry[];
+}
+
+/** Git blob sha1 of the vendored version/v4.16 report.schema.json. */
+export const VENDORED_V416_SCHEMA_BLOB = "7478313cc006162432649d734e59c5cd77db5106";
+
+/** version/v4.16 candidate: CANDIDATE_ONLY, never publishable. */
+export const CANDIDATE_PIN = ADS_V5_REVISION;
+
+export function gitBlobSha1(bytes: Uint8Array): string {
+  return createHash("sha1").update(`blob ${bytes.byteLength}\0`).update(bytes).digest("hex");
+}
+
+export function vendoredV416SchemaBlob(): string {
+  const url = new URL("../../vendor/ads/v4.16/report.schema.json", import.meta.url);
+  return gitBlobSha1(readFileSync(url));
+}
+
+export function loadAdoption(): Adoption {
+  const url = new URL("../../config/ads-adoption.json", import.meta.url);
+  return JSON.parse(readFileSync(url, "utf8")) as Adoption;
+}
+
+export type ProfileMode = "ADOPTED" | "CANDIDATE" | "V4_DEFAULT";
+
+export type ProfileResolution =
+  | { ok: true; profile: ReportProfile; mode: ProfileMode; adsRevision: string }
+  | { ok: false; code: string; message: string };
+
+export interface ResolveInput {
+  profile?: ReportProfile;
+  adsPin?: string;
+  publish: boolean;
+  adoption: Adoption;
+}
+
+function fail(code: string, message: string): ProfileResolution {
+  return { ok: false, code, message };
+}
+
+/** Profile/pin guard (ADS §16.7): v5 is never automatic and the candidate is never publishable. */
+export function resolveProfile(input: ResolveInput): ProfileResolution {
+  const entries = input.adoption.adopted.filter((e) => e.profile === "v5");
+  let profile = input.profile;
+  let pin = input.adsPin;
+  if (profile === undefined) {
+    const first = entries[0];
+    if (!first) {
+      return { ok: true, profile: "v4", mode: "V4_DEFAULT", adsRevision: ADS_V4_REVISION };
+    }
+    profile = "v5";
+    pin ??= first.main_sha;
+  }
+  if (profile === "v4") {
+    return { ok: true, profile: "v4", mode: "V4_DEFAULT", adsRevision: ADS_V4_REVISION };
+  }
+  if (pin === undefined) {
+    return fail("ADS_PIN_REQUIRED", "--profile v5 requires --ads-pin <sha>");
+  }
+  if (pin === CANDIDATE_PIN) {
+    if (input.publish) {
+      return fail(
+        "CANDIDATE_NOT_PUBLISHABLE",
+        "version/v4.16 candidate pin is CANDIDATE_ONLY; publishing needs a qualified main adoption SHA",
+      );
+    }
+    return { ok: true, profile: "v5", mode: "CANDIDATE", adsRevision: pin };
+  }
+  const entry = entries.find((e) => e.main_sha === pin);
+  if (!entry) {
+    return fail(
+      "UNKNOWN_ADS_PIN",
+      `ads pin ${pin} is neither the candidate nor an adopted main SHA`,
+    );
+  }
+  if (entry.report_schema_blob !== VENDORED_V416_SCHEMA_BLOB) {
+    return fail(
+      "SCHEMA_BLOB_MISMATCH",
+      `adopted report_schema_blob ${entry.report_schema_blob} differs from the vendored v4.16 schema`,
+    );
+  }
+  return { ok: true, profile: "v5", mode: "ADOPTED", adsRevision: entry.main_sha };
+}

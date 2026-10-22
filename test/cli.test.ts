@@ -239,3 +239,72 @@ test("a differing report already on the issue yields CONFLICT, exit 7", async ()
   assert.equal(r.json.outcome, "CONFLICT");
   assert.equal(client.creates, 1);
 });
+
+const CANDIDATE = "3041a1be3f130e5cc5e676c2e56a99882adfd97c";
+const PUBLISHER_SHA = "b".repeat(40);
+const v5Args = (dir: string, extra: string[] = []) =>
+  baseArgs(dir, ["--profile", "v5", "--publisher-source-sha", PUBLISHER_SHA, ...extra]);
+
+test("v5 candidate dry run with clearance writes a v5 report", async () => {
+  const dir = await tmp();
+  const client = new FakeClient();
+  const r = await exec(
+    v5Args(dir, ["--ads-pin", CANDIDATE, "--clearance-ref", "clearance:synthetic"]),
+    client,
+  );
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.json.outcome, "DRY_RUN");
+  assert.equal(client.creates, 0);
+  const p = parseReportComment(await readFile(join(dir, "out", "report.md"), "utf8"));
+  assert.ok(p.ok);
+  assert.equal(p.profile, "v5");
+  assert.equal((p.doc.data.subject as { ads_revision: string }).ads_revision, CANDIDATE);
+});
+
+test("v5 candidate with --publish is refused (exit 2) and posts nothing", async () => {
+  const dir = await tmp();
+  const client = new FakeClient();
+  const r = await exec(
+    v5Args(dir, ["--ads-pin", CANDIDATE, "--clearance-ref", "clearance:synthetic", "--publish"]),
+    client,
+  );
+  assert.equal(r.code, 2);
+  assert.match(r.stderr, /CANDIDATE_NOT_PUBLISHABLE/);
+  assert.equal(client.creates, 0);
+});
+
+test("v5 without clearance is HELD (exit 8): store written, no report file, no create", async () => {
+  const dir = await tmp();
+  const client = new FakeClient();
+  const r = await exec(v5Args(dir, ["--ads-pin", CANDIDATE]), client);
+  assert.equal(r.code, 8, r.stderr);
+  assert.equal(r.json.outcome, "HELD");
+  assert.equal(r.json.reason, "PUBLICATION_CLEARANCE_REQUIRED");
+  assert.equal(client.creates, 0);
+  assert.equal(existsSync(join(dir, "out", "report.md")), false);
+  assert.ok(countFiles(join(dir, "store")) >= 4);
+});
+
+test("v5 without --ads-pin exits 2", async () => {
+  const dir = await tmp();
+  const r = await exec(v5Args(dir, ["--clearance-ref", "clearance:synthetic"]));
+  assert.equal(r.code, 2);
+  assert.match(r.stderr, /ADS_PIN_REQUIRED/);
+  assert.equal(countFiles(join(dir, "store")), 0);
+});
+
+test("v5 without --publisher-source-sha exits 2; unknown pin exits 2", async () => {
+  const dir = await tmp();
+  const noSha = baseArgs(dir, [
+    "--profile",
+    "v5",
+    "--ads-pin",
+    CANDIDATE,
+    "--clearance-ref",
+    "clearance:synthetic",
+  ]);
+  assert.equal((await exec(noSha)).code, 2);
+  const unknown = await exec(v5Args(dir, ["--ads-pin", "a".repeat(40), "--clearance-ref", "c"]));
+  assert.equal(unknown.code, 2);
+  assert.match(unknown.stderr, /UNKNOWN_ADS_PIN/);
+});

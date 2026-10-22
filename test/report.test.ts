@@ -84,7 +84,7 @@ function summary(over: Partial<AttemptSummary> = {}): AttemptSummary {
   };
 }
 
-const V5_PUB = { clearance_ref: "clearance:synthetic", projection_digest: "d".repeat(64) };
+const V5_PUB = { clearance_ref: "clearance:synthetic" };
 const v4opts = { profile: "v4", revision: 1, supersedes: null } as const;
 const v5opts = {
   profile: "v5",
@@ -192,11 +192,17 @@ describe("build / render / parse", () => {
   });
 
   it("v5 refuses values it cannot express", () => {
-    assert.throws(() => buildReportDocument(summary(), manifest, v5opts), UnrepresentableError);
+    // metrics without identity
+    assert.throws(
+      () => buildReportDocument(summary(), manifest, v5opts),
+      (e: unknown) =>
+        e instanceof UnrepresentableError && e.code === "METRIC_IDENTITY_REQUIRED_IN_V5",
+    );
     const noMetrics = summary({ metrics: [], verifier: { ...summary().verifier, status: "PASS" } });
     assert.throws(
       () => buildReportDocument(noMetrics, manifest, { ...v5opts, publication: undefined as any }),
-      UnrepresentableError,
+      (e: unknown) =>
+        e instanceof UnrepresentableError && e.code === "PUBLICATION_CLEARANCE_REQUIRED",
     );
   });
 

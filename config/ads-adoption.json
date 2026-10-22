@@ -1,0 +1,4 @@
+{
+  "note": "ADS v4.16 main adoption entries. Empty until a qualified main v4.16 adoption SHA exists (ADS §16.7); version/v4.16 3041a1b is CANDIDATE_ONLY. An entry: { ads_version, main_sha (40 hex), report_schema_blob, profile: v5 }.",
+  "adopted": []
+}
