@@ -10,6 +10,7 @@ export {
   type Adoption,
   type AdoptionEntry,
   CANDIDATE_PIN,
+  QUALIFIED_V416_MAIN_SHA,
   type E2eTestSubject,
   gitBlobSha1,
   loadAdoption,
