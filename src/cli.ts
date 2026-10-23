@@ -1,6 +1,7 @@
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { findCodexRollouts } from "./adapters/codex/find.ts";
 import { collectCodexRun } from "./adapters/codex/index.ts";
 import { parseCodexRollout } from "./adapters/codex/parse.ts";
 import { collectZcodeRun, type ZcodeRunInput } from "./adapters/zcode/index.ts";
@@ -10,12 +11,20 @@ import {
   parseRunRecord,
   type RunRecord,
 } from "./adapters/zcode/parse.ts";
-import { computeAggregates, PUBLIC_GAP_LIMIT } from "./aggregates/index.ts";
-import { canonicalDigest, sha256Hex } from "./canonical.ts";
-import { sortRunSegments } from "./correlate.ts";
-import { labelAttempt } from "./labels/index.ts";
-import { buildLineage, type GitExec, makeGitExec } from "./lineage/index.ts";
-import type { AttemptSummary, ManifestPointer, VerifierRecord } from "./model.ts";
+import { type AutoReportDeps, runAutoReportCommand } from "./autoreport/index.ts";
+import {
+  type AgentCollection,
+  buildEvidence,
+  countBy,
+  EXIT,
+  Failure,
+  type GateInput,
+  humanSummary,
+  manifestMatches,
+  persistRevision,
+  readManifestOrNull,
+} from "./collect-core.ts";
+import type { ManifestPointer } from "./model.ts";
 import { assertNoForbiddenContent } from "./privacy.ts";
 import { GhCliClient, type GitHubClient, publishReport } from "./publish/index.ts";
 import {
@@ -27,36 +36,18 @@ import {
   resolveProfile,
   UnrepresentableError,
 } from "./report/index.ts";
-import { EvidenceStore, NotFoundError } from "./store/index.ts";
-import {
-  assessVerifiers,
-  extractGateRecord,
-  parseTaskCheckLog,
-  type SubjectBinding,
-  toVerifierOutcome,
-} from "./verifier/index.ts";
+import { EvidenceStore } from "./store/index.ts";
 
-const E2E_LIMIT =
-  "ADS v4.16 candidate 3041a1b used as isolated E2E test subject; not production adoption";
+export { EXIT } from "./collect-core.ts";
 
 export interface CliDeps {
+  /** auto-report overrides (tests): sleep, env, inventory, adoption, settle wait. */
+  autoReport?: Partial<AutoReportDeps>;
   client?: GitHubClient;
   now?: () => Date;
   stdout?: (s: string) => void;
   stderr?: (s: string) => void;
 }
-
-export const EXIT = {
-  OK: 0,
-  FAILURE: 1,
-  USAGE: 2,
-  PRIVACY: 3,
-  REVISION_CONFLICT: 4,
-  STORE_VERIFY: 5,
-  UNREPRESENTABLE: 6,
-  NOT_PUBLISHED: 7,
-  HELD: 8,
-} as const;
 
 const USAGE = `usage: collect --repo <owner/name> --issue <n> --headless <file>
                [--model-io <file> | --zcode-rollout-dir <dir>] [--zcode-hook-spool <dir>] [--run <file>]
@@ -69,17 +60,12 @@ const USAGE = `usage: collect --repo <owner/name> --issue <n> --headless <file>
                [--codex-hook-spool <dir>] [--gate-log <file>[@<40hex>]]... [--gate-sha <40hex>]
                [--git-dir <dir>] --store <dir> --out <report.md> [--operator-id codex]
                [--role builder] [--profile v4|v5] [--publish] [--ads-pin <sha>]
-               [--clearance-ref <ref>] [--publisher-source-sha <40hex>]`;
+               [--clearance-ref <ref>] [--publisher-source-sha <40hex>]
+       auto-report --agent zcode|codex --session <id> [--spool-dir <dir>] [--rollout-dir <dir>]
+               [--store <dir>] [--outbox <dir>] [--config <file>] [--dry-run]
+       auto-report --retry [--config <file>] [--outbox <dir>] [--dry-run]`;
 
 class UsageError extends Error {}
-class Failure extends Error {
-  readonly code: number;
-  constructor(code: number, message: string) {
-    super(message);
-    this.code = code;
-  }
-}
-
 const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SHA_RE = /^[0-9a-f]{40}$/;
 const SESSION_FILE_RE = /^[A-Za-z0-9_.-]+$/;
@@ -133,50 +119,6 @@ function parseGateSpec(raw: string): GateSpec {
   return { file: raw, sha: null };
 }
 
-/** Subject = head_after of the finished segment whose end precedes the log mtime and the next start. */
-function inferSubject(segs: RunRecord[], mtimeMs: number): string | null {
-  for (let i = 0; i < segs.length; i++) {
-    const seg = segs[i] as RunRecord;
-    if (!seg.finished_at || !seg.head_after) continue;
-    const end = Date.parse(seg.finished_at);
-    if (Number.isNaN(end) || mtimeMs < end) continue;
-    const next = segs[i + 1];
-    const nextStart = next?.started_at ? Date.parse(next.started_at) : Number.NaN;
-    if (Number.isNaN(nextStart) || mtimeMs < nextStart) return seg.head_after;
-  }
-  return null;
-}
-
-function countBy(xs: string[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const x of xs) out[x] = (out[x] ?? 0) + 1;
-  return Object.fromEntries(Object.entries(out).sort(([a], [b]) => (a < b ? -1 : 1)));
-}
-
-function table(summary: AttemptSummary): string {
-  const rows = summary.metrics.map(
-    (m) =>
-      `| ${m.name} | ${m.value === null ? "unknown" : `${m.value} ${m.unit}`} | ${m.epistemic} | ${m.coverage} |`,
-  );
-  return ["| metric | value | epistemic | coverage |", "| --- | --- | --- | --- |", ...rows].join(
-    "\n",
-  );
-}
-
-function humanSummary(summary: AttemptSummary): string {
-  const lines = [
-    `**task-meta execution summary** for \`${summary.task_ref}\` (attempt \`${summary.attempt_ref}\`)`,
-    "",
-    `Capture coverage: **${summary.capture_coverage}**. Verifier: **${summary.verifier.status}**. Cost: unknown.`,
-    "",
-    table(summary),
-  ];
-  if (summary.limits.length > 0) {
-    lines.push("", "Limits:", ...summary.limits.map((l) => `- ${l}`));
-  }
-  return lines.join("\n");
-}
-
 async function readText(path: string, what: string): Promise<string> {
   try {
     return await readFile(path, "utf8");
@@ -185,35 +127,10 @@ async function readText(path: string, what: string): Promise<string> {
   }
 }
 
-/** Rollout files of one Codex thread under a sessions dir: `rollout-*<id>*.jsonl` (depth <= 4). */
-async function findCodexRollouts(dir: string, sessionId: string): Promise<string[]> {
-  const found: string[] = [];
-  const walk = async (d: string, depth: number): Promise<void> => {
-    let entries: import("node:fs").Dirent[];
-    try {
-      entries = await readdir(d, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const e of entries) {
-      if (e.isDirectory()) {
-        if (depth < 4) await walk(join(d, e.name), depth + 1);
-      } else if (
-        e.name.startsWith("rollout-") &&
-        e.name.endsWith(".jsonl") &&
-        e.name.includes(sessionId)
-      ) {
-        found.push(join(d, e.name));
-      }
-    }
-  };
-  await walk(dir, 0);
-  return found.sort();
-}
-
 async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Promise<number> {
   const now = deps.now ?? (() => new Date());
   const [command, ...rest] = argv;
+  if (command === "auto-report") return runAutoReportCommand(rest, deps, out);
   if (command !== "collect" && command !== "collect-codex") {
     throw new UsageError(`unknown or missing command: ${command ?? ""}`);
   }
@@ -293,12 +210,8 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
   const extraLimits: string[] = [];
   let runTexts: string[] = [];
   let attemptRef: string;
-  let codexRun = null as RunRecord | null;
-  let collect: (clock: string) => {
-    observations: ReturnType<typeof collectZcodeRun>["observations"];
-    summary: AttemptSummary;
-    profile: ReturnType<typeof collectZcodeRun>["profile"];
-  };
+  let codexRun: RunRecord | null = null;
+  let collect: (clock: string) => AgentCollection;
   if (isCodex) {
     let texts: string[];
     const files = v["codex-session"];
@@ -430,47 +343,27 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
 
   const store = new EvidenceStore(resolve(v.store as string));
   // Re-collecting the same inputs must be byte-identical: reuse the first revision's clock.
-  let existing: Awaited<ReturnType<EvidenceStore["readManifest"]>> | null = null;
-  try {
-    existing = await store.readManifest(attemptRef, 1);
-  } catch (e) {
-    if (!(e instanceof NotFoundError)) throw e;
-  }
+  const existing = await readManifestOrNull(store, attemptRef, 1);
   const clock = existing ? existing.created_at : now().toISOString();
 
-  const { observations, summary, profile: capability } = collect(clock);
-  summary.limits.push(...extraLimits);
-
-  // ---- R2: verifier assessment, lineage, labels, aggregates ----
+  const collection = collect(clock);
   const runs: RunRecord[] = isCodex
     ? codexRun
       ? [codexRun]
       : []
     : runTexts.map((t) => parseRunRecord(t));
-  const sorted = sortRunSegments(runs);
-  const records: VerifierRecord[] = [];
-  let inferredUsed = false;
-  let unboundCount = 0;
+  const gates: GateInput[] = [];
   for (const spec of gateSpecs) {
     const text = await readText(spec.file, "gate log");
-    const ref = `gate-log:${sha256Hex(text).slice(0, 12)}`;
-    let subject: string | null = spec.sha;
-    let binding: SubjectBinding = spec.sha !== null ? "OBSERVED" : "UNKNOWN";
-    // A gate-recorded GATE_SUBJECT_SHA (written at run time) beats mtime inference.
-    if (spec.sha === null && extractGateRecord(text).sha === null) {
-      let mtimeMs: number | null = null;
+    let mtimeMs: number | null = null;
+    if (spec.sha === null) {
       try {
         mtimeMs = (await stat(spec.file)).mtimeMs;
       } catch {
         mtimeMs = null;
       }
-      subject = mtimeMs === null ? null : inferSubject(sorted, mtimeMs);
-      if (subject !== null) {
-        binding = "INFERRED";
-        inferredUsed = true;
-      } else unboundCount++;
     }
-    records.push(parseTaskCheckLog(text, { ref, subject_sha: subject, subject_binding: binding }));
+    gates.push({ text, sha: spec.sha, mtimeMs });
   }
   // Required verifier scope is declared by the operator (e.g. a repo whose gate only runs tests);
   // default is the full task-check scope.
@@ -479,112 +372,25 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     .map((s) => s.trim())
     .filter((s) => s !== "")
     .map((s) => (s.startsWith("task-check:") ? s : `task-check:${s}`));
-  const assessment = assessVerifiers({
-    records,
-    attempt_source_sha: summary.source_sha,
-    run_exit_codes: runs.map((r) => r.exit_code),
-    ...(requiredScope && requiredScope.length > 0 ? { required_scope: requiredScope } : {}),
-  });
-  summary.verifier = toVerifierOutcome(assessment, summary.source_sha);
-
-  const git: GitExec | undefined =
-    v["git-dir"] !== undefined ? makeGitExec(resolve(v["git-dir"])) : undefined;
-  const lineage = await buildLineage({
-    attempt_ref: attemptRef,
+  const evidence = await buildEvidence({
+    collection,
+    attemptRef,
     runs,
-    ...(git ? { git } : {}),
-    segmentRefs: runs.map(
-      (_, i) => `${isCodex ? "codex:rollout" : "zcode:run-record"}:${attemptRef}#${i + 1}`,
-    ),
+    segmentPrefix: isCodex ? "codex:rollout" : "zcode:run-record",
+    gates,
+    requiredScope,
+    gitDir: v["git-dir"] !== undefined ? resolve(v["git-dir"]) : undefined,
+    extraLimits,
+    mode: resolution.mode,
   });
-  for (const t of lineage.transitions) {
-    if (t.to_version === null) continue;
-    for (const r of assessment.records) {
-      if (r.subject_sha !== null && t.to_version === `git:${r.subject_sha}`) {
-        const ref = r.source_refs[0];
-        if (ref !== undefined && !t.verifier_refs.includes(ref)) t.verifier_refs.push(ref);
-      }
-    }
-  }
-  const labels = labelAttempt({ observations, lineage, assessment });
-  const aggregates = computeAggregates({
-    summaryAttempts: [attemptRef],
-    excludedAttempts: [],
-    assessment,
-    lineage,
-    labels,
-  });
-  summary.limits.push(
-    `verifier outcome class: ${assessment.outcome_class}`,
-    `verifier conflicts: ${assessment.conflicts.length}`,
-    ...assessment.limits.slice(0, 5),
-  );
-  if (inferredUsed) {
-    summary.limits.push(
-      "gate log subject inferred from file mtime: after a finished run segment and before the next one starts",
-    );
-  }
-  if (unboundCount > 0) {
-    summary.limits.push(
-      `${unboundCount} gate log(s) without subject binding (mtime not inferable)`,
-    );
-  }
-  if (resolution.mode === "E2E_TEST_SUBJECT") summary.limits.push(E2E_LIMIT);
-  summary.limits.push(PUBLIC_GAP_LIMIT);
-  summary.limits = [...new Set(summary.limits)];
-
-  const values = {
-    observations,
-    summary,
-    capability,
-    verifier: assessment,
-    lineage,
-    labels,
-    aggregates,
-  };
-  try {
-    assertNoForbiddenContent(values);
-  } catch (e) {
-    throw new Failure(EXIT.PRIVACY, `privacy guard refused the evidence: ${(e as Error).message}`);
-  }
-  const ROLES = Object.keys(values) as (keyof typeof values)[];
-  if (existing) {
-    const same =
-      existing.objects.length === ROLES.length &&
-      ROLES.every(
-        (role) =>
-          existing.objects.find((o) => o.role === role)?.digest === canonicalDigest(values[role]),
-      );
-    if (!same) {
-      throw new Failure(
-        EXIT.REVISION_CONFLICT,
-        "attempt already has a different revision 1; revisions/supersedes are not supported by the v0.1 CLI",
-      );
-    }
-  }
-  const objects = [];
-  for (const role of ROLES) {
-    objects.push({ role, digest: (await store.putObject(values[role])).digest });
-  }
-  const written = await store.writeManifest({
-    attempt_ref: attemptRef,
-    revision: 1,
-    objects,
-    predecessor: null,
-    created_at: clock,
-  });
-  const pointer: ManifestPointer = {
-    ref: written.ref,
-    sha256: written.sha256,
-    access: written.access,
-  };
-  const verified = await store.verifyManifest(pointer.sha256);
-  if (!verified.ok) {
+  const { summary, assessment, lineage, labels } = evidence;
+  if (existing && !manifestMatches(existing, evidence)) {
     throw new Failure(
-      EXIT.STORE_VERIFY,
-      `store verification failed: missing=${verified.missing.length} tampered=${verified.tampered.length}`,
+      EXIT.REVISION_CONFLICT,
+      "attempt already has a different revision 1; revisions/supersedes are not supported by the v0.1 CLI",
     );
   }
+  const pointer: ManifestPointer = await persistRevision(store, evidence, 1, null, clock);
 
   const clearance = v["clearance-ref"];
   if (profile === "v5" && (clearance === undefined || clearance === "")) {

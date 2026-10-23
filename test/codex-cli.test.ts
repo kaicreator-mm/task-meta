@@ -140,6 +140,8 @@ function args(dir: string, file: string, extra: string[] = []): string[] {
     join(dir, "store"),
     "--out",
     join(dir, "out", "report.md"),
+    "--profile",
+    "v4",
     ...extra,
   ];
 }
@@ -266,6 +268,8 @@ test("--codex-sessions-dir + --session-id finds the base and continuation files"
     join(dir, "store"),
     "--out",
     join(dir, "out", "report.md"),
+    "--profile",
+    "v4",
   ]);
   assert.equal(r.code, 0, r.stderr);
   assert.equal(r.json.capture_coverage, "COMPLETE");
@@ -288,6 +292,8 @@ test("--codex-sessions-dir + --session-id finds the base and continuation files"
     join(dir2, "store"),
     "--out",
     join(dir2, "out", "report.md"),
+    "--profile",
+    "v4",
   ]);
   assert.equal(miss.code, 1);
   assert.match(miss.stderr, /no rollout file found/);
@@ -365,4 +371,32 @@ test("privacy guard still applies: a path-like operator id exits 3 and stores no
   );
   assert.equal(r.code, 3);
   assert.equal(countFiles(join(dir, "store")), 0);
+});
+
+test("without --profile collect-codex follows the owner-authorized v5 default", async () => {
+  const dir = await tmp();
+  const file = await rolloutFile(dir);
+  const noProfile = args(dir, file).filter(
+    (a, i, all) => a !== "--profile" && all[i - 1] !== "--profile",
+  );
+  // v5 needs the publisher source sha
+  assert.equal((await exec(noProfile)).code, 2);
+  // without clearance the evidence is stored but nothing is rendered
+  const held = await exec([...noProfile, "--publisher-source-sha", "b".repeat(40)]);
+  assert.equal(held.code, 8);
+  assert.equal(held.json.reason, "PUBLICATION_CLEARANCE_REQUIRED");
+  const ok = await exec([
+    ...noProfile,
+    "--publisher-source-sha",
+    "b".repeat(40),
+    "--clearance-ref",
+    "owner-authorization:test",
+  ]);
+  assert.equal(ok.code, 0, ok.stderr);
+  assert.equal(ok.json.profile, "v5");
+  const body = await readFile(join(dir, "out", "report.md"), "utf8");
+  assert.match(
+    body,
+    /ADS v4\.16 adopted from version\/v4\.16@3041a1b by project-owner authorization/,
+  );
 });

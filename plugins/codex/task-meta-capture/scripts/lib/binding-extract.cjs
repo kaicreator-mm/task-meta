@@ -1,3 +1,5 @@
+// GENERATED from plugins/shared/binding-extract.mjs by scripts/sync-plugin-shared.mjs; do not edit.
+"use strict";
 // Task-binding reference extraction. Pure, dependency-free (Node built-ins only).
 // Shared source: copied into each plugin's scripts/lib/ by `npm run sync-plugins`.
 // The input text is examined in memory; the output holds ONLY normalized refs
@@ -46,7 +48,7 @@ function blank(text, start, end) {
  * @param {{ aliases?: Record<string,string>, knownRepos?: string[] }} opts
  * @returns {{ refs: Array<{ kind: "ISSUE"|"PR"|"REPO", repo: string|null, number: number|null }> }}
  */
-export function extractRefs(text, opts = {}) {
+function extractRefs(text, opts = {}) {
   if (typeof text !== "string" || text === "") return { refs: [] };
   const map = repoMap(opts);
   /** @type {Array<{ pos: number, kind: string, repo: string|null, number: number|null }>} */
@@ -158,7 +160,7 @@ export function extractRefs(text, opts = {}) {
  * `<repo-or-alias>-i<issue>-<agent>`, `<repo-or-alias>-pr<n>-...`, `task/<name>`.
  * Task numbers (`-t13-`) are not Issue numbers and yield no Issue ref.
  */
-export function parseWorktreeName(name, opts = {}) {
+function parseWorktreeName(name, opts = {}) {
   if (typeof name !== "string" || name === "") return { refs: [] };
   const map = repoMap(opts);
   const base = name.split(/[/]/).filter(Boolean).pop() ?? "";
@@ -186,3 +188,5 @@ export function parseWorktreeName(name, opts = {}) {
   }
   return { refs };
 }
+
+module.exports = { extractRefs, parseWorktreeName };

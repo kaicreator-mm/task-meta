@@ -17,10 +17,24 @@ export interface E2eTestSubject {
   note?: string;
 }
 
+/** Project-owner authorization (DEFINITION v0.2 section 1.1): the candidate pin is the effective default. */
+export interface OwnerAuthorizedEntry {
+  ads_version: string;
+  ads_pin: string;
+  report_schema_blob: string;
+  profile: "v5";
+  /** "all" or the list of repositories (owner/name) the authorization covers. */
+  scope: "all" | string[];
+  authorization_ref: string;
+  authorized_on: string;
+  note?: string;
+}
+
 export interface Adoption {
   note?: string;
   adopted: AdoptionEntry[];
   e2e_test_subjects?: E2eTestSubject[];
+  owner_authorized?: OwnerAuthorizedEntry[];
 }
 
 /** Git blob sha1 of the vendored version/v4.16 report.schema.json. */
@@ -43,7 +57,12 @@ export function loadAdoption(): Adoption {
   return JSON.parse(readFileSync(url, "utf8")) as Adoption;
 }
 
-export type ProfileMode = "ADOPTED" | "CANDIDATE" | "E2E_TEST_SUBJECT" | "V4_DEFAULT";
+export type ProfileMode =
+  | "ADOPTED"
+  | "CANDIDATE"
+  | "E2E_TEST_SUBJECT"
+  | "OWNER_AUTHORIZED"
+  | "V4_DEFAULT";
 
 export type ProfileResolution =
   | { ok: true; profile: ReportProfile; mode: ProfileMode; adsRevision: string }
@@ -70,6 +89,23 @@ export function resolveProfile(input: ResolveInput): ProfileResolution {
   if (profile === undefined) {
     const first = entries[0];
     if (!first) {
+      // An adopted main entry wins; otherwise the owner authorization is the default.
+      const owner = (input.adoption.owner_authorized ?? []).find(
+        (e) =>
+          e.profile === "v5" &&
+          (pin === undefined || pin === e.ads_pin) &&
+          (e.scope === "all" ||
+            (input.repository !== undefined && e.scope.includes(input.repository))),
+      );
+      if (owner) {
+        if (owner.report_schema_blob !== VENDORED_V416_SCHEMA_BLOB) {
+          return fail(
+            "SCHEMA_BLOB_MISMATCH",
+            `owner-authorized report_schema_blob ${owner.report_schema_blob} differs from the vendored v4.16 schema`,
+          );
+        }
+        return { ok: true, profile: "v5", mode: "OWNER_AUTHORIZED", adsRevision: owner.ads_pin };
+      }
       return { ok: true, profile: "v4", mode: "V4_DEFAULT", adsRevision: ADS_V4_REVISION };
     }
     profile = "v5";

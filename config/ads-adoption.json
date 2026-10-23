@@ -1,6 +1,18 @@
 {
-  "note": "ADS v4.16 main adoption entries. Empty until a qualified main v4.16 adoption SHA exists (ADS §16.7); version/v4.16 3041a1b is CANDIDATE_ONLY. An entry: { ads_version, main_sha (40 hex), report_schema_blob, profile: v5 }. e2e_test_subjects: isolated E2E repositories that may receive the exact candidate pin; this is not production adoption and never changes the effective default pin.",
+  "note": "ADS v4.16 main adoption entries. Empty until a qualified main v4.16 adoption SHA exists (ADS §16.7); version/v4.16 3041a1b is CANDIDATE_ONLY. owner_authorized: project-owner authorization of the v4.16 candidate pin as the default profile (not ADS-main qualified). An adopted entry: { ads_version, main_sha (40 hex), report_schema_blob, profile: v5 }. e2e_test_subjects: isolated E2E repositories that may receive the exact candidate pin; this is not production adoption and never changes the effective default pin.",
   "adopted": [],
+  "owner_authorized": [
+    {
+      "ads_version": "4.16",
+      "ads_pin": "3041a1be3f130e5cc5e676c2e56a99882adfd97c",
+      "report_schema_blob": "7478313cc006162432649d734e59c5cd77db5106",
+      "profile": "v5",
+      "scope": "all",
+      "authorization_ref": "owner-authorization:2026-10-23:kaicreator-mm",
+      "authorized_on": "2026-10-23",
+      "note": "spec complete; remaining ADS work is testing; not ADS-main qualified"
+    }
+  ],
   "e2e_test_subjects": [
     {
       "repository": "kaicreator-mm/task-meta-e2e",

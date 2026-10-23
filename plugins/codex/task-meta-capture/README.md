@@ -35,6 +35,16 @@ clock), Bash/exec `input_class` (fixed enum, only when the tool input has a `com
 SessionEnd only: `git_head`, `git_dirty`, `git_remote_repo` (`owner/name`) via
 `git -C <cwd> ...` with a 2 s timeout.
 
+Since 0.2.0 (task binding + auto-report):
+- `binding_refs` (UserPromptSubmit): normalized Issue/PR/repo references extracted in memory from
+  the prompt; the prompt text itself is dropped.
+- `worktree_refs` (SessionStart / Stop / SessionEnd): refs parsed from the cwd directory name and
+  the current branch name, same helpers as the ZCode plugin (`plugins/shared`, built to
+  `scripts/lib/*.cjs` by `npm run sync-plugins`).
+- Stop / SessionEnd start `task-meta auto-report --agent codex --session <id>` detached, using
+  `TASK_META_HOME` or the plugin-local `config.json` (`taskMetaHome`). Kill switch:
+  `TASK_META_AUTO_REPORT=0` or `"enabled": false` in `config/auto-report.json`.
+
 ## What is NOT captured
 
 Prompts, assistant text, tool input and response, error messages, the working directory or

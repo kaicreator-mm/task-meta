@@ -1,6 +1,8 @@
 // Ingestion of the Codex task-meta-capture hook spool (plugins/codex/task-meta-capture).
 // Lines are `{"d":sha256(JCS(e)),"e":e}`, metadata only, schema `task-meta/codex-hook/v1`.
+import type { BindingRef } from "../../binding/types.ts";
 import { canonicalDigest } from "../../canonical.ts";
+import { toRefs } from "../zcode/hooks.ts";
 
 export const CODEX_HOOK_SCHEMA = "task-meta/codex-hook/v1";
 
@@ -40,6 +42,9 @@ export interface CodexHookEntry {
   git_dirty: boolean | null;
   git_remote_repo: string | null;
   cwd_digest: string | null;
+  /** v0.2 fields (plugin >= 0.2.0); null in 0.1.x lines. Refs only, never prompt text. */
+  binding_refs: BindingRef[] | null;
+  worktree_refs: Array<BindingRef & { source: "WORKTREE" | "BRANCH" }> | null;
 }
 
 export interface CodexHookSpoolParse {
@@ -84,6 +89,8 @@ function toEntry(e: unknown): CodexHookEntry | null {
     git_dirty: typeof o.git_dirty === "boolean" ? o.git_dirty : null,
     git_remote_repo: strOrNull(o.git_remote_repo),
     cwd_digest: strOrNull(o.cwd_digest),
+    binding_refs: toRefs(o.binding_refs, false),
+    worktree_refs: toRefs(o.worktree_refs, true) as CodexHookEntry["worktree_refs"],
   };
 }
 

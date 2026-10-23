@@ -45,6 +45,14 @@ export interface HookEntry {
   worktree_refs?: Array<BindingRef & { source: "WORKTREE" | "BRANCH" }> | null | undefined;
 }
 
+/** The slice of a hook-spool entry the binding resolver reads (ZCode and Codex spools share it). */
+export interface BindingSpoolEntry {
+  event: string;
+  binding_refs?: BindingRef[] | null | undefined;
+  git_remote_repo?: string | null | undefined;
+  worktree_refs?: Array<BindingRef & { source: "WORKTREE" | "BRANCH" }> | null | undefined;
+}
+
 export interface HookSpoolParse {
   entries: HookEntry[];
   skipped: { line: number; reason: string }[];
@@ -69,7 +77,7 @@ const HEAD_RE = /^[0-9a-f]{40}$/;
 const REMOTE_RE = /^[\w.-]+\/[\w.-]+$/;
 const MAX_REFS = 64;
 
-function toRefs(v: unknown, withSource: boolean): BindingRef[] | null {
+export function toRefs(v: unknown, withSource: boolean): BindingRef[] | null {
   if (!Array.isArray(v)) return null;
   const out: BindingRef[] = [];
   for (const x of v.slice(0, MAX_REFS)) {
@@ -367,7 +375,7 @@ export function hookOnlyTool(h: HookTool, skeleton: ObservationRecord): Observat
  * the git remote (SessionStart/Stop). Normalized refs only. The caller supplies the inventory
  * to `resolveBinding`.
  */
-export function bindingInputFromSpool(entries: HookEntry[]): BindingSources {
+export function bindingInputFromSpool(entries: BindingSpoolEntry[]): BindingSources {
   const promptRefs: BindingRef[] = [];
   const worktreeRefs: BindingRef[] = [];
   const branchRefs: BindingRef[] = [];

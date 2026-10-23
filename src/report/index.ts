@@ -13,6 +13,7 @@ export {
   type E2eTestSubject,
   gitBlobSha1,
   loadAdoption,
+  type OwnerAuthorizedEntry,
   type ProfileResolution,
   resolveProfile,
   VENDORED_V416_SCHEMA_BLOB,

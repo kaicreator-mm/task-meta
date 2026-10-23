@@ -47,6 +47,8 @@ export interface ZcodeRunInput {
   gateSha?: string;
   /** Contents of the task-meta-capture hook spool for this session (`<sessionId>.jsonl`). */
   hookSpool?: string;
+  /** Explicit session id (UI sessions have no headless result; the hook spool carries it). */
+  sessionId?: string;
 }
 
 export interface ZcodeCollection {
@@ -132,9 +134,21 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
   const parsedIo = input.modelIo !== undefined ? parseModelIo(input.modelIo) : null;
   const limits: string[] = [];
 
-  const sessionId = headless?.sessionId ?? parsedIo?.records[0]?.sessionId ?? null;
+  if (
+    input.headless === undefined &&
+    input.modelIo === undefined &&
+    input.hookSpool === undefined
+  ) {
+    throw new Error(
+      "zcode adapter: no session source: need at least one of headless result, model-io or hook spool",
+    );
+  }
+  const sessionId =
+    input.sessionId ?? headless?.sessionId ?? parsedIo?.records[0]?.sessionId ?? null;
   if (!sessionId) {
-    throw new Error("zcode adapter: no session id (neither headless result nor model-io provided)");
+    throw new Error(
+      "zcode adapter: no session id (neither headless result nor model-io nor explicit id provided)",
+    );
   }
 
   const taskRef = `${input.repository}#${input.issue_number}`;
