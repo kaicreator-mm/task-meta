@@ -51,6 +51,14 @@ auto-report is told what fired it. A `stop` run waits `settle_seconds` (default 
 session to go quiet and defers to a later Stop if another turn starts; `session-end` publishes
 at once; at most `max_revisions_per_session` (default 3) revisions are posted per session.
 
+Since 0.2.4 (watcher): Codex on Windows kills the hook job object when the session exits, which
+also kills an auto-report spawned from Stop/SessionEnd. SessionStart therefore starts
+`auto-report --agent codex --session <id> --trigger watch` through WMI (`Win32_Process.Create`,
+outside the job; elsewhere a detached spawn). The watcher polls the spool and reports on
+SessionEnd or on a settled Stop. Stop/SessionEnd keep spawning a direct detached auto-report
+(harmless duplicates: lock + idempotency). Extra stop switches for the WMI-created process (it does
+not see `TASK_META_AUTO_REPORT=0`): `"enabled": false` or a file `<outbox>/STOP`.
+
 ## What is NOT captured
 
 Prompts, assistant text, tool input and response, error messages, the working directory or

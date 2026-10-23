@@ -13,6 +13,10 @@ export interface AutoReportConfig {
   claude: { spool_dir: string; projects_dir: string };
   /** Stop-triggered runs wait this long without new spool activity before publishing. */
   settle_seconds: number;
+  /** `--trigger watch`: exit after this long without any spool activity. */
+  watch_idle_exit_seconds: number;
+  /** `--trigger watch`: maximum watcher lifetime. */
+  watch_max_seconds: number;
   /** Revisions per session beyond which new data is HELD (REVISION_CAP) until session-end/retry. */
   max_revisions_per_session: number;
   gate_log_root: string | null;
@@ -76,6 +80,8 @@ export function loadAutoReportConfig(path?: string, home: string = homedir()): A
       projects_dir: expandHome(str(cl.projects_dir, "~/.claude/projects"), home),
     },
     settle_seconds: num(j.settle_seconds, 180, 0),
+    watch_idle_exit_seconds: num(j.watch_idle_exit_seconds, 21600, 1),
+    watch_max_seconds: num(j.watch_max_seconds, 86400, 1),
     max_revisions_per_session: Math.floor(num(j.max_revisions_per_session, 3, 1)),
     gate_log_root: gate === null ? null : expandHome(gate, home),
     publisher_source_sha: str(j.publisher_source_sha, "auto"),

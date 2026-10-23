@@ -10,6 +10,10 @@ export type OutboxState =
   | "FAILED"
   | "DISABLED"
   | "ALREADY_RUNNING"
+  /** A `--trigger watch` process already watches this session. */
+  | "ALREADY_WATCHING"
+  /** A watcher gave up (no spool activity for `watch_idle_exit_seconds`, or max lifetime). */
+  | "WATCH_IDLE_EXIT"
   /** A Stop-triggered run saw new session activity while settling; the later Stop reports. */
   | "SUPERSEDED_BY_ACTIVITY"
   /** Returned by `--dry-run` only; never written to the outbox. */
@@ -76,10 +80,14 @@ export class Outbox {
   }
 
   /** Exclusive per-session lock file. Returns a release function, or null when already held. */
-  async lock(session: string): Promise<(() => Promise<void>) | null> {
+  async lock(
+    session: string,
+    suffix = "lock",
+    staleMs: number = STALE_LOCK_MS,
+  ): Promise<(() => Promise<void>) | null> {
     const dir = join(this.dir, "locks");
     await mkdir(dir, { recursive: true });
-    const file = join(dir, `${safeName(session)}.lock`);
+    const file = join(dir, `${safeName(session)}.${suffix}`);
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const fh = await open(file, "wx");
@@ -99,7 +107,7 @@ export class Outbox {
         if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
         // A crashed process must not block the session forever.
         try {
-          if (Date.now() - (await stat(file)).mtimeMs > STALE_LOCK_MS) {
+          if (Date.now() - (await stat(file)).mtimeMs > staleMs) {
             await unlink(file);
             continue;
           }

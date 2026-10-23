@@ -10,6 +10,7 @@ import {
   type AutoReportTrigger,
   autoReportSession,
 } from "./runner.ts";
+import { type WatchDeps, watchSession } from "./watcher.ts";
 
 export { loadAutoReportConfig } from "./config.ts";
 export type { AutoReportGitHub } from "./github.ts";
@@ -20,6 +21,7 @@ export {
   type AutoReportTrigger,
   autoReportSession,
 } from "./runner.ts";
+export { type WatchDeps, watchSession } from "./watcher.ts";
 
 export interface AutoReportCliDeps {
   client?: unknown;
@@ -27,6 +29,7 @@ export interface AutoReportCliDeps {
   stdout?: (s: string) => void;
   stderr?: (s: string) => void;
   autoReport?: Partial<AutoReportDeps>;
+  watch?: Partial<WatchDeps>;
 }
 
 /** `auto-report ...` command. Exit 0 for every outcome; only usage errors exit 2. */
@@ -54,15 +57,25 @@ export async function runAutoReportCommand(
       return EXIT.USAGE;
     }
   }
-  if (v.trigger !== undefined && v.trigger !== "stop" && v.trigger !== "session-end") {
-    err("error: --trigger must be stop or session-end\n");
+  const isWatch = v.trigger === "watch";
+  if (v.trigger !== undefined && v.trigger !== "stop" && v.trigger !== "session-end" && !isWatch) {
+    err("error: --trigger must be stop, session-end or watch\n");
+    return EXIT.USAGE;
+  }
+  if (isWatch && (v.retry === true || v["dry-run"] === true)) {
+    err("error: --trigger watch cannot combine with --retry or --dry-run\n");
     return EXIT.USAGE;
   }
   const base: Omit<AutoReportOptions, "agent" | "session"> = {
     spoolDir: v["spool-dir"],
     rolloutDir: v["rollout-dir"],
     projectsDir: v["projects-dir"],
-    trigger: v.retry === true ? "retry" : (v.trigger as AutoReportTrigger | undefined),
+    trigger:
+      v.retry === true
+        ? "retry"
+        : isWatch
+          ? undefined
+          : (v.trigger as AutoReportTrigger | undefined),
     store: v.store,
     outbox: v.outbox,
     configPath: v.config,
@@ -74,6 +87,14 @@ export async function runAutoReportCommand(
     ...(deps.autoReport ?? {}),
   };
   try {
+    if (isWatch) {
+      const r = await watchSession(
+        { ...base, agent: v.agent as string, session: v.session as string },
+        { ...d, ...(deps.watch ?? {}) },
+      );
+      out(`${JSON.stringify(r)}\n`);
+      return EXIT.OK;
+    }
     if (v.retry !== true) {
       const r = await autoReportSession(
         { ...base, agent: v.agent as string, session: v.session as string },

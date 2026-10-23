@@ -225,6 +225,20 @@ desktop app (2.1.308 locally) fires plugin hooks identically, that async hooks o
 are not killed before they write (Stop/SessionEnd are therefore synchronous), and that `/clear` or a
 resume ends a session with SessionEnd.
 
+## 12. Codex watcher (`auto-report --trigger watch`, Codex plugin 0.2.4)
+
+- `codex exec` kills its Windows job object right after Stop/SessionEnd, taking a hook-spawned reporter
+  with it (a PowerShell/WMI spawn started there never finishes). SessionStart starts a watcher instead
+  (WMI `Win32_Process.Create`, outside the job, 4 s timeout); Stop/SessionEnd only spawn directly.
+- The watcher polls the session spool every 2 s (size change = activity): SessionEnd => publish like
+  `session-end` and exit; Stop + `settle_seconds` quiet => publish like `stop`, keep watching (a later
+  settled Stop publishes revision N+1, bounded by `max_revisions_per_session`).
+- Exits `WATCH_IDLE_EXIT` (no publish) after `watch_idle_exit_seconds` (6 h) without activity or
+  `watch_max_seconds` (24 h) lifetime. One watcher per session: lock `<outbox>/locks/<session>.watch`
+  (stale after `watch_max_seconds`); a second one ends `ALREADY_WATCHING`.
+- Kill switch checked every iteration: `enabled:false` in config or a file `<outbox>/STOP`
+  (`TASK_META_AUTO_REPORT=0` is invisible to a WMI process); outbox state `DISABLED`.
+
 ## 13. T19 golden set status (#16)
 
 - Sample: 224 real tool-call events (zcode 120, claude 72, codex 32) from the capture-plugin hook

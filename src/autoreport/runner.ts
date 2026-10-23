@@ -71,6 +71,8 @@ export interface AutoReportOptions {
   outbox?: string | undefined;
   configPath?: string | undefined;
   dryRun?: boolean | undefined;
+  /** The caller (the watcher) already settled; a `stop` trigger skips its own settle wait. */
+  skipSettle?: boolean | undefined;
 }
 
 export interface AutoReportDeps {
@@ -86,7 +88,7 @@ export interface AutoReportDeps {
 
 const SESSION_RE = /^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,199}$/;
 const SESSION_FILE_RE = /^[A-Za-z0-9_.-]+$/;
-const realSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+export const realSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** Replace absolute paths and bound the length: outbox reasons never carry local paths. */
 function scrub(msg: string): string {
@@ -212,7 +214,7 @@ function asSupersedes(v: unknown): SupersedesRef | null {
   return null;
 }
 
-function agentDirs(
+export function agentDirs(
   opts: AutoReportOptions,
   cfg: AutoReportConfig,
 ): { spoolDir: string; artifactDir: string } {
@@ -236,7 +238,7 @@ function agentDirs(
 
 type SpoolParser = (text: string) => { entries: SpoolView[]; all: SpoolEntries };
 
-function spoolParser(agent: string): SpoolParser {
+export function spoolParser(agent: string): SpoolParser {
   if (agent === "claude") {
     return (text) => {
       const e = parseClaudeHookSpool(text).entries;
@@ -265,7 +267,7 @@ function spoolParser(agent: string): SpoolParser {
 }
 
 /** Late hook lines of an already finished turn; they are not new session activity. */
-const STRAGGLER_EVENTS: ReadonlySet<string> = new Set([
+export const STRAGGLER_EVENTS: ReadonlySet<string> = new Set([
   "PostToolUse",
   "PostToolUseFailure",
   "SubagentStop",
@@ -701,7 +703,7 @@ export async function autoReportSession(
   if (!SESSION_RE.test(opts.session)) return finish(entry("FAILED", ["invalid session id"]));
 
   // Settle BEFORE taking the lock: a later Stop's run must not be turned away by this one.
-  if (!dry && opts.trigger === "stop") {
+  if (!dry && opts.trigger === "stop" && opts.skipSettle !== true) {
     let quiet = true;
     try {
       quiet = await settledQuiet(opts, cfg, deps);
