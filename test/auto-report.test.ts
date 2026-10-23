@@ -232,7 +232,7 @@ async function allText(dir: string): Promise<string> {
 }
 
 describe("auto-report publish", () => {
-  test("synthetic UI session: PUBLISHED to the bound Issue, v5 + owner limit, outbox verifies", async () => {
+  test("synthetic UI session: PUBLISHED with qualified main v5 pin and outbox receipt", async () => {
     const env = await setup({ spool: GOOD() });
     const gh = new FakeGh();
     const r = await run(env, gh);
@@ -250,9 +250,9 @@ describe("auto-report publish", () => {
     assert.equal(subject.repository, REPO);
     assert.equal(subject.issue_ref, `https://github.com/${REPO}/issues/1296`);
     assert.equal(subject.source_sha, H2);
-    assert.equal(subject.ads_revision, "3041a1be3f130e5cc5e676c2e56a99882adfd97c");
+    assert.equal(subject.ads_revision, "718fb02e33b31f568736447b2b905883cc6fcc3a");
     assert.equal(subject.publisher_source_sha, PUB_SHA);
-    assert.ok((d.limits as string[]).includes(OWNER_LIMIT));
+    assert.ok(!(d.limits as string[]).includes(OWNER_LIMIT));
     assert.equal(d.revision, 1);
     assert.equal(d.supersedes, null);
     assert.equal((d.verifier as { status: string }).status, "NOT_RUN");
