@@ -1,6 +1,6 @@
-# task-meta v0.3 — L1 Product Evidence and source-delta ledger (R0)
+# task-meta v0.3 — L1 Product Evidence R1 focused source-delta repair
 
-**Status:** PRODUCT_EVIDENCE_R0_CANDIDATE / NOT_INDEPENDENTLY_REVIEWED / PRD_FREEZE=NO / L2_FREEZE=NO / TASK_DAG=NOT_ADMITTED. This is authored design evidence, not independent Review, an implementation Claim, or Release qualification.
+**Status:** PRODUCT_EVIDENCE_R1_CANDIDATE / R0_INDEPENDENT_BLOCK_P1_1_P2_1 / R1_REVIEW_NOT_RUN / PRD_FREEZE=NO / L2_FREEZE=NO / TASK_DAG=NOT_ADMITTED. This is authored design evidence, not independent Review, an implementation Claim, or Release qualification.
 
 ## 1. Immutable observed baselines
 
@@ -11,7 +11,7 @@
 | ADS v4.17 protocol phase | `version/v4.17@1355bc0694b3b0225effa82b670725f83a2b873b` | C08/C10 integrated only into version branch; full ADS v4.17 Release NOT CLAIMED |
 | ADS normative owner | `standards/GITHUB_AGENT_INTERACTION_PROTOCOL.md` blob `49ecd802c5bf14237e23d5e321c56c220eb8974e` | §10 C08, §16.6–16.7 C10; no new v3/v4/v5 wire |
 | ADS compatible predecessor | `main@718fb02e33b31f568736447b2b905883cc6fcc3a` | v4.16 predecessor qualified; v5 schema blob `7478313cc006162432649d734e59c5cd77db5106` |
-| task-meta v0.3 Product requirements | #27–#31, #33 | Future requirements, not implemented tasks |
+| task-meta v0.3 Product requirements | #27–#31, #33, #36 | Future requirements, not implemented tasks |
 | downstream requirement intake | Tally #70–#72 | Not a current Tally runtime qualification |
 
 **Currentness boundary:** These pins are exact review subjects, not mutable `latest` imports. On a branch/source change rerun the applicable source-delta comparison. Normal/public production v5 publication requires independently qualified effective ADS v4.16 **main SHA** with a verified exact vendored v5 Schema blob and applicable publication clearance. Project-owner authorization of a *candidate version-branch* is not a substitute for that qualified main source. Without valid adoption the normal writer must fail closed (qualified v4 profile only if separately permitted, otherwise HELD); isolated allowlisted candidate test lanes remain test-only. V4.17 version-branch protocol text is usable for source-conformance development but is not automatically an authorized production v4.17 release.
@@ -57,6 +57,7 @@
 
 | Lane | task-meta | ADS v4.17 semantic owner | Tally consumer |
 |---|---|---|---|
+| Qualified v5 publication admission (existing v0.2 defect) | #36 | GAIP §16.7 v4.16 qualified main pin, inherited by v4.17 | #72 producer/consumer compatibility |
 | Source-qualified attempt→report→feedback join | #28 | C09 #1295, existing v5 feedback | #70 |
 | Correction/currentness/prospective eligibility inputs | #29 | C10 #1296 (merged GAIP §16.6–16.7) | #71 |
 | Public comparable, privacy-safe metrics | #30 | C12 #1298, inherited v5 schema | #72 |
@@ -79,6 +80,8 @@
 4. v0.2 status disposition: implementation merged at exact main, release NOT_QUALIFIED/UNKNOWN, author-requested v0.3 source-baseline carry-forward only; a separate qualified v0.2 closeout or v0.3 explicit full requalification is required before v0.3 Release. Reviewer must never backfill v0.2 PASS.
 5. Verify normal v5 publisher's qualification gate: old all-repo owner-authorized candidate with adopted=[] and publish=true MUST be blocked, whereas authorized isolated E2E retains candidate-specific test-only capability. After an actual effective qualified-main adoption is verified, normal publishing may use that exact main SHA and unchanged schema. Qualified v4 fallback only when independently admissible; otherwise HELD.
 6. Should Tally app E2E block this version? (Proposed: source/producer verification required; cross-product Tally live runtime explicitly separate, NOT_RUN when unavailable.)
+
+**R1 author repair:** P1-01 normal v5 publication authorization is now explicitly an implementation-blocking product requirement #36 with six negative/positive source cases; P2-01 treats v0.2 feature baseline as carried forward for source planning only, with v0.2 Release NOT_QUALIFIED_OR_UNKNOWN and mandatory v0.3 release requalification. No production source change, owner Freeze, independent Reviewer PASS or runtime test is claimed.
 
 Source-only L1 evidence, not a test or implementation claim.
 
