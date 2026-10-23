@@ -1,22 +1,30 @@
-# task-meta v0.3 — PRD R0 Candidate
+# task-meta v0.3 — PRD R1 Candidate (focused Product Review repair)
 
-**Status:** PRODUCT_PRD_R0_CANDIDATE / INDEPENDENT_PRODUCT_REVIEW_NOT_RUN / PRODUCT_FREEZE=NO / L2_NOT_FROZEN / TASK_DAG_NOT_ADMITTED / NO_V03_IMPLEMENTATION_CLAIM.
+**Status:** PRODUCT_PRD_R1_CANDIDATE / INDEPENDENT_R0_REVIEW=BLOCK_P1_1_P2_1 / R1_DELTA_REVIEW=NOT_RUN / PRODUCT_FREEZE=NO / L2_NOT_FROZEN / TASK_DAG_NOT_ADMITTED / NO_V03_IMPLEMENTATION_CLAIM.
 **Parent:** [#27](https://github.com/kaicreator-mm/task-meta/issues/27). **Requirement lanes:** #28/#29/#30/#31/#33. **L1 evidence:** [L1_PRODUCT_EVIDENCE_R0.md](./L1_PRODUCT_EVIDENCE_R0.md).
 
 ## 1. Product decision and value
 
 v0.3 makes task-meta a **source-qualified ADS v4.17 evidence/feedback producer and observational analysis companion**, building directly on existing v0.2 capture/publisher. The version provides reconstructible evidence→report→public feedback joins; lawful immutable correction/currentness; profile-safe public comparability; optional C08 owner-governed strategy trajectories; joint ADS GitHub-only Golden producer conformance. No alternate transport or task authority.
 
-**Primary user journey:** a real ZCode/Claude Code/Codex Task is bound to Issue/Attempt and witnessed Agent/Host events; task-meta retains only safe private immutable observations, publishes a qualified ADS v5 `EXECUTION_SUMMARY` with actual native GitHub readback; a future Tally reader accesses only native GitHub records, and may publish existing ADS `EXPERIENCE_USE_FEEDBACK`; task-meta separately observes its source-qualified native public reference as facts, without inferring Tally selection or effectiveness. Late verifier evidence or a lawful correction produces profile-valid revision/notice, never historical mutation. Independent Cross-system Golden and real E2E are distinct.
+**Primary user journey:** a real ZCode/Claude Code/Codex Task is bound to Issue/Attempt and witnessed Agent/Host events; task-meta retains only safe private immutable observations, first enforces a qualified normal-publication profile+pin+clearance (otherwise HELD), then publishes a conformant ADS v5 `EXECUTION_SUMMARY` when authorized with actual native GitHub readback; a future Tally reader accesses only native GitHub records, and may publish existing ADS `EXPERIENCE_USE_FEEDBACK`; task-meta separately observes its source-qualified native public reference as facts, without inferring Tally selection or effectiveness. Late verifier evidence or a lawful correction produces profile-valid revision/notice, never historical mutation. Independent Cross-system Golden and real E2E are distinct.
 
 ## 2. Authority and non-goals
 
-- ADS v4.17 protocol baseline is `version/v4.17@1355bc0694b3b0225effa82b670725f83a2b873b`; GAIP normative blob `49ecd802c5bf14237e23d5e321c56c220eb8974e`; existing v5 schema blob `7478313cc006162432649d734e59c5cd77db5106`. C08/C10 are source-merged; ADS full v4.17 Release NOT asserted. Production adoption requires effective qualified/project-authorized profile pin and limits.
+- ADS v4.17 protocol baseline is `version/v4.17@1355bc0694b3b0225effa82b670725f83a2b873b`; GAIP normative blob `49ecd802c5bf14237e23d5e321c56c220eb8974e`; existing v5 schema blob `7478313cc006162432649d734e59c5cd77db5106`. C08/C10 are source-merged; ADS full v4.17 Release NOT asserted. For **ordinary v5 publication**, v0.3 requires an actually qualified immutable ADS v4.16 **main** SHA entry, exact vendored v5 Schema blob and source-owned publication clearance; merely project-owner-authorized **version-branch candidate** cannot authorize normal GitHub writes. Existing v0.2 `owner_authorized` all-repo default is an explicitly blocking baseline defect requiring a narrowly scoped v0.3 remediation task. Isolated allowlisted E2E candidate publication is permitted only within its original strictly labeled test lane; no production PASS inference.
 - ADS solely owns semantics and public wire. task-meta owns collecting and safely projecting facts, NEVER Task acceptance, CI/Review/Host truth, Tally advisory decision, requalification of Tally candidates, package authoring, Agent scheduler/optimizer, policy engine, or training.
 - No Tally→task-meta callback, DB, API, SDK, raw-Trace or private-manifest reads; Tally GitHub-only access is a non-negotiable interface. No new `ads/github/v6`, v5 fields, report kinds or global Gate.
 - Historical v3/v4/v5 payloads unchanged. No universal required provider hook; provider capability and privacy limit are explicit. No raw prompts, reasoning text, private file paths, complete tool args/results, secrets, hidden grader, private source diffs in public objects.
 
 ## 3. Functional requirements
+
+### FR00 — Fail-closed ADS publication adoption and qualified prior baseline (P0, v0.3 release precondition)
+- Existing source `config/ads-adoption.json` has `adopted: []` with `owner_authorized` `scope:all` for unqualified `version/v4.16@3041a1be3f130e5cc5e676c2e56a99882adfd97c`; existing `src/report/pin.ts` auto-selects `OWNER_AUTHORIZED` v5 default even when `publish=true`. This **must not continue** as v0.3 ordinary production behavior. It is a live baseline discrepancy, not a contract permitting exception.
+- Only a qualified immutable ADS v4.16 **main** adoption (currently source-qualified predecessor `main@718fb02e33b31f568736447b2b905883cc6fcc3a`, subject to actual effective adoption), exact existing v5 schema blob `7478313cc006162432649d734e59c5cd77db5106`, verified repository/profile clearance and permitted subject may yield `ADOPTED` normal-publication mode. A version-branch candidate/owner assertion/default/all scope must not silently grant it.
+- With no qualified matching entry, ordinary v5 publication is nonpublishable/HELD; an independently qualified authorized **v4** profile may be selected only when caller policy allows, never silently recast candidate v5 as v4 success. An isolated explicitly allowlisted `task-meta-e2e` test subject may retain candidate-profile `E2E_TEST_SUBJECT` behavior, but report carries test-only provenance and never establishes normal production qualification. Unknown/mismatched SHA/blob/clearance must fail closed and not send a comment.
+- Acceptance: (1) `adopted=[]`, `owner_authorized=[scope:all candidate]`, ordinary repo, `publish=true`, implicit profile → HELD/no POST (previously incorrectly accepted); (2) explicit candidate v5 on ordinary repo → nonpublishable/no POST; (3) isolated allowlisted E2E subject+candidate+test flag → test-lane only; (4) verified qualified-main pin+blob+clearance → normal v5 allowed; (5) wrong main SHA or vendored schema mismatch/clearance denial → blocked; (6) qualified v4 fallback only with separately valid v4 policy.
+- Exact v0.2 main implementation `36ea9147239fe669d021c7eb273a864322f27356` is admitted for **source baseline carry-forward into planning/testing only** under the user's v0.3 continuation request. Prior v0.2 Version Closure remains `NOT_QUALIFIED_OR_UNKNOWN` (PR merges and package.json `0.1.0` do not prove a release). The v0.3 Release Controller must either verify the independently qualified v0.2 closeout or record owner-approved unqualified carry-forward and require fresh whole-v0.3 Version Closure evidence: correct version metadata, all applicable regression/security/source gates, real publisher/Agent/Host qualification, waivers explicitly scoped and independent Release Qualification before main merge. Never relabel historical v0.2 as PASS.
+
 
 ### FR01 — Source-qualified causal/feedback reference join (#28, C09; P0)
 - Stable namespaced `source_event_id`, adapter revision, Session, Task/Issue, run/attempt, logical vs physical call, exact source SHA if actually witnessed; immutable public Report identity = canonical owning GitHub Issue + namespace + report ID + revision + kind + actual comment ID/URI + source/profile/data digest.
@@ -57,6 +65,7 @@ v0.3 makes task-meta a **source-qualified ADS v4.17 evidence/feedback producer a
 
 | Case | Witness | Required disposition |
 |---|---|---|
+| A00 | Old all-repo owner-authorized v4.16 candidate + `adopted=[]` + ordinary `publish=true` | Reject candidate by default with no GitHub write; test-only allowlist distinct; qualified main/blob/clearance explicit |
 | A01 | Real supported Agent run → exact Issue/Attempt → ADS v5 report → actual comment readback | One qualified publication with digest and source limits |
 | A02 | Two logical Agent sessions share one GitHub login, or two real retries sharing an identical source-version transition | Distinct actors/Attempts; only true source-event duplicate delivery collapses |
 | A03 | Report revised, duplicate delivery/lost ACK | Same tuple+digest dedup; cross-digest CONFLICT |
@@ -74,19 +83,22 @@ v0.3 makes task-meta a **source-qualified ADS v4.17 evidence/feedback producer a
 
 ## 6. Delivery scope and dependency policy
 
-**Feature set:** FR01 #28; FR02 #29; FR03 #30; FR04 #31; FR05 #33. Reuse v0.1/v0.2 installed modules, no fork/new DB. Candidate architecture modules `src/feedback`, `src/currentness`, `src/trajectory`, `src/metrics`, `test/v0.3` are suggestions only, NOT approved L2 API names.
+**Feature set:** FR00 publisher admission remediation (small independent work item in Task DAG, must precede normal #31 real publication); FR01 #28; FR02 #29; FR03 #30; FR04 #31; FR05 #33. Reuse v0.1/v0.2 installed modules, no fork/new DB. Candidate architecture modules `src/feedback`, `src/currentness`, `src/trajectory`, `src/metrics`, `test/v0.3` are suggestions only, NOT approved L2 API names.
 
-**Ordered gates:** L1 R0 authored → independent Product Review P0/P1=0 → explicit Product Freeze → L2 source/ABI/permission design → independent L2 Review and Freeze → small Native Task DAG + authorized Task Claims → implementation & focused PR Reviews → shared ADS Golden and real producer-specific E2E → release qualification → version-branch/main integration. A source-only independent Review is permitted before physical verification, but NOT substituted for runtime proof.
+**Ordered gates:** L1 R0 independently BLOCK-reviewed (P1-01/P2-01) → focused R1 author repair and distinct delta Review P0/P1=0 → independent Product Review P0/P1=0 → explicit Product Freeze → L2 source/ABI/permission design → independent L2 Review and Freeze → small Native Task DAG + authorized Task Claims → implementation & focused PR Reviews → shared ADS Golden and real producer-specific E2E → release qualification → version-branch/main integration. A source-only independent Review is permitted before physical verification, but NOT substituted for runtime proof.
 
 **Parallel work after gate:** C08 trajectory semantics, #28 feedback join and #29 correction ledger are mutually separable if immutable identity/source contracts are frozen; #30 comparability and #31 fixtures can follow in parallel. Only #31 full integration depends on implementations. Full Tally app replatforming is external independent qualification and must not be falsely required for ADS source release or falsely marked PASS for task-meta.
 
 ## 7. Open questions for independent Product Reviewer
 
-1. Confirm no duplicated v0.2 publisher/adapter/Golden and v0.2 actual closure state.
+1. Confirm no duplicated v0.2 publisher/adapter/Golden and v0.2 actual release is marked NOT_QUALIFIED_OR_UNKNOWN; source baseline carry-forward for design does not become retrospective Release PASS.
 2. Confirm new source-owned records do not mint ADS wire or Tally Decision state.
 3. Confirm FR05 distinguishes observed code VersionState vs owner-governed strategy, with admissible denominators and source coverage.
 4. Confirm correction DISPUTE/nonrevocation, verified REVOKE/REDACT, native-vs-report identities and materially dependent prospective Tally eligibility are correctly separated.
 5. Confirm real E2E matrix includes at least one actual provider/Host+GitHub readback and honest not-run other consumers.
-6. Record precise P0/P1/P2, `PRODUCT_FREEZE_READY=YES|NO`, pin and changed files. Author must not self-approve.
+6. Verify FR00 old candidate+all-scope default cannot authorize normal v5 publication; only qualified main/schema/clearance or isolated test lane, with explicit no-POST denial and v4 fallback qualification.
+7. Record precise P0/P1/P2, `PRODUCT_FREEZE_READY=YES|NO`, pin and changed files. Author must not self-approve.
+
+**R1 author-side repair note:** Focused scope closes independent Product R0 P1-01 (ordinary publication admission) and P2-01 (prior v0.2 source/Release status). This is **not** a claim of R1 independent PASS or Product Owner Freeze. R1 must be reviewed at new exact HEAD before L2/DAG or any v0.3 implementation.
 
 **This PRD is a candidate for independent review, not a frozen authority or authorization to start a v0.3 Builder.**
