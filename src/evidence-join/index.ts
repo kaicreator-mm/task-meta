@@ -64,7 +64,7 @@ function refFromComment(
     typeof data.report_id !== "string" ||
     typeof data.publisher_namespace !== "string" ||
     typeof data.report_kind !== "string" ||
-    !Number.isSafeInteger(data.revision)
+    (typeof data.revision !== "number" || !Number.isSafeInteger(data.revision))
   ) return null;
   const phase = data.report_kind === "EXPERIENCE_USE_FEEDBACK" && parsed.profile === "v5"
     ? data.phase
