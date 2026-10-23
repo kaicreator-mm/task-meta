@@ -1,6 +1,7 @@
 // T17 (#15): multi-attempt branch DAG for one Issue. Combines per-attempt lineages with real git
 // ancestry (read-only). Never invents commits; edges only join versions already in the DAG.
 // Stores no paths, diff text or branch names.
+import { canonicalDigest } from "../canonical.ts";
 import type {
   AttemptRelation,
   AttemptRelationKind,
@@ -54,25 +55,43 @@ export async function buildIssueDag(input: BuildIssueDagInput): Promise<IssueVer
     return a.attempt_ref < b.attempt_ref ? -1 : a.attempt_ref > b.attempt_ref ? 1 : 0;
   });
 
-  // Duplicate attempts (identical transition signature): dedup note, no new versions/edges.
-  const sigs = new Map<string, string>();
-  const kept: typeof ordered = [];
+  // Delivery identity is an actual Attempt ref, NOT a Git transition signature.
+  // Two physical attempts can legitimately produce the exact same code transitions.
+  // Only a byte-equivalent repeat delivery of the SAME Attempt may be collapsed.
+  const seenByAttempt = new Map<string, string>();
+  const conflicted = new Set<string>();
+  const keptCandidates: typeof ordered = [];
   for (const a of ordered) {
-    const sig = a.lineage.transitions
-      .map((t) => `${t.from_version ?? "-"}>${t.to_version ?? "-"}:${t.kind}`)
-      .join("|");
-    const first = sig === "" ? undefined : sigs.get(sig);
+    // Normalize JSON to avoid undefined optional properties being treated as source
+    // identity. Preserve ordered transitions: their causal order is material.
+    const digest = canonicalDigest(JSON.parse(JSON.stringify({
+      started_at: a.started_at,
+      lineage: a.lineage,
+    })) as unknown);
+    const first = seenByAttempt.get(a.attempt_ref);
     if (first !== undefined) {
-      gaps.push({
-        kind: "DUPLICATE_ATTEMPT",
-        ref: a.attempt_ref,
-        detail: `identical transitions to ${first}; merged, no new versions`,
-      });
+      if (first === digest) {
+        gaps.push({
+          kind: "DUPLICATE_ATTEMPT",
+          ref: a.attempt_ref,
+          detail: "same Attempt identity and content digest delivered repeatedly; one occurrence retained",
+        });
+      } else {
+        // No reliable currentness/revision witness was supplied: do not choose
+        // first/last-by-timestamp for conflicting evidence with one Attempt ID.
+        conflicted.add(a.attempt_ref);
+        gaps.push({
+          kind: "ATTEMPT_SOURCE_CONFLICT",
+          ref: a.attempt_ref,
+          detail: "same Attempt identity supplied different content; all conflicting occurrences held",
+        });
+      }
       continue;
     }
-    if (sig !== "") sigs.set(sig, a.attempt_ref);
-    kept.push(a);
+    seenByAttempt.set(a.attempt_ref, digest);
+    keptCandidates.push(a);
   }
+  const kept = keptCandidates.filter((a) => !conflicted.has(a.attempt_ref));
 
   // Versions: union by SHA.
   const vmap = new Map<string, VersionState>();
