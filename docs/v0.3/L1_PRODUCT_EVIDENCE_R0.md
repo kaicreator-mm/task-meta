@@ -78,3 +78,7 @@
 5. Should Tally app E2E block this version? (Proposed: source/producer verification required; cross-product Tally live runtime explicitly separate, NOT_RUN when unavailable.)
 
 Source-only L1 evidence, not a test or implementation claim.
+
+### Additional source-delta finding R7 / high — same-transition attempts may be incorrectly collapsed
+
+At `main@36ea9147239fe669d021c7eb273a864322f27356`, `src/lineage/dag.ts` stores `sigs: Map<transition-signature, first-attempt>` and marks subsequent attempts with identical transition signatures as `DUPLICATE_ATTEMPT`, then skips them from `kept`. **Identical from/to/kind is not proof of the same observed logical attempt or physical delivery**; two independent attempts (including a lawful retry without code change) may legitimately have identical version transitions. The version-DAG may share VersionState nodes but must preserve genuinely distinct attempts/causal selection occurrences in any attempt/metric/feedback evidence. Review must require stable source-event/logical/physical attempt identity before deduping a reported attempt; same source event+same digest may dedupe delivery, different source attempt must remain separate. Tests: (a) same event duplicate delivery collapses, (b) distinct attempt IDs with same version transitions remain distinct, (c) conflicting same event identity/digest is CONFLICT, (d) concurrent unordered branches do not become a temporal causal chain.
