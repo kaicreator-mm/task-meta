@@ -237,5 +237,9 @@ resume ends a session with SessionEnd.
   update_plan, wrap_up); listed in `disagreements.md`. UNKNOWN share: A 29.9%, B 26.8%.
 - Caveat: most agreement is structural (both map the same shell input_class); the informative
   signal is the UNKNOWN-heavy Bash:OTHER / PowerShell residue, which metadata cannot resolve.
-- Owner adjudication of the 7 rows: pending (empty `owner:` column). Labeler A was not tuned.
+- Owner adjudication (2026-10-23): all 7 rows decided (Agent, TaskStop, wrap_up → OTHER;
+  update_plan → PLANNING); the four tools were added to the rule table as labeler v1.1.0. After
+  adjudication: 100% / kappa 1.000 in-sample (not out-of-sample evidence), A UNKNOWN 26.8%.
+- Note: `scripts/golden-agreement.ts` regenerates `agreement.md`/`disagreements.md` and would
+  drop the appended adjudication; keep the committed files as the record.
 - Regenerate: `node scripts/golden-sample.ts`, `node scripts/golden-agreement.ts`.

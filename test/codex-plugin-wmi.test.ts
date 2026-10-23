@@ -18,7 +18,10 @@ const capture = createRequire(import.meta.url)(join(PLUGIN, "scripts", "capture.
 
 const temps: string[] = [];
 after(async () => {
-  for (const t of temps) await rm(t, { recursive: true, force: true });
+  // The WMI-created stub may still hold its directory briefly; retry and never fail on cleanup.
+  for (const t of temps) {
+    await rm(t, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }).catch(() => {});
+  }
 });
 async function tmp(): Promise<string> {
   const d = await mkdtemp(join(tmpdir(), "tm-codex-wmi-"));

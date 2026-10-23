@@ -115,7 +115,7 @@ test("confusion matrix and disagreement list on a tiny fixture", () => {
     {
       id: "000000000002",
       agent: "zcode",
-      tool_name: "Agent",
+      tool_name: "UnmappedTool",
       input_class: null,
       outcome: "success",
       prev_tool: null,
@@ -146,6 +146,6 @@ test("confusion matrix and disagreement list on a tiny fixture", () => {
   assert.equal(m[0]?.[0], 1);
   assert.equal(m[7]?.[6], 1);
   assert.equal(m[1]?.[2], 1);
-  assert.match(rep.disagreementsMd, /000000000002 \| zcode \| Agent/);
+  assert.match(rep.disagreementsMd, /000000000002 \| zcode \| UnmappedTool/);
   assert.match(rep.disagreementsMd, /\| owner: \|/);
 });
