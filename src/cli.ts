@@ -1,6 +1,8 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { collectCodexRun } from "./adapters/codex/index.ts";
+import { parseCodexRollout } from "./adapters/codex/parse.ts";
 import { collectZcodeRun, type ZcodeRunInput } from "./adapters/zcode/index.ts";
 import {
   parseHeadlessResult,
@@ -61,7 +63,13 @@ const USAGE = `usage: collect --repo <owner/name> --issue <n> --headless <file>
                [--gate-log <file>[@<40hex>]]... [--gate-sha <40hex>] [--git-dir <dir>]
                --store <dir> --out <report.md>
                [--operator-id zcode] [--role builder] [--profile v4|v5] [--publish]
-               [--ads-pin <sha>] [--clearance-ref <ref>] [--publisher-source-sha <40hex>]`;
+               [--ads-pin <sha>] [--clearance-ref <ref>] [--publisher-source-sha <40hex>]
+       collect-codex --repo <owner/name> --issue <n>
+               (--codex-session <rollout.jsonl>... | --codex-sessions-dir <dir> --session-id <id>)
+               [--codex-hook-spool <dir>] [--gate-log <file>[@<40hex>]]... [--gate-sha <40hex>]
+               [--git-dir <dir>] --store <dir> --out <report.md> [--operator-id codex]
+               [--role builder] [--profile v4|v5] [--publish] [--ads-pin <sha>]
+               [--clearance-ref <ref>] [--publisher-source-sha <40hex>]`;
 
 class UsageError extends Error {}
 class Failure extends Error {
@@ -88,6 +96,10 @@ function optionsFrom(argv: string[]) {
       "model-io": { type: "string" },
       "zcode-rollout-dir": { type: "string" },
       "zcode-hook-spool": { type: "string" },
+      "codex-session": { type: "string", multiple: true },
+      "codex-sessions-dir": { type: "string" },
+      "codex-hook-spool": { type: "string" },
+      "session-id": { type: "string" },
       "verifier-scope": { type: "string" },
       run: { type: "string", multiple: true },
       "gate-log": { type: "string", multiple: true },
@@ -173,10 +185,39 @@ async function readText(path: string, what: string): Promise<string> {
   }
 }
 
+/** Rollout files of one Codex thread under a sessions dir: `rollout-*<id>*.jsonl` (depth <= 4). */
+async function findCodexRollouts(dir: string, sessionId: string): Promise<string[]> {
+  const found: string[] = [];
+  const walk = async (d: string, depth: number): Promise<void> => {
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = await readdir(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        if (depth < 4) await walk(join(d, e.name), depth + 1);
+      } else if (
+        e.name.startsWith("rollout-") &&
+        e.name.endsWith(".jsonl") &&
+        e.name.includes(sessionId)
+      ) {
+        found.push(join(d, e.name));
+      }
+    }
+  };
+  await walk(dir, 0);
+  return found.sort();
+}
+
 async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Promise<number> {
   const now = deps.now ?? (() => new Date());
   const [command, ...rest] = argv;
-  if (command !== "collect") throw new UsageError(`unknown or missing command: ${command ?? ""}`);
+  if (command !== "collect" && command !== "collect-codex") {
+    throw new UsageError(`unknown or missing command: ${command ?? ""}`);
+  }
+  const isCodex = command === "collect-codex";
 
   let parsed: ReturnType<typeof optionsFrom>;
   try {
@@ -186,8 +227,34 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
   }
   const v = parsed.values;
   if (parsed.positionals.length > 0) throw new UsageError("unexpected positional arguments");
-  for (const k of ["repo", "issue", "headless", "store", "out"] as const) {
+  for (const k of [
+    "repo",
+    "issue",
+    "store",
+    "out",
+    ...(isCodex ? [] : ["headless" as const]),
+  ] as const) {
     if (v[k] === undefined) throw new UsageError(`missing --${k}`);
+  }
+  if (isCodex) {
+    for (const k of [
+      "headless",
+      "model-io",
+      "zcode-rollout-dir",
+      "zcode-hook-spool",
+      "run",
+    ] as const) {
+      if (v[k] !== undefined) throw new UsageError(`--${k} is not valid with collect-codex`);
+    }
+  } else {
+    for (const k of [
+      "codex-session",
+      "codex-sessions-dir",
+      "codex-hook-spool",
+      "session-id",
+    ] as const) {
+      if (v[k] !== undefined) throw new UsageError(`--${k} is only valid with collect-codex`);
+    }
   }
   const repo = v.repo as string;
   if (!REPO_RE.test(repo)) throw new UsageError("--repo must be <owner/name>");
@@ -223,59 +290,143 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     throw new UsageError("--profile v5 requires --publisher-source-sha <40 lowercase hex>");
   }
 
-  const headless = await readText(v.headless as string, "headless");
-  const input: ZcodeRunInput = {
-    repository: repo,
-    issue_number: issue,
-    actor: {
+  const extraLimits: string[] = [];
+  let runTexts: string[] = [];
+  let attemptRef: string;
+  let codexRun = null as RunRecord | null;
+  let collect: (clock: string) => {
+    observations: ReturnType<typeof collectZcodeRun>["observations"];
+    summary: AttemptSummary;
+    profile: ReturnType<typeof collectZcodeRun>["profile"];
+  };
+  if (isCodex) {
+    let texts: string[];
+    const files = v["codex-session"];
+    if (files !== undefined && files.length > 0) {
+      if (v["codex-sessions-dir"] !== undefined || v["session-id"] !== undefined) {
+        throw new UsageError("--codex-session excludes --codex-sessions-dir/--session-id");
+      }
+      texts = [];
+      for (const f of files) texts.push(await readText(f, "codex session"));
+    } else if (v["codex-sessions-dir"] !== undefined && v["session-id"] !== undefined) {
+      if (!SESSION_FILE_RE.test(v["session-id"]))
+        throw new UsageError("--session-id is not a valid id");
+      const found = await findCodexRollouts(resolve(v["codex-sessions-dir"]), v["session-id"]);
+      if (found.length === 0)
+        throw new Failure(EXIT.FAILURE, "no rollout file found for the session id");
+      texts = [];
+      for (const f of found) texts.push(await readText(f, "codex session"));
+    } else {
+      throw new UsageError(
+        "collect-codex needs --codex-session <file> or --codex-sessions-dir <dir> --session-id <id>",
+      );
+    }
+    const sid =
+      texts.map((t) => parseCodexRollout(t).session?.id ?? null).find((x) => x !== null) ?? null;
+    if (sid === null) throw new Failure(EXIT.FAILURE, "no session id found in the supplied inputs");
+    attemptRef = sid;
+    const actor = {
       role: v.role ?? "builder",
       operator_kind: "agent",
-      operator_id: v["operator-id"] ?? "zcode",
-      session_ref: "",
+      operator_id: v["operator-id"] ?? "codex",
+      session_ref: sid,
       transport_actor: null,
-    },
-    observed_at: "",
-    headless,
-  };
+    };
+    let hookSpool: string | undefined;
+    if (v["codex-hook-spool"] !== undefined) {
+      try {
+        const file = `${sid.replace(/[^A-Za-z0-9_-]/g, "_")}.jsonl`;
+        hookSpool = await readFile(join(v["codex-hook-spool"], file), "utf8");
+      } catch {
+        extraLimits.push(
+          "no hook spool for this session (capture plugin not enabled or no events)",
+        );
+      }
+    }
+    collect = (clock) => {
+      try {
+        const c = collectCodexRun({
+          repository: repo,
+          issue_number: issue,
+          actor,
+          observed_at: clock,
+          rollout: texts,
+          ...(hookSpool !== undefined ? { hookSpool } : {}),
+        });
+        codexRun = c.run;
+        return c;
+      } catch (e) {
+        throw new Failure(EXIT.FAILURE, `collection failed: ${(e as Error).message}`);
+      }
+    };
+  } else {
+    const headless = await readText(v.headless as string, "headless");
+    const input: ZcodeRunInput = {
+      repository: repo,
+      issue_number: issue,
+      actor: {
+        role: v.role ?? "builder",
+        operator_kind: "agent",
+        operator_id: v["operator-id"] ?? "zcode",
+        session_ref: "",
+        transport_actor: null,
+      },
+      observed_at: "",
+      headless,
+    };
 
-  const extraLimits: string[] = [];
-  let modelIo: string | undefined;
-  const sessionId = parseHeadlessResult(headless)?.sessionId ?? null;
-  if (v["model-io"] !== undefined) {
-    modelIo = await readText(v["model-io"], "model-io");
-  } else if (v["zcode-rollout-dir"] !== undefined) {
-    if (sessionId === null || !SESSION_FILE_RE.test(sessionId)) {
-      throw new Failure(EXIT.FAILURE, "headless result has no usable sessionId");
+    let modelIo: string | undefined;
+    const sessionId = parseHeadlessResult(headless)?.sessionId ?? null;
+    if (v["model-io"] !== undefined) {
+      modelIo = await readText(v["model-io"], "model-io");
+    } else if (v["zcode-rollout-dir"] !== undefined) {
+      if (sessionId === null || !SESSION_FILE_RE.test(sessionId)) {
+        throw new Failure(EXIT.FAILURE, "headless result has no usable sessionId");
+      }
+      try {
+        modelIo = await readFile(
+          join(v["zcode-rollout-dir"], `model-io-${sessionId}.jsonl`),
+          "utf8",
+        );
+      } catch {
+        modelIo = undefined; // recorded as a limit by the adapter ("no model-io rollout")
+      }
     }
-    try {
-      modelIo = await readFile(join(v["zcode-rollout-dir"], `model-io-${sessionId}.jsonl`), "utf8");
-    } catch {
-      modelIo = undefined; // recorded as a limit by the adapter ("no model-io rollout")
+    if (modelIo !== undefined) input.modelIo = modelIo;
+    if (v["zcode-hook-spool"] !== undefined) {
+      if (sessionId === null || !SESSION_FILE_RE.test(sessionId)) {
+        throw new Failure(EXIT.FAILURE, "headless result has no usable sessionId");
+      }
+      try {
+        // The capture plugin sanitizes session ids to [A-Za-z0-9_-] for the file name.
+        const file = `${sessionId.replace(/[^A-Za-z0-9_-]/g, "_")}.jsonl`;
+        input.hookSpool = await readFile(join(v["zcode-hook-spool"], file), "utf8");
+      } catch {
+        extraLimits.push(
+          "no hook spool for this session (capture plugin not enabled or no events)",
+        );
+      }
     }
-  }
-  if (modelIo !== undefined) input.modelIo = modelIo;
-  if (v["zcode-hook-spool"] !== undefined) {
-    if (sessionId === null || !SESSION_FILE_RE.test(sessionId)) {
-      throw new Failure(EXIT.FAILURE, "headless result has no usable sessionId");
+    if (v.run !== undefined) {
+      input.runRecords = [];
+      for (const f of v.run) input.runRecords.push(await readText(f, "run record"));
     }
-    try {
-      // The capture plugin sanitizes session ids to [A-Za-z0-9_-] for the file name.
-      const file = `${sessionId.replace(/[^A-Za-z0-9_-]/g, "_")}.jsonl`;
-      input.hookSpool = await readFile(join(v["zcode-hook-spool"], file), "utf8");
-    } catch {
-      extraLimits.push("no hook spool for this session (capture plugin not enabled or no events)");
+    runTexts = input.runRecords ?? [];
+    const ref = sessionId ?? parseModelIo(modelIo ?? "").records[0]?.sessionId ?? null;
+    if (ref === null) {
+      throw new Failure(EXIT.FAILURE, "no session id found in the supplied inputs");
     }
+    attemptRef = ref;
+    input.actor.session_ref = ref;
+    collect = (clock) => {
+      input.observed_at = clock;
+      try {
+        return collectZcodeRun(input);
+      } catch (e) {
+        throw new Failure(EXIT.FAILURE, `collection failed: ${(e as Error).message}`);
+      }
+    };
   }
-  if (v.run !== undefined) {
-    input.runRecords = [];
-    for (const f of v.run) input.runRecords.push(await readText(f, "run record"));
-  }
-  const runTexts = input.runRecords ?? [];
-  const attemptRef = sessionId ?? parseModelIo(modelIo ?? "").records[0]?.sessionId ?? null;
-  if (attemptRef === null) {
-    throw new Failure(EXIT.FAILURE, "no session id found in the supplied inputs");
-  }
-  input.actor.session_ref = attemptRef;
 
   const store = new EvidenceStore(resolve(v.store as string));
   // Re-collecting the same inputs must be byte-identical: reuse the first revision's clock.
@@ -286,19 +437,16 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     if (!(e instanceof NotFoundError)) throw e;
   }
   const clock = existing ? existing.created_at : now().toISOString();
-  input.observed_at = clock;
 
-  let collection: ReturnType<typeof collectZcodeRun>;
-  try {
-    collection = collectZcodeRun(input);
-  } catch (e) {
-    throw new Failure(EXIT.FAILURE, `collection failed: ${(e as Error).message}`);
-  }
-  const { observations, summary, profile: capability } = collection;
+  const { observations, summary, profile: capability } = collect(clock);
   summary.limits.push(...extraLimits);
 
   // ---- R2: verifier assessment, lineage, labels, aggregates ----
-  const runs: RunRecord[] = runTexts.map((t) => parseRunRecord(t));
+  const runs: RunRecord[] = isCodex
+    ? codexRun
+      ? [codexRun]
+      : []
+    : runTexts.map((t) => parseRunRecord(t));
   const sorted = sortRunSegments(runs);
   const records: VerifierRecord[] = [];
   let inferredUsed = false;
@@ -345,7 +493,9 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     attempt_ref: attemptRef,
     runs,
     ...(git ? { git } : {}),
-    segmentRefs: runs.map((_, i) => `zcode:run-record:${attemptRef}#${i + 1}`),
+    segmentRefs: runs.map(
+      (_, i) => `${isCodex ? "codex:rollout" : "zcode:run-record"}:${attemptRef}#${i + 1}`,
+    ),
   });
   for (const t of lineage.transitions) {
     if (t.to_version === null) continue;
