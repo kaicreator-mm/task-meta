@@ -1,0 +1,13 @@
+{
+  "note": "task-meta auto-report (docs/v0.2/DEFINITION.md section 4). Kill switch: enabled=false or env TASK_META_AUTO_REPORT=0. publisher_source_sha 'auto' = git rev-parse HEAD of the task-meta install. gate_log_root: gate logs are taken by convention from <root>/<worktree>/gate*.log when the worktree name matches the session's worktree refs and the log contains GATE_SUBJECT_SHA or EXIT=.",
+  "enabled": true,
+  "clearance_ref": "owner-authorization:2026-10-23:kaicreator-mm/*",
+  "store": "~/.task-meta/store",
+  "outbox": "~/.task-meta/outbox",
+  "zcode": {
+    "spool_dir": "~/.task-meta/zcode-spool",
+    "rollout_dir": "~/.zcode/cli/rollout"
+  },
+  "gate_log_root": "C:/xDev/kAiCreator/_tmp",
+  "publisher_source_sha": "auto"
+}

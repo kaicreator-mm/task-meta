@@ -87,6 +87,9 @@ function baseArgs(dir: string, extra: string[] = []): string[] {
     join(dir, "store"),
     "--out",
     join(dir, "out", "report.md"),
+    // The default profile is v5 (owner-authorized); these v0.1 flows exercise v4 explicitly.
+    "--profile",
+    "v4",
     ...extra,
   ];
 }
@@ -514,4 +517,38 @@ test("gate log with GATE_SUBJECT_SHA and no @sha binds OBSERVED (no mtime infere
   const p = parseReportComment(await readFile(join(dir, "out", "report.md"), "utf8"));
   assert.ok(p.ok);
   assert.ok(!(p.doc.data.limits as string[]).some((l) => l.includes("inferred from file mtime")));
+});
+
+// ---- owner-authorized default profile ----
+
+const OWNER_LIMIT_TEXT =
+  "ADS v4.16 adopted from version/v4.16@3041a1b by project-owner authorization; not ADS-main qualified";
+
+test("collect without --profile defaults to v5 OWNER_AUTHORIZED and may publish to any repo", async () => {
+  const dir = await tmp();
+  const client = new FakeClient();
+  const args = dropFlag(
+    v5Args(dir, ["--clearance-ref", "clearance:synthetic", "--publish"]),
+    "--profile",
+  );
+  const r = await exec(args, client);
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.json.outcome, "PUBLISHED");
+  assert.equal(r.json.profile, "v5");
+  const p = parseReportComment(client.comments[0]?.body ?? "");
+  assert.ok(p.ok);
+  const limits = p.doc.data.limits as string[];
+  assert.ok(limits.includes(OWNER_LIMIT_TEXT));
+  assert.ok(!limits.some((l) => l.includes("isolated E2E test subject")));
+  assert.equal((p.doc.data.subject as { ads_revision: string }).ads_revision, CANDIDATE);
+});
+
+test("collect --profile v4 still works and carries no owner limit", async () => {
+  const dir = await tmp();
+  const r = await exec(baseArgs(dir));
+  assert.equal(r.code, 0, r.stderr);
+  const p = parseReportComment(await readFile(join(dir, "out", "report.md"), "utf8"));
+  assert.ok(p.ok);
+  assert.equal(p.profile, "v4");
+  assert.ok(!(p.doc.data.limits as string[]).includes(OWNER_LIMIT_TEXT));
 });
