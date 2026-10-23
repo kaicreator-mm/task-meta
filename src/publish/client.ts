@@ -95,7 +95,16 @@ export class GhCliClient implements GitHubClient {
   protected readonly exec: ExecFn;
   protected readonly gh: string;
   constructor(opts: { exec?: ExecFn; ghPath?: string } = {}) {
-    this.exec = opts.exec ?? defaultExec;
+    // Under the node:test runner, a client without an injected exec would hit the live GitHub
+    // API; refuse so a test that forgot its fake client fails loudly instead of going online.
+    const underTest = process.env.NODE_TEST_CONTEXT !== undefined;
+    this.exec =
+      opts.exec ??
+      (underTest
+        ? async () => {
+            throw new Error("GhCliClient: live GitHub calls are disabled under node:test");
+          }
+        : defaultExec);
     this.gh = opts.ghPath ?? "gh";
   }
 

@@ -46,7 +46,7 @@ Since 0.2.0 (task binding + auto-report):
   (`taskMetaHome`). Kill switch: `TASK_META_AUTO_REPORT=0` or `"enabled": false` in
   `config/auto-report.json`.
 
-Since 0.2.1 (per-turn flood guard): Codex fires Stop at the end of every turn, so the spawned
+Since 0.2.2 (per-turn flood guard): Codex fires Stop at the end of every turn, so the spawned
 auto-report is told what fired it. A `stop` run waits `settle_seconds` (default 180) for the
 session to go quiet and defers to a later Stop if another turn starts; `session-end` publishes
 at once; at most `max_revisions_per_session` (default 3) revisions are posted per session.

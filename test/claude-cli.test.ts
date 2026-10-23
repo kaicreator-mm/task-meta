@@ -52,7 +52,7 @@ async function tmp(): Promise<string> {
 const spoolLine = (event: string, s: number, extra: Record<string, unknown> = {}): string => {
   const e = {
     schema: CLAUDE_HOOK_SCHEMA,
-    plugin_version: "0.2.1",
+    plugin_version: "0.2.2",
     agent: "claude",
     event,
     session_id: SID,

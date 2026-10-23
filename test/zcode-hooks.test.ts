@@ -354,6 +354,13 @@ async function cli(extra: string[], dir: string) {
       ...extra,
     ],
     {
+      // Offline: the dry run still reads back comments; never reach the live GitHub API.
+      client: {
+        listIssueComments: async () => ({ comments: [], hasNext: false }),
+        createIssueComment: async () => {
+          throw new Error("tests never post");
+        },
+      },
       now: () => new Date("2026-10-23T00:00:00.000Z"),
       stdout: (s) => {
         stdout += s;
