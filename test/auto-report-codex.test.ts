@@ -189,7 +189,8 @@ test("auto-report --agent codex: PUBLISHED v5 to the bound Issue, then ALREADY_P
   assert.equal(subject.issue_ref, `https://github.com/${REPO}/issues/1296`);
   assert.equal(subject.source_sha, H2);
   assert.equal(subject.publisher_source_sha, PUB_SHA);
-  assert.ok((d.limits as string[]).includes(OWNER_LIMIT));
+  assert.ok(!(d.limits as string[]).includes(OWNER_LIMIT));
+  assert.equal(subject.ads_revision, "718fb02e33b31f568736447b2b905883cc6fcc3a");
   const metrics = d.metrics as Array<{ name: string; adapter_id: string }>;
   assert.ok(metrics.length > 0);
   assert.ok(metrics.every((m) => m.adapter_id === "codex"));

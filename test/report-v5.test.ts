@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { collectZcodeRun, type ZcodeRunInput } from "../src/adapters/zcode/index.ts";
 import { canonicalDigest } from "../src/canonical.ts";
-import { publishReport, type GitHubClient, type IssueComment } from "../src/publish/index.ts";
 import type { AttemptSummary, CostObservation, ManifestPointer } from "../src/model.ts";
+import { type GitHubClient, type IssueComment, publishReport } from "../src/publish/index.ts";
 import {
   ADS_V5_REVISION,
   buildReportDocument,

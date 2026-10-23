@@ -264,26 +264,44 @@ test("explicit candidate pin still needs the E2E allowlist to publish (owner def
 
 test("explicit ordinary candidate is denied even if owner authorization is all-repositories", () => {
   const r = resolveProfile({
-    profile: "v5", adsPin: CANDIDATE_PIN, publish: true,
-    repository: "kaicreator-mm/ordinary", e2eTestOnly: true, adoption: owner(),
+    profile: "v5",
+    adsPin: CANDIDATE_PIN,
+    publish: true,
+    repository: "kaicreator-mm/ordinary",
+    e2eTestOnly: true,
+    adoption: owner(),
   });
   assert.ok(!r.ok && r.code === "CANDIDATE_NOT_PUBLISHABLE");
 });
 
 test("allowlisted test repository still requires explicit test purpose", () => {
   const r = resolveProfile({
-    profile: "v5", adsPin: CANDIDATE_PIN, publish: true,
-    repository: E2E_REPO, adoption: e2e(),
+    profile: "v5",
+    adsPin: CANDIDATE_PIN,
+    publish: true,
+    repository: E2E_REPO,
+    adoption: e2e(),
   });
   assert.ok(!r.ok && r.code === "CANDIDATE_TEST_PURPOSE_REQUIRED");
 });
 
 test("qualified v4.16 main pin is required; merely shaped 40-hex adoption fails", () => {
   const fake: Adoption = {
-    adopted: [{ ads_version: "4.16.0", main_sha: "a".repeat(40),
-      report_schema_blob: VENDORED_V416_SCHEMA_BLOB, profile: "v5" }],
+    adopted: [
+      {
+        ads_version: "4.16.0",
+        main_sha: "a".repeat(40),
+        report_schema_blob: VENDORED_V416_SCHEMA_BLOB,
+        profile: "v5",
+      },
+    ],
   };
-  const r = resolveProfile({ profile: "v5", adsPin: "a".repeat(40), publish: true,
-    repository: "example/repo", adoption: fake });
+  const r = resolveProfile({
+    profile: "v5",
+    adsPin: "a".repeat(40),
+    publish: true,
+    repository: "example/repo",
+    adoption: fake,
+  });
   assert.ok(!r.ok && r.code === "UNQUALIFIED_MAIN_PIN");
 });

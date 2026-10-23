@@ -116,7 +116,10 @@ export function resolveProfile(input: ResolveInput): ProfileResolution {
   if (pin === CANDIDATE_PIN) {
     if (input.publish) {
       if (input.e2eTestOnly !== true) {
-        return fail("CANDIDATE_TEST_PURPOSE_REQUIRED", "candidate publication requires explicit isolated E2E test purpose");
+        return fail(
+          "CANDIDATE_TEST_PURPOSE_REQUIRED",
+          "candidate publication requires explicit isolated E2E test purpose",
+        );
       }
       const subject = (input.adoption.e2e_test_subjects ?? []).find(
         (e) =>
@@ -146,7 +149,10 @@ export function resolveProfile(input: ResolveInput): ProfileResolution {
     );
   }
   if (entry.main_sha !== QUALIFIED_V416_MAIN_SHA || entry.ads_version !== "4.16.0") {
-    return fail("UNQUALIFIED_MAIN_PIN", "normal v5 requires the exact qualified ADS v4.16 main SHA");
+    return fail(
+      "UNQUALIFIED_MAIN_PIN",
+      "normal v5 requires the exact qualified ADS v4.16 main SHA",
+    );
   }
   if (entry.report_schema_blob !== VENDORED_V416_SCHEMA_BLOB) {
     return fail(
@@ -155,7 +161,10 @@ export function resolveProfile(input: ResolveInput): ProfileResolution {
     );
   }
   if (input.publish && vendoredV416SchemaBlob() !== VENDORED_V416_SCHEMA_BLOB) {
-    return fail("VENDORED_SCHEMA_BLOB_MISMATCH", "actual vendored v5 schema bytes differ from the qualified ADS schema");
+    return fail(
+      "VENDORED_SCHEMA_BLOB_MISMATCH",
+      "actual vendored v5 schema bytes differ from the qualified ADS schema",
+    );
   }
   return { ok: true, profile: "v5", mode: "ADOPTED", adsRevision: entry.main_sha };
 }

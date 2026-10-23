@@ -1,4 +1,9 @@
-import { loadAdoption, parseReportComment, REPORT_MARKER, resolveProfile } from "../report/index.ts";
+import {
+  loadAdoption,
+  parseReportComment,
+  REPORT_MARKER,
+  resolveProfile,
+} from "../report/index.ts";
 import type { GitHubClient, IssueComment } from "./client.ts";
 
 export type PublishOutcome =
@@ -174,7 +179,9 @@ export async function publishReport(
   if (!parsed.ok) return { state: "NOT_PUBLISHED", reason: `invalid report body: ${parsed.error}` };
   const data = parsed.doc.data;
   const subject = (data.subject ?? {}) as {
-    repository?: unknown; issue_ref?: unknown; ads_revision?: unknown;
+    repository?: unknown;
+    issue_ref?: unknown;
+    ads_revision?: unknown;
     publisher_source_sha?: unknown;
   };
   // This is the LAST in-process GitHub write boundary. A caller cannot bypass
@@ -182,7 +189,10 @@ export async function publishReport(
   // publishReport directly.
   if (opts.publish && parsed.doc.schema === "ads/github/v5") {
     if (typeof subject.ads_revision !== "string") {
-      return { state: "NOT_PUBLISHED", reason: "ADS_PIN_REQUIRED: missing v5 subject.ads_revision" };
+      return {
+        state: "NOT_PUBLISHED",
+        reason: "ADS_PIN_REQUIRED: missing v5 subject.ads_revision",
+      };
     }
     const gate = resolveProfile({
       profile: "v5",
@@ -194,7 +204,8 @@ export async function publishReport(
     });
     if (!gate.ok) return { state: "NOT_PUBLISHED", reason: `${gate.code}: ${gate.message}` };
     const publication = (data.publication ?? {}) as {
-      classification?: unknown; clearance_ref?: unknown;
+      classification?: unknown;
+      clearance_ref?: unknown;
     };
     if (
       publication.classification !== "PUBLISHABLE" ||
@@ -203,7 +214,10 @@ export async function publishReport(
       typeof subject.publisher_source_sha !== "string" ||
       !/^[0-9a-f]{40}$/.test(subject.publisher_source_sha)
     ) {
-      return { state: "NOT_PUBLISHED", reason: "PUBLICATION_CLEARANCE_REQUIRED: no qualified v5 source/clearance" };
+      return {
+        state: "NOT_PUBLISHED",
+        reason: "PUBLICATION_CLEARANCE_REQUIRED: no qualified v5 source/clearance",
+      };
     }
   }
   if (subject.repository !== repo) {

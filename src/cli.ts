@@ -211,7 +211,9 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     throw new UsageError("--profile must be v4 or v5");
   }
   if (v["e2e-test-only"] === true && (v.profile !== "v5" || v["ads-pin"] === undefined)) {
-    throw new UsageError("--e2e-test-only requires explicit --profile v5 and --ads-pin; test repositories only");
+    throw new UsageError(
+      "--e2e-test-only requires explicit --profile v5 and --ads-pin; test repositories only",
+    );
   }
   const resolution = resolveProfile({
     ...(v.profile !== undefined ? { profile: v.profile as ReportProfile } : {}),

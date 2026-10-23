@@ -541,7 +541,10 @@ test("collect without --profile uses qualified ADS main v5 adoption, not legacy 
   const limits = p.doc.data.limits as string[];
   assert.ok(!limits.includes(OWNER_LIMIT_TEXT));
   assert.ok(!limits.some((l) => l.includes("isolated E2E test subject")));
-  assert.equal((p.doc.data.subject as { ads_revision: string }).ads_revision, "718fb02e33b31f568736447b2b905883cc6fcc3a");
+  assert.equal(
+    (p.doc.data.subject as { ads_revision: string }).ads_revision,
+    "718fb02e33b31f568736447b2b905883cc6fcc3a",
+  );
 });
 
 test("collect --profile v4 still works and carries no owner limit", async () => {

@@ -373,7 +373,7 @@ test("privacy guard still applies: a path-like operator id exits 3 and stores no
   assert.equal(countFiles(join(dir, "store")), 0);
 });
 
-test("without --profile collect-codex follows the owner-authorized v5 default", async () => {
+test("without --profile collect-codex follows the adopted qualified v5 main default", async () => {
   const dir = await tmp();
   const file = await rolloutFile(dir);
   const noProfile = args(dir, file).filter(
@@ -395,8 +395,6 @@ test("without --profile collect-codex follows the owner-authorized v5 default", 
   assert.equal(ok.code, 0, ok.stderr);
   assert.equal(ok.json.profile, "v5");
   const body = await readFile(join(dir, "out", "report.md"), "utf8");
-  assert.match(
-    body,
-    /ADS v4\.16 adopted from version\/v4\.16@3041a1b by project-owner authorization/,
-  );
+  assert.match(body, /ads_revision: 718fb02e33b31f568736447b2b905883cc6fcc3a/);
+  assert.doesNotMatch(body, /by project-owner authorization/);
 });
