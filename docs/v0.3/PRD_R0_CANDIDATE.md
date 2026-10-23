@@ -21,7 +21,7 @@ v0.3 makes task-meta a **source-qualified ADS v4.17 evidence/feedback producer a
 ### FR01 — Source-qualified causal/feedback reference join (#28, C09; P0)
 - Stable namespaced `source_event_id`, adapter revision, Session, Task/Issue, run/attempt, logical vs physical call, exact source SHA if actually witnessed; immutable public Report identity = canonical owning GitHub Issue + namespace + report ID + revision + kind + actual comment ID/URI + source/profile/data digest.
 - Optional public Feedback join stores **only** GitHub native source reference, actual profile/revision/namespace, factual observed phase and source verification. `PRESENTED`, `ACCEPTED`, `APPLIED`, `SKIPPED`, `INDEPENDENTLY_CHECKED`, `OBSERVED_EFFECT` remain separate. A source-present feedback does not imply Tally actually consumed a premise, nor proof of applied benefit.
-- Missing/colliding/foreign/stale/partial refs → UNRESOLVED/CONFLICT/UNKNOWN; full bounded GitHub native readback; timestamp/GitHub shared-login/model-string joins prohibited; no double-counting by feedback reappearance.
+- Missing/colliding/foreign/stale/partial refs → UNRESOLVED/CONFLICT/UNKNOWN; full bounded GitHub native readback; timestamp/GitHub shared-login/model-string joins prohibited; no double-counting by feedback reappearance. **Distinct real Attempt identities remain distinct even if they share an identical Git transition signature, code SHA, timestamps, or source tree.** Only verified same original source-event identity+digest dedupes duplicate delivery; incompatible same-key payload is CONFLICT. Current `src/lineage/dag.ts` signature-based attempt coalescing needs source-identity delta review.
 
 ### FR02 — Immutable source-currentness/correction reconciliation (#29, C10; P0)
 - Retain exact historic source and report publications/receipts/chain; immutable revision/supersedes according to selected v4/v5 profile. New correction is an owner-qualified `EXECUTION_CORRECTION` notice against an actual read-back prior target, not an in-place overwrite. Replacement fact = new profile-valid revision.
@@ -58,7 +58,7 @@ v0.3 makes task-meta a **source-qualified ADS v4.17 evidence/feedback producer a
 | Case | Witness | Required disposition |
 |---|---|---|
 | A01 | Real supported Agent run → exact Issue/Attempt → ADS v5 report → actual comment readback | One qualified publication with digest and source limits |
-| A02 | Two logical Agent sessions share one GitHub login | Distinct actors/Attempts; no mistaken authority merge |
+| A02 | Two logical Agent sessions share one GitHub login, or two real retries sharing an identical source-version transition | Distinct actors/Attempts; only true source-event duplicate delivery collapses |
 | A03 | Report revised, duplicate delivery/lost ACK | Same tuple+digest dedup; cross-digest CONFLICT |
 | A04 | Actual feedback PRESENTED only, or APPLIED without exact independent verifier | No checked/effectiveness promotion |
 | A05 | Wrong comment/SHA/owner, altered post-publication body, 403/429/missing terminal page | UNKNOWN/HELD/CONFLICT; never PASS/no-data=0 |
