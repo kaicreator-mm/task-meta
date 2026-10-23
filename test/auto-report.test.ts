@@ -534,6 +534,14 @@ describe("agent write-back citation", () => {
     assert.deepEqual(refs, ["github:comment:11", "github:comment:14"]);
     assert.ok((d.limits as string[]).includes("agent write-back comments cited: 2"));
     assert.ok(!posted.body.includes("SENTINEL_WB_TEXT"));
+    // Readers get clickable links to the agent's separate write-back comments.
+    const base = `https://github.com/${REPO}/issues/1296`;
+    assert.ok(
+      posted.body.includes(
+        `Agent write-back: [comment 11](${base}#issuecomment-11), [comment 14](${base}#issuecomment-14)`,
+      ),
+      posted.body,
+    );
   });
 
   test("at most five comments are cited (the latest five)", async () => {
