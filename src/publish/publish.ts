@@ -1,4 +1,4 @@
-import { parseReportComment } from "../report/index.ts";
+import { parseReportComment, REPORT_MARKER } from "../report/index.ts";
 import type { GitHubClient, IssueComment } from "./client.ts";
 
 export type PublishOutcome =
@@ -19,6 +19,12 @@ export interface FindResult {
   entries: ReportEntry[];
   /** Comments that are not valid reports (counted, never acted on). */
   ignored: number;
+  /**
+   * Comments that carry the ADS marker and a `report_id` line but no longer parse as a valid
+   * report (e.g. edited in place into an invalid shape). Their identity cannot be verified, so a
+   * report with the same report_id must not be posted again next to them.
+   */
+  damaged: { reportId: string; comment: IssueComment }[];
   totalComments: number;
 }
 
@@ -43,6 +49,7 @@ export async function findReports(
   perPage: number = PER_PAGE,
 ): Promise<FindResult> {
   const entries: ReportEntry[] = [];
+  const damaged: FindResult["damaged"] = [];
   let ignored = 0;
   let total = 0;
   for (let page = 1; ; page++) {
@@ -53,6 +60,8 @@ export async function findReports(
       const parsed = parseReportComment(c.body);
       if (!parsed.ok) {
         ignored++;
+        const rid = damagedReportId(c.body);
+        if (rid !== null) damaged.push({ reportId: rid, comment: c });
         continue;
       }
       entries.push({
@@ -63,7 +72,14 @@ export async function findReports(
     }
     if (!res.hasNext) break;
   }
-  return { entries, ignored, totalComments: total };
+  return { entries, ignored, damaged, totalComments: total };
+}
+
+/** report_id of a marker comment that failed to parse, read from its raw YAML line. */
+function damagedReportId(body: string): string | null {
+  if (!body.replace(/\r\n/g, "\n").startsWith(`${REPORT_MARKER}\n`)) return null;
+  const m = /^\s*report_id:\s*["']?([^"'\s]+)["']?\s*$/m.exec(body);
+  return m?.[1] ?? null;
 }
 
 export interface PublishOptions {
@@ -174,12 +190,23 @@ export async function publishReport(
   const identity = identityOf(issue, data);
   const digest = parsed.dataDigest;
 
-  const readback = async (): Promise<Decision> =>
-    decide((await findReports(client, repo, issue, perPage)).entries, identity, digest);
+  let lastFind: FindResult | null = null;
+  const readback = async (): Promise<Decision> => {
+    lastFind = await findReports(client, repo, issue, perPage);
+    return decide(lastFind.entries, identity, digest);
+  };
 
   try {
     const pre = await readback();
     if (pre.found) return pre.outcome;
+    const reportId = String(data.report_id);
+    const broken = (lastFind as FindResult | null)?.damaged.find((d) => d.reportId === reportId);
+    if (broken) {
+      return {
+        state: "NOT_PUBLISHED",
+        reason: `UNVERIFIED_EXISTING: comment ${broken.comment.id} carries report_id ${reportId} but is not a valid report (edited or damaged); not posting a second copy`,
+      };
+    }
     if (!opts.publish) return { state: "DRY_RUN", body, dataDigest: digest };
 
     let created: IssueComment | null = null;

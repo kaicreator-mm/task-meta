@@ -222,6 +222,30 @@ describe("publish faults (offline mirror of the live harness)", () => {
     assert.equal(stored.body, edited);
   });
 
+  it("4 a comment edited into an invalid report is UNVERIFIED: no second copy is posted", async () => {
+    const c = new FaultClient();
+    const body = bodyFor();
+    assert.equal((await publish(c, body)).state, "PUBLISHED");
+    const stored = c.comments[0] as IssueComment;
+    stored.body = stored.body.replace(/schema: ads\/github\/v\d/, "schema: ads/github/v9"); // breaks the schema
+    assert.ok(stored.body.includes("schema: ads/github/v9"));
+    const o = await publish(c, body);
+    assert.equal(o.state, "NOT_PUBLISHED");
+    if (o.state === "NOT_PUBLISHED") {
+      assert.match(o.reason, /^UNVERIFIED_EXISTING: comment \d+ carries report_id /);
+    }
+    assert.equal(c.creates, 1);
+    assert.equal(c.comments.length, 1);
+  });
+
+  it("4 a marker comment with an unrelated report_id does not block publishing", async () => {
+    const c = new FaultClient();
+    c.add(
+      "<!-- ads:github -->\n```yaml\nschema: broken\ndata:\n  report_id: task-meta:other\n```\n",
+    );
+    assert.equal((await publish(c, bodyFor())).state, "PUBLISHED");
+  });
+
   it("4 a differing copy next to an equal one still yields CONFLICT, never last-writer-wins", async () => {
     const c = new FaultClient();
     const body = bodyFor();
