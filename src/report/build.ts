@@ -1,3 +1,4 @@
+import { canonicalDigest } from "../canonical.ts";
 import type { AttemptSummary, ManifestPointer } from "../model.ts";
 import {
   ADS_V4_REVISION,
@@ -15,8 +16,10 @@ export interface BuildOptions {
   supersedes: null | SupersedesRef;
   /** Required for v5: the publisher's own source commit. */
   publisherSourceSha?: string;
-  /** Required for v5 (publication clearance has no AttemptSummary source). */
-  publication?: { clearance_ref: string; projection_digest: string };
+  /** v5: clearance asserted by the source owner; projection_digest is computed here. */
+  publication?: { clearance_ref: string };
+  /** v5 subject.ads_revision (default ADS_V5_REVISION). */
+  adsRevision?: string;
 }
 
 const UNWITNESSED = "collector did not witness current HEAD of the owning branch";
@@ -25,16 +28,27 @@ function currentness() {
   return { state: "UNKNOWN", source_refs: [] as string[], limits: [UNWITNESSED] };
 }
 
-function metrics(s: AttemptSummary) {
-  return s.metrics.map((m) => ({
-    name: m.name,
-    value: m.value,
-    unit: m.unit,
-    epistemic: m.epistemic,
-    coverage: m.coverage,
-    source_refs: [...m.source_refs],
-    currentness: currentness(),
-  }));
+function metrics(s: AttemptSummary, v5: boolean) {
+  return s.metrics.map((m) => {
+    const base = {
+      name: m.name,
+      value: m.value,
+      unit: m.unit,
+      epistemic: m.epistemic,
+      coverage: m.coverage,
+      source_refs: [...m.source_refs],
+      currentness: currentness(),
+    };
+    if (!v5) return base;
+    const id = m.identity;
+    if (!id) {
+      throw new UnrepresentableError(
+        "METRIC_IDENTITY_REQUIRED_IN_V5",
+        `metric ${m.name} carries no source identity`,
+      );
+    }
+    return { ...base, ...id };
+  });
 }
 
 function head(s: AttemptSummary, o: BuildOptions) {
@@ -90,6 +104,12 @@ function buildV4(s: AttemptSummary, m: ManifestPointer, o: BuildOptions): Report
       "ads/github/v4 requires a 40-hex subject.source_sha; the attempt has none witnessed",
     );
   }
+  if (s.cost.basis === "PROVIDER_REPORTED") {
+    throw new UnrepresentableError(
+      "PROVIDER_REPORTED_UNSUPPORTED_IN_V4",
+      "ads/github/v4 has no PROVIDER_REPORTED cost basis; it is never relabelled",
+    );
+  }
   const subjectSha = s.verifier.subject_sha ?? s.source_sha;
   return {
     schema: "ads/github/v4",
@@ -113,7 +133,7 @@ function buildV4(s: AttemptSummary, m: ManifestPointer, o: BuildOptions): Report
       limits: [...s.limits],
       supersedes: o.supersedes,
       capture_coverage: s.capture_coverage,
-      metrics: metrics(s),
+      metrics: metrics(s, false),
       cost: {
         value: s.cost.value,
         currency: s.cost.currency,
@@ -137,21 +157,23 @@ function buildV5(s: AttemptSummary, m: ManifestPointer, o: BuildOptions): Report
       "ads/github/v5 requires subject.publisher_source_sha",
     );
   }
-  if (!o.publication) {
+  if (!o.publication?.clearance_ref) {
     throw new UnrepresentableError(
-      "PUBLICATION_REQUIRED_IN_V5",
-      "ads/github/v5 requires publication.clearance_ref and projection_digest; AttemptSummary carries neither",
+      "PUBLICATION_CLEARANCE_REQUIRED",
+      "ads/github/v5 needs a source-owner clearance_ref; without it the report is HELD",
     );
   }
-  if (s.metrics.length > 0) {
+  const v5metrics = metrics(s, true);
+  const acc = s.cost.accounting;
+  const accounting = {
+    accounting_ref: acc?.accounting_ref ?? null,
+    economic_scope_ref: acc?.economic_scope_ref ?? null,
+    billing_window_ref: acc?.billing_window_ref ?? null,
+    cost_category: acc?.cost_category ?? null,
+  };
+  if (s.cost.basis === "BILLED" && Object.values(accounting).some((x) => x === null)) {
     throw new UnrepresentableError(
-      "METRICS_UNREPRESENTABLE_IN_V5",
-      "v5 metrics require metric_id/observation_id/logical_call_ref/... which MetricValue does not carry",
-    );
-  }
-  if (s.cost.basis === "BILLED") {
-    throw new UnrepresentableError(
-      "BILLED_COST_UNREPRESENTABLE_IN_V5",
+      "BILLED_ACCOUNTING_REQUIRED_IN_V5",
       "v5 BILLED cost requires accounting_ref/economic_scope_ref/billing_window_ref/cost_category",
     );
   }
@@ -164,55 +186,55 @@ function buildV5(s: AttemptSummary, m: ManifestPointer, o: BuildOptions): Report
   const pinned = s.source_sha !== null;
   const ran = s.verifier.status === "PASS" || s.verifier.status === "FAIL";
   const subjectSha = ran ? (s.verifier.subject_sha ?? s.source_sha) : s.verifier.subject_sha;
+  const data = {
+    ...head(s, o),
+    subject: {
+      repository: s.repository,
+      issue_ref: issueRef(s),
+      task_ref: s.task_ref,
+      attempt_ref: s.attempt_ref,
+      attempt_binding: s.attempt_binding,
+      source_sha: s.source_sha,
+      ads_revision: o.adsRevision ?? ADS_V5_REVISION,
+      ads_profile: "ads/github/v5:report",
+      currentness: currentness(),
+      publisher_source_sha: o.publisherSourceSha,
+      source_status: pinned ? "PINNED" : "UNPINNED",
+      source_currentness: "UNKNOWN",
+      source_reason: pinned ? null : "collector witnessed no immutable execution bytes",
+      collector_observation_refs: [...s.observation_refs],
+    },
+    actor: { ...s.actor },
+    observed_at: s.observed_at,
+    source_refs: [...s.observation_refs],
+    limits: [...s.limits],
+    supersedes: o.supersedes,
+    capture_coverage: s.capture_coverage,
+    metrics: v5metrics,
+    cost: {
+      value: s.cost.value,
+      currency: s.cost.currency,
+      basis: s.cost.basis,
+      pricing_basis: s.cost.pricing_basis,
+      epistemic: s.cost.epistemic,
+      source_refs: [...s.cost.source_refs],
+      currentness: currentness(),
+      ...accounting,
+    },
+    aggregation: aggregation(s),
+    verifier: { ...verifierCore(s, subjectSha), status: s.verifier.status },
+    ...tail(s, m),
+  };
   return {
     schema: "ads/github/v5",
     kind: "report",
     data: {
-      ...head(s, o),
-      subject: {
-        repository: s.repository,
-        issue_ref: issueRef(s),
-        task_ref: s.task_ref,
-        attempt_ref: s.attempt_ref,
-        attempt_binding: s.attempt_binding,
-        source_sha: s.source_sha,
-        ads_revision: ADS_V5_REVISION,
-        ads_profile: "ads/github/v5:report",
-        currentness: currentness(),
-        publisher_source_sha: o.publisherSourceSha,
-        source_status: pinned ? "PINNED" : "UNPINNED",
-        source_currentness: "UNKNOWN",
-        source_reason: pinned ? null : "collector witnessed no immutable execution bytes",
-        collector_observation_refs: [...s.observation_refs],
-      },
-      actor: { ...s.actor },
-      observed_at: s.observed_at,
-      source_refs: [...s.observation_refs],
-      limits: [...s.limits],
-      supersedes: o.supersedes,
+      ...data,
       publication: {
         classification: "PUBLISHABLE",
         clearance_ref: o.publication.clearance_ref,
-        projection_digest: o.publication.projection_digest,
+        projection_digest: canonicalDigest(data),
       },
-      capture_coverage: s.capture_coverage,
-      metrics: [],
-      cost: {
-        value: s.cost.value,
-        currency: s.cost.currency,
-        basis: s.cost.basis,
-        pricing_basis: s.cost.pricing_basis,
-        epistemic: s.cost.epistemic,
-        source_refs: [...s.cost.source_refs],
-        currentness: currentness(),
-        accounting_ref: null,
-        economic_scope_ref: null,
-        billing_window_ref: null,
-        cost_category: null,
-      },
-      aggregation: aggregation(s),
-      verifier: { ...verifierCore(s, subjectSha), status: s.verifier.status },
-      ...tail(s, m),
     },
   };
 }

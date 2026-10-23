@@ -7,6 +7,17 @@ export {
   reportDataDigest,
 } from "./comment.ts";
 export {
+  type Adoption,
+  type AdoptionEntry,
+  CANDIDATE_PIN,
+  gitBlobSha1,
+  loadAdoption,
+  type ProfileResolution,
+  resolveProfile,
+  VENDORED_V416_SCHEMA_BLOB,
+  vendoredV416SchemaBlob,
+} from "./pin.ts";
+export {
   ADS_V4_REVISION,
   ADS_V5_REVISION,
   type ReportDocument,

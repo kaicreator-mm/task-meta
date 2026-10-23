@@ -6,6 +6,7 @@ import type {
   AttemptSummary,
   Coverage,
   Epistemic,
+  MetricIdentity,
   MetricValue,
   ObservationRecord,
   VerifierOutcome,
@@ -186,6 +187,36 @@ export function witnessedHead(runs: RunRecord[]): string | null {
   return [...segs].reverse().find((sg) => isFinished(sg) && sg.head_after)?.head_after ?? null;
 }
 
+interface IdentityCtx {
+  observation_id: string;
+  window_id: string;
+  source_revision: number;
+}
+
+function isoWindow(sid: string, starts: Array<string | null>, ends: Array<string | null>): string {
+  const sv = starts.map((x) => (x ? Date.parse(x) : Number.NaN)).filter((x) => !Number.isNaN(x));
+  const ev = ends.map((x) => (x ? Date.parse(x) : Number.NaN)).filter((x) => !Number.isNaN(x));
+  if (sv.length === 0 || ev.length === 0) return `zcode:window:${sid}:unknown`;
+  const a = new Date(Math.min(...sv)).toISOString();
+  const b = new Date(Math.max(...ev)).toISOString();
+  return `zcode:window:${sid}:${a}/${b}`;
+}
+
+function identityFor(sid: string, m: MetricValue, ctx: IdentityCtx | undefined): MetricIdentity {
+  const known = m.value !== null && ctx !== undefined;
+  return {
+    metric_id: `task-meta:${sid}:${m.name}`,
+    observation_id: known ? ctx.observation_id : `zcode:unobserved:${sid}`,
+    logical_call_ref: `zcode:attempt:${sid}`,
+    physical_attempt_ref: `zcode:attempt:${sid}`,
+    adapter_id: "zcode",
+    provider_run_ref: null,
+    measurement_kind: known ? "COUNTER_DELTA" : "UNKNOWN",
+    window_id: known ? ctx.window_id : `zcode:window:${sid}:unknown`,
+    source_revision: known ? ctx.source_revision : 1,
+  };
+}
+
 export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
   const sid = input.sessionId;
   const headlessRef = `zcode:session:${sid}`;
@@ -230,6 +261,7 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
   const modelCov: Coverage = degraded ? "PARTIAL" : "COMPLETE";
 
   const metrics: MetricValue[] = [];
+  const ctxs = new Map<string, IdentityCtx>();
   const h = input.headless;
   if (haveModelIo) {
     const usage = (r: ObservationRecord) => r.usage;
@@ -239,6 +271,27 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
     const cw = sumField(effectiveReqs, (r) => usage(r)?.cache_write_tokens);
     const cov = (partial: boolean): Coverage => (partial ? "PARTIAL" : modelCov);
     const refs = [modelIoRef];
+    const toolRecs = input.observations.filter((o) => o.kind === "TOOL_CALL");
+    const modelCtx: IdentityCtx = {
+      observation_id: modelIoRef,
+      window_id: isoWindow(
+        sid,
+        effectiveReqs.map((r) => r.started_at),
+        effectiveReqs.map((r) => r.completed_at),
+      ),
+      source_revision: Math.max(1, ...effectiveReqs.concat(toolRecs).map((r) => r.source_revision)),
+    };
+    for (const n of [
+      "model_requests",
+      "input_tokens",
+      "output_tokens",
+      "cache_read_tokens",
+      "cache_write_tokens",
+      "tool_calls",
+      "model_wall_ms",
+    ]) {
+      ctxs.set(n, modelCtx);
+    }
     metrics.push(
       metric("model_requests", effectiveReqs.length, "count", "OBSERVED", modelCov, refs),
       metric("input_tokens", inTok.value, "tokens", "OBSERVED", cov(inTok.partial), refs),
@@ -268,6 +321,20 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
     );
   } else if (h) {
     const refs = [headlessRef];
+    const hctx: IdentityCtx = {
+      observation_id: headlessRef,
+      window_id: `zcode:window:${sid}:unknown`,
+      source_revision: 1,
+    };
+    for (const n of [
+      "model_requests",
+      "input_tokens",
+      "output_tokens",
+      "cache_read_tokens",
+      "cache_write_tokens",
+    ]) {
+      ctxs.set(n, hctx);
+    }
     limits.push("no model-io rollout; token metrics are headless self-report");
     const u = h.usage;
     metrics.push(
@@ -300,6 +367,16 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
     if (!isFinished(sg) || !sg.started_at || !sg.finished_at) continue;
     finishedWindows.push([Date.parse(sg.started_at), Date.parse(sg.finished_at)]);
   }
+  const finishedSegs = segs.filter(isFinished);
+  ctxs.set("run_wall_ms", {
+    observation_id: runRef,
+    window_id: isoWindow(
+      sid,
+      finishedSegs.map((sg) => sg.started_at),
+      finishedSegs.map((sg) => sg.finished_at),
+    ),
+    source_revision: 1,
+  });
   const runWall = finishedWindows.length > 0 ? unionIntervalMs(finishedWindows) : null;
   const unfinished = segs.filter((sg) => !isFinished(sg)).length;
   const brokenAt = brokenChainIndexes(segs);
@@ -327,6 +404,10 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
       runRef,
     ]),
   );
+  const withIdentity = metrics.map((m) => ({
+    ...m,
+    identity: identityFor(sid, m, ctxs.get(m.name)),
+  }));
   if (!haveRun) limits.push("run record missing; run boundary and source SHA unknown");
   if (unfinished > 0) limits.push(`${unfinished} run segment(s) without finish record`);
   for (const i of brokenAt) limits.push(`run segment head chain broken at ${i}`);
@@ -365,7 +446,7 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
     observation_refs: observationRefs.slice(0, 10),
     capture_coverage: capture,
     limits,
-    metrics,
+    metrics: withIdentity,
     cost: {
       value: null,
       currency: null,

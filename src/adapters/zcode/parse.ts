@@ -64,6 +64,112 @@ export function parseHeadlessResult(text: string): HeadlessResult | null {
   };
 }
 
+export type CommandClass =
+  | "TEST"
+  | "TYPECHECK_LINT"
+  | "BUILD"
+  | "DEPENDENCY"
+  | "VCS"
+  | "READ_SEARCH"
+  | "FILE_WRITE"
+  | "OTHER";
+
+const READ_CMDS = new Set(["cat", "head", "tail", "less", "ls", "find", "grep", "rg", "wc", "awk"]);
+const WRITE_CMDS = new Set(["mkdir", "cp", "mv", "rm", "tee", "touch"]);
+const LINT_CMDS = new Set(["tsc", "biome", "eslint"]);
+
+function classifyNpmRun(script: string | undefined): CommandClass {
+  if (!script) return "OTHER";
+  if (script === "test" || script.startsWith("test:")) return "TEST";
+  if (script === "typecheck" || script === "lint") return "TYPECHECK_LINT";
+  if (script === "build" || script.startsWith("build:")) return "BUILD";
+  return "OTHER";
+}
+
+function hasFileRedirect(seg: string): boolean {
+  // `>` / `>>` to something other than an fd dup (`2>&1`) or /dev/null.
+  return /(?:^|[^0-9&>-])>{1,2}\s*(?!&|\/dev\/null\b)\S/.test(seg);
+}
+
+/**
+ * Privacy-safe class of a shell command, by the FIRST command of the line only.
+ * Pure; returns a fixed enum value and never any part of the command text.
+ * `bash -c "..."` is not parsed and yields OTHER.
+ */
+export function classifyCommand(cmd: string): CommandClass {
+  const segments = cmd.split(/&&|;|\r?\n/).map((x) => x.trim());
+  let seg = "";
+  for (const s of segments) {
+    if (s === "") continue;
+    if (/^(cd|pushd|export|set)(\s|$)/.test(s)) continue;
+    seg = s;
+    break;
+  }
+  if (seg === "") return "OTHER";
+  // Only the head of a pipeline decides the class (`||` already left-trimmed by the split).
+  const head = seg.split(/\|\|?/)[0]?.trim() ?? "";
+  const tokens = head.split(/\s+/).filter((t) => t !== "");
+  // Leading env assignments, `rtk` proxy and `timeout <n>` wrappers.
+  for (;;) {
+    const t = tokens[0];
+    if (t === undefined) return "OTHER";
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(t) || t === "rtk" || t === "env") tokens.shift();
+    else if (t === "timeout" && /^\d+[smh]?$/.test(tokens[1] ?? "")) tokens.splice(0, 2);
+    else break;
+  }
+  const first = (tokens[0] ?? "").replace(/^.*[/]/, "").replace(/\.exe$/i, "");
+  const rest = tokens.slice(1);
+  const r0 = rest[0];
+  const redirect = hasFileRedirect(head);
+  let cls: CommandClass = "OTHER";
+  if (first === "bash" || first === "sh") {
+    const script = rest.find((a) => !a.startsWith("-"));
+    if (r0 === "-c" || r0 === "-lc") cls = "OTHER";
+    else if (script && /(^|[/])task-check\.sh$/.test(script)) cls = "TEST";
+  } else if (first === "git" || first === "gh") {
+    cls = "VCS";
+  } else if (first === "npm" || first === "pnpm") {
+    if (r0 === "test" || r0 === "t") cls = "TEST";
+    else if (r0 === "run" || r0 === "run-script") cls = classifyNpmRun(rest[1]);
+    else if (r0 === "ci" || r0 === "install" || r0 === "i" || r0 === "add") cls = "DEPENDENCY";
+    else if (first === "pnpm") cls = classifyNpmRun(r0);
+  } else if (first === "npx") {
+    if (r0 === "vitest" || r0 === "jest") cls = "TEST";
+    else if (r0 !== undefined && LINT_CMDS.has(r0)) cls = "TYPECHECK_LINT";
+  } else if (first === "node") {
+    if (rest.includes("--test")) cls = "TEST";
+  } else if (first === "vitest" || first === "jest" || first === "pytest") {
+    cls = "TEST";
+  } else if (first === "python" || first === "python3") {
+    if (r0 === "-m" && rest[1] === "pytest") cls = "TEST";
+  } else if (first === "go") {
+    if (r0 === "test") cls = "TEST";
+    else if (r0 === "build") cls = "BUILD";
+  } else if (first === "cargo") {
+    if (r0 === "test") cls = "TEST";
+    else if (r0 === "build") cls = "BUILD";
+  } else if (first === "make") {
+    cls = "BUILD";
+  } else if (LINT_CMDS.has(first)) {
+    cls = "TYPECHECK_LINT";
+  } else if (first === "pip" || first === "pip3") {
+    if (r0 === "install") cls = "DEPENDENCY";
+  } else if (first === "fnm") {
+    cls = "DEPENDENCY";
+  } else if (first === "sed") {
+    cls = rest.some((a) => /^-[a-zA-Z]*i/.test(a) || a.startsWith("--in-place"))
+      ? "FILE_WRITE"
+      : "READ_SEARCH";
+  } else if (READ_CMDS.has(first)) {
+    cls = redirect ? "FILE_WRITE" : "READ_SEARCH";
+  } else if (WRITE_CMDS.has(first)) {
+    cls = "FILE_WRITE";
+  } else if (redirect) {
+    cls = "FILE_WRITE";
+  }
+  return cls;
+}
+
 export interface ModelIoUsage {
   inputTokens: number | null;
   outputTokens: number | null;
@@ -86,7 +192,7 @@ export interface ModelIoRecord {
   providerId: string | null;
   finishReason: string | null;
   usage: ModelIoUsage;
-  toolCalls: { id: string; name: string }[];
+  toolCalls: { id: string; name: string; inputClass?: string }[];
 }
 
 export interface ModelIoParse {
@@ -126,13 +232,20 @@ export function parseModelIo(text: string): ModelIoParse {
     const model = isObj(obj.model) ? obj.model : {};
     const resp = isObj(obj.response) ? obj.response : {};
     const usage = isObj(resp.usage) ? resp.usage : {};
-    const toolCalls: { id: string; name: string }[] = [];
+    const toolCalls: { id: string; name: string; inputClass?: string }[] = [];
     if (Array.isArray(resp.toolCalls)) {
       for (const tc of resp.toolCalls) {
         if (!isObj(tc)) continue;
         const id = str(tc.id);
         const name = str(tc.name);
-        if (id && name) toolCalls.push({ id, name });
+        if (!id || !name) continue;
+        // Only the fixed-enum class of a Bash command survives; the command text is dropped here.
+        const cmd = isObj(tc.input) ? tc.input.command : undefined;
+        if (name.toLowerCase() === "bash" && typeof cmd === "string") {
+          toolCalls.push({ id, name, inputClass: classifyCommand(cmd) });
+        } else {
+          toolCalls.push({ id, name });
+        }
       }
     }
     records.push({

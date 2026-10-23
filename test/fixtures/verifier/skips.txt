@@ -1,0 +1,10 @@
+v24.21.0
+== lint ==
+-- typecheck (仓库未定义, 跳过)
+== test ==
+ℹ tests 3
+ℹ pass 3
+ℹ fail 0
+ℹ skipped 0
+task-check: 全绿
+EXIT=0

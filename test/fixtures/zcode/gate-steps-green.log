@@ -1,0 +1,10 @@
+v24.21.0
+== lint ==
+== typecheck ==
+== test ==
+ℹ tests 5
+ℹ pass 5
+ℹ fail 0
+ℹ skipped 0
+task-check: 全绿
+EXIT=0

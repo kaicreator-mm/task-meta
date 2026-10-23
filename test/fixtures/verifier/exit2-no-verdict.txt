@@ -1,0 +1,8 @@
+== lint ==
+== typecheck ==
+== test ==
+# tests 4
+# pass 3
+# fail 1
+!! test 未通过
+EXIT=2

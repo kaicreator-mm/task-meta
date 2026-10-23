@@ -19,7 +19,7 @@ npm run lint && npm run typecheck && npm test
 ```bash
 node src/cli.ts collect --repo <owner/name> --issue <n> --headless <result.json> \
   [--model-io <file> | --zcode-rollout-dir <dir>] [--run <run.txt>] \
-  [--gate-log <file> --gate-sha <40hex>] \
+  [--gate-log <file>[@<40hex>]]... [--git-dir <dir>] \
   --store <dir> --out <report.md> [--operator-id zcode] [--role builder] [--profile v4|v5] [--publish]
 ```
 
@@ -32,7 +32,17 @@ the readback is a read-only `gh api` call). stdout is one JSON line
 
 - `--zcode-rollout-dir` resolves `model-io-<sessionId>.jsonl` from the headless session id;
   a missing file is recorded as a limit.
-- A gate log is bound only to the explicit `--gate-sha` (both flags are required together).
+- `--gate-log <file>@<sha>` (repeatable) binds a gate log to that commit: subject binding OBSERVED.
+  The legacy pair `--gate-log <file> --gate-sha <sha>` (one log) still means `file@sha`.
+  Without `@sha` the subject is inferred from the log file mtime (after a finished run segment's
+  `finished_at` and before the next segment starts => that segment's `head_after`, binding INFERRED,
+  recorded as a limit); otherwise it is unbound (UNKNOWN). Inferred/unbound logs never yield
+  STRICT_TERMINAL_SUCCESS. All logs go through the #11 verifier assessment, which is the only verdict source.
+- `--git-dir <dir>` (optional, read-only) lets lineage (#15) read parents and per-transition diffstat.
+- Beyond the three original objects the manifest also holds `verifier`, `lineage`, `labels`
+  and `aggregates` (private; only a bounded outcome-class limit and the ADS gap limit reach the report).
+  stdout additionally carries `outcome_class`, `versions`, `transitions` (count by kind),
+  `labels` (count by kind), `profile` and `mode` (`dry-run`|`publish`).
 - Re-running with identical inputs is idempotent (same manifest digest). A changed input
   for an existing attempt is refused (exit 4): v0.1 has no revisions/supersedes.
 

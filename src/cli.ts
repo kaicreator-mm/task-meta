@@ -1,20 +1,37 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { collectZcodeRun, type ZcodeRunInput } from "./adapters/zcode/index.ts";
-import { parseHeadlessResult, parseModelIo } from "./adapters/zcode/parse.ts";
-import { canonicalDigest } from "./canonical.ts";
-import type { AttemptSummary, ManifestPointer } from "./model.ts";
+import {
+  parseHeadlessResult,
+  parseModelIo,
+  parseRunRecord,
+  type RunRecord,
+} from "./adapters/zcode/parse.ts";
+import { computeAggregates, PUBLIC_GAP_LIMIT } from "./aggregates/index.ts";
+import { canonicalDigest, sha256Hex } from "./canonical.ts";
+import { sortRunSegments } from "./correlate.ts";
+import { labelAttempt } from "./labels/index.ts";
+import { buildLineage, type GitExec, makeGitExec } from "./lineage/index.ts";
+import type { AttemptSummary, ManifestPointer, VerifierRecord } from "./model.ts";
 import { assertNoForbiddenContent } from "./privacy.ts";
 import { GhCliClient, type GitHubClient, publishReport } from "./publish/index.ts";
 import {
   buildReportDocument,
+  loadAdoption,
   type ReportProfile,
   renderReportComment,
   reportDataDigest,
+  resolveProfile,
   UnrepresentableError,
 } from "./report/index.ts";
 import { EvidenceStore, NotFoundError } from "./store/index.ts";
+import {
+  assessVerifiers,
+  parseTaskCheckLog,
+  type SubjectBinding,
+  toVerifierOutcome,
+} from "./verifier/index.ts";
 
 export interface CliDeps {
   client?: GitHubClient;
@@ -32,12 +49,15 @@ export const EXIT = {
   STORE_VERIFY: 5,
   UNREPRESENTABLE: 6,
   NOT_PUBLISHED: 7,
+  HELD: 8,
 } as const;
 
 const USAGE = `usage: collect --repo <owner/name> --issue <n> --headless <file>
                [--model-io <file> | --zcode-rollout-dir <dir>] [--run <file>]
-               [--gate-log <file> --gate-sha <40hex>] --store <dir> --out <report.md>
-               [--operator-id zcode] [--role builder] [--profile v4|v5] [--publish]`;
+               [--gate-log <file>[@<40hex>]]... [--gate-sha <40hex>] [--git-dir <dir>]
+               --store <dir> --out <report.md>
+               [--operator-id zcode] [--role builder] [--profile v4|v5] [--publish]
+               [--ads-pin <sha>] [--clearance-ref <ref>] [--publisher-source-sha <40hex>]`;
 
 class UsageError extends Error {}
 class Failure extends Error {
@@ -64,7 +84,8 @@ function optionsFrom(argv: string[]) {
       "model-io": { type: "string" },
       "zcode-rollout-dir": { type: "string" },
       run: { type: "string", multiple: true },
-      "gate-log": { type: "string" },
+      "gate-log": { type: "string", multiple: true },
+      "git-dir": { type: "string" },
       "gate-sha": { type: "string" },
       store: { type: "string" },
       out: { type: "string" },
@@ -72,9 +93,46 @@ function optionsFrom(argv: string[]) {
       role: { type: "string" },
       profile: { type: "string" },
       publish: { type: "boolean" },
+      "ads-pin": { type: "string" },
+      "clearance-ref": { type: "string" },
+      "publisher-source-sha": { type: "string" },
     },
   });
   return { values, positionals };
+}
+
+interface GateSpec {
+  file: string;
+  sha: string | null;
+}
+
+function parseGateSpec(raw: string): GateSpec {
+  const at = raw.lastIndexOf("@");
+  if (at > 0) {
+    const tail = raw.slice(at + 1);
+    if (SHA_RE.test(tail)) return { file: raw.slice(0, at), sha: tail };
+  }
+  return { file: raw, sha: null };
+}
+
+/** Subject = head_after of the finished segment whose end precedes the log mtime and the next start. */
+function inferSubject(segs: RunRecord[], mtimeMs: number): string | null {
+  for (let i = 0; i < segs.length; i++) {
+    const seg = segs[i] as RunRecord;
+    if (!seg.finished_at || !seg.head_after) continue;
+    const end = Date.parse(seg.finished_at);
+    if (Number.isNaN(end) || mtimeMs < end) continue;
+    const next = segs[i + 1];
+    const nextStart = next?.started_at ? Date.parse(next.started_at) : Number.NaN;
+    if (Number.isNaN(nextStart) || mtimeMs < nextStart) return seg.head_after;
+  }
+  return null;
+}
+
+function countBy(xs: string[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const x of xs) out[x] = (out[x] ?? 0) + 1;
+  return Object.fromEntries(Object.entries(out).sort(([a], [b]) => (a < b ? -1 : 1)));
 }
 
 function table(summary: AttemptSummary): string {
@@ -129,8 +187,12 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
   if (!REPO_RE.test(repo)) throw new UsageError("--repo must be <owner/name>");
   if (!/^[1-9]\d*$/.test(v.issue as string)) throw new UsageError("--issue must be a number");
   const issue = Number(v.issue);
-  if ((v["gate-log"] === undefined) !== (v["gate-sha"] === undefined)) {
-    throw new UsageError("--gate-log and --gate-sha must be given together");
+  const gateSpecs = (v["gate-log"] ?? []).map(parseGateSpec);
+  if (v["gate-sha"] !== undefined) {
+    if (gateSpecs.length !== 1 || gateSpecs[0]?.sha !== null) {
+      throw new UsageError("--gate-sha pairs with exactly one --gate-log without @<sha>");
+    }
+    (gateSpecs[0] as GateSpec).sha = v["gate-sha"];
   }
   if (v["gate-sha"] !== undefined && !SHA_RE.test(v["gate-sha"])) {
     throw new UsageError("--gate-sha must be 40 lowercase hex characters");
@@ -138,8 +200,21 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
   if (v["model-io"] !== undefined && v["zcode-rollout-dir"] !== undefined) {
     throw new UsageError("--model-io and --zcode-rollout-dir are mutually exclusive");
   }
-  const profile = v.profile ?? "v4";
-  if (profile !== "v4" && profile !== "v5") throw new UsageError("--profile must be v4 or v5");
+  if (v.profile !== undefined && v.profile !== "v4" && v.profile !== "v5") {
+    throw new UsageError("--profile must be v4 or v5");
+  }
+  const resolution = resolveProfile({
+    ...(v.profile !== undefined ? { profile: v.profile as ReportProfile } : {}),
+    ...(v["ads-pin"] !== undefined ? { adsPin: v["ads-pin"] } : {}),
+    publish: v.publish === true,
+    adoption: loadAdoption(),
+  });
+  if (!resolution.ok) throw new UsageError(`${resolution.code}: ${resolution.message}`);
+  const profile = resolution.profile;
+  const publisherSha = v["publisher-source-sha"];
+  if (profile === "v5" && (publisherSha === undefined || !SHA_RE.test(publisherSha))) {
+    throw new UsageError("--profile v5 requires --publisher-source-sha <40 lowercase hex>");
+  }
 
   const headless = await readText(v.headless as string, "headless");
   const input: ZcodeRunInput = {
@@ -175,11 +250,7 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     input.runRecords = [];
     for (const f of v.run) input.runRecords.push(await readText(f, "run record"));
   }
-  if (v["gate-log"] !== undefined) {
-    input.gateLog = await readText(v["gate-log"], "gate log");
-    input.gateSha = v["gate-sha"] as string;
-  }
-
+  const runTexts = input.runRecords ?? [];
   const attemptRef = sessionId ?? parseModelIo(modelIo ?? "").records[0]?.sessionId ?? null;
   if (attemptRef === null) {
     throw new Failure(EXIT.FAILURE, "no session id found in the supplied inputs");
@@ -205,18 +276,104 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
   }
   const { observations, summary, profile: capability } = collection;
 
+  // ---- R2: verifier assessment, lineage, labels, aggregates ----
+  const runs: RunRecord[] = runTexts.map((t) => parseRunRecord(t));
+  const sorted = sortRunSegments(runs);
+  const records: VerifierRecord[] = [];
+  let inferredUsed = false;
+  let unboundCount = 0;
+  for (const spec of gateSpecs) {
+    const text = await readText(spec.file, "gate log");
+    const ref = `gate-log:${sha256Hex(text).slice(0, 12)}`;
+    let subject: string | null = spec.sha;
+    let binding: SubjectBinding = spec.sha !== null ? "OBSERVED" : "UNKNOWN";
+    if (spec.sha === null) {
+      let mtimeMs: number | null = null;
+      try {
+        mtimeMs = (await stat(spec.file)).mtimeMs;
+      } catch {
+        mtimeMs = null;
+      }
+      subject = mtimeMs === null ? null : inferSubject(sorted, mtimeMs);
+      if (subject !== null) {
+        binding = "INFERRED";
+        inferredUsed = true;
+      } else unboundCount++;
+    }
+    records.push(parseTaskCheckLog(text, { ref, subject_sha: subject, subject_binding: binding }));
+  }
+  const assessment = assessVerifiers({
+    records,
+    attempt_source_sha: summary.source_sha,
+    run_exit_codes: runs.map((r) => r.exit_code),
+  });
+  summary.verifier = toVerifierOutcome(assessment, summary.source_sha);
+
+  const git: GitExec | undefined =
+    v["git-dir"] !== undefined ? makeGitExec(resolve(v["git-dir"])) : undefined;
+  const lineage = await buildLineage({
+    attempt_ref: attemptRef,
+    runs,
+    ...(git ? { git } : {}),
+    segmentRefs: runs.map((_, i) => `zcode:run-record:${attemptRef}#${i + 1}`),
+  });
+  for (const t of lineage.transitions) {
+    if (t.to_version === null) continue;
+    for (const r of assessment.records) {
+      if (r.subject_sha !== null && t.to_version === `git:${r.subject_sha}`) {
+        const ref = r.source_refs[0];
+        if (ref !== undefined && !t.verifier_refs.includes(ref)) t.verifier_refs.push(ref);
+      }
+    }
+  }
+  const labels = labelAttempt({ observations, lineage, assessment });
+  const aggregates = computeAggregates({
+    summaryAttempts: [attemptRef],
+    excludedAttempts: [],
+    assessment,
+    lineage,
+    labels,
+  });
+  summary.limits.push(
+    `verifier outcome class: ${assessment.outcome_class}`,
+    `verifier conflicts: ${assessment.conflicts.length}`,
+    ...assessment.limits.slice(0, 5),
+  );
+  if (inferredUsed) {
+    summary.limits.push(
+      "gate log subject inferred from file mtime: after a finished run segment and before the next one starts",
+    );
+  }
+  if (unboundCount > 0) {
+    summary.limits.push(
+      `${unboundCount} gate log(s) without subject binding (mtime not inferable)`,
+    );
+  }
+  summary.limits.push(PUBLIC_GAP_LIMIT);
+  summary.limits = [...new Set(summary.limits)];
+
+  const values = {
+    observations,
+    summary,
+    capability,
+    verifier: assessment,
+    lineage,
+    labels,
+    aggregates,
+  };
   try {
-    assertNoForbiddenContent({ observations, summary, capability });
+    assertNoForbiddenContent(values);
   } catch (e) {
     throw new Failure(EXIT.PRIVACY, `privacy guard refused the evidence: ${(e as Error).message}`);
   }
-
-  const values = { observations, summary, capability };
+  const ROLES = Object.keys(values) as (keyof typeof values)[];
   if (existing) {
-    const same = (["observations", "summary", "capability"] as const).every(
-      (role) =>
-        existing.objects.find((o) => o.role === role)?.digest === canonicalDigest(values[role]),
-    );
+    const same =
+      existing.objects.length === ROLES.length &&
+      ROLES.every(
+        (role) =>
+          existing.objects.find((o) => o.role === role)?.digest === canonicalDigest(values[role]),
+      );
     if (!same) {
       throw new Failure(
         EXIT.REVISION_CONFLICT,
@@ -225,7 +382,7 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     }
   }
   const objects = [];
-  for (const role of ["observations", "summary", "capability"] as const) {
+  for (const role of ROLES) {
     objects.push({ role, digest: (await store.putObject(values[role])).digest });
   }
   const written = await store.writeManifest({
@@ -248,12 +405,35 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     );
   }
 
+  const clearance = v["clearance-ref"];
+  if (profile === "v5" && (clearance === undefined || clearance === "")) {
+    // No source-owner clearance: the evidence is stored but nothing is rendered for posting.
+    out(
+      `${JSON.stringify({
+        outcome: "HELD",
+        reason: "PUBLICATION_CLEARANCE_REQUIRED",
+        attempt_ref: attemptRef,
+        manifest: pointer,
+        capture_coverage: summary.capture_coverage,
+        outcome_class: assessment.outcome_class,
+      })}
+`,
+    );
+    return EXIT.HELD;
+  }
   let doc: ReturnType<typeof buildReportDocument>;
   try {
     doc = buildReportDocument(summary, pointer, {
-      profile: profile as ReportProfile,
+      profile,
       revision: 1,
       supersedes: null,
+      ...(profile === "v5"
+        ? {
+            publisherSourceSha: publisherSha as string,
+            publication: { clearance_ref: clearance as string },
+            adsRevision: resolution.adsRevision,
+          }
+        : {}),
     });
   } catch (e) {
     if (e instanceof UnrepresentableError) {
@@ -286,6 +466,12 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     data_digest: reportDataDigest(doc.data),
     capture_coverage: summary.capture_coverage,
     limits_count: summary.limits.length,
+    outcome_class: assessment.outcome_class,
+    versions: lineage.versions.length,
+    transitions: countBy(lineage.transitions.map((t) => t.kind)),
+    labels: countBy(labels.map((l) => l.kind)),
+    profile,
+    mode: v.publish === true ? "publish" : "dry-run",
   };
   if (outcome.state === "NOT_PUBLISHED") line.reason = outcome.reason;
   if (outcome.state === "CONFLICT") {

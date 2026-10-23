@@ -222,6 +222,10 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
       o.parent_ref = req.observation_id;
       o.tool = { call_id: tc.id, name: tc.name };
       o.fields_epistemic.tool = "OBSERVED";
+      if (tc.inputClass !== undefined) {
+        o.tool.input_class = tc.inputClass;
+        o.fields_epistemic["tool.input_class"] = "INFERRED";
+      }
       tools.push(o);
     }
   }

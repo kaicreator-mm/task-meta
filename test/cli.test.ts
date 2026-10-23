@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { main } from "../src/cli.ts";
+import { assertNoForbiddenContent } from "../src/privacy.ts";
 import type { GitHubClient, IssueComment } from "../src/publish/index.ts";
 import { parseReportComment } from "../src/report/index.ts";
+import { EvidenceStore } from "../src/store/index.ts";
 
 const fxDir = join(import.meta.dirname, "fixtures", "zcode");
 const fx = (n: string) => join(fxDir, n);
@@ -148,11 +151,15 @@ test("changed input yields exit 4 and leaves the store untouched", async () => {
   assert.equal(countFiles(join(dir, "store")), before);
 });
 
-test("gate flags must be given together (exit 2)", async () => {
+test("--gate-sha without a single bare --gate-log is a usage error; bare --gate-log is allowed", async () => {
   const dir = await tmp();
-  assert.equal((await exec(dropFlag(baseArgs(dir), "--gate-sha"))).code, 2);
   assert.equal((await exec(dropFlag(baseArgs(dir), "--gate-log"))).code, 2);
-  assert.equal(countFiles(join(dir, "store")), 0);
+  const ok = await exec(dropFlag(baseArgs(dir), "--gate-sha"));
+  assert.equal(ok.code, 0, ok.stderr);
+  const dir2 = await tmp();
+  const dup = baseArgs(dir2, ["--gate-log", `${fx("gate-pass.log")}@${SHA}`]);
+  assert.equal((await exec(dup)).code, 2);
+  assert.equal(countFiles(join(dir2, "store")), 0);
 });
 
 test("other usage errors exit 2", async () => {
@@ -238,4 +245,223 @@ test("a differing report already on the issue yields CONFLICT, exit 7", async ()
   assert.equal(r.code, 7);
   assert.equal(r.json.outcome, "CONFLICT");
   assert.equal(client.creates, 1);
+});
+
+const CANDIDATE = "3041a1be3f130e5cc5e676c2e56a99882adfd97c";
+const PUBLISHER_SHA = "b".repeat(40);
+const v5Args = (dir: string, extra: string[] = []) =>
+  dropFlag(dropFlag(baseArgs(dir), "--gate-log"), "--gate-sha").concat([
+    "--gate-log",
+    `${fx("gate-steps-green.log")}@${SHA}`,
+    "--profile",
+    "v5",
+    "--publisher-source-sha",
+    PUBLISHER_SHA,
+    ...extra,
+  ]);
+
+test("v5 candidate dry run with clearance writes a v5 report", async () => {
+  const dir = await tmp();
+  const client = new FakeClient();
+  const r = await exec(
+    v5Args(dir, ["--ads-pin", CANDIDATE, "--clearance-ref", "clearance:synthetic"]),
+    client,
+  );
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.json.outcome, "DRY_RUN");
+  assert.equal(client.creates, 0);
+  const p = parseReportComment(await readFile(join(dir, "out", "report.md"), "utf8"));
+  assert.ok(p.ok);
+  assert.equal(p.profile, "v5");
+  assert.equal((p.doc.data.subject as { ads_revision: string }).ads_revision, CANDIDATE);
+});
+
+test("v5 candidate with --publish is refused (exit 2) and posts nothing", async () => {
+  const dir = await tmp();
+  const client = new FakeClient();
+  const r = await exec(
+    v5Args(dir, ["--ads-pin", CANDIDATE, "--clearance-ref", "clearance:synthetic", "--publish"]),
+    client,
+  );
+  assert.equal(r.code, 2);
+  assert.match(r.stderr, /CANDIDATE_NOT_PUBLISHABLE/);
+  assert.equal(client.creates, 0);
+});
+
+test("v5 without clearance is HELD (exit 8): store written, no report file, no create", async () => {
+  const dir = await tmp();
+  const client = new FakeClient();
+  const r = await exec(v5Args(dir, ["--ads-pin", CANDIDATE]), client);
+  assert.equal(r.code, 8, r.stderr);
+  assert.equal(r.json.outcome, "HELD");
+  assert.equal(r.json.reason, "PUBLICATION_CLEARANCE_REQUIRED");
+  assert.equal(client.creates, 0);
+  assert.equal(existsSync(join(dir, "out", "report.md")), false);
+  assert.ok(countFiles(join(dir, "store")) >= 4);
+});
+
+test("v5 without --ads-pin exits 2", async () => {
+  const dir = await tmp();
+  const r = await exec(v5Args(dir, ["--clearance-ref", "clearance:synthetic"]));
+  assert.equal(r.code, 2);
+  assert.match(r.stderr, /ADS_PIN_REQUIRED/);
+  assert.equal(countFiles(join(dir, "store")), 0);
+});
+
+test("v5 without --publisher-source-sha exits 2; unknown pin exits 2", async () => {
+  const dir = await tmp();
+  const noSha = baseArgs(dir, [
+    "--profile",
+    "v5",
+    "--ads-pin",
+    CANDIDATE,
+    "--clearance-ref",
+    "clearance:synthetic",
+  ]);
+  assert.equal((await exec(noSha)).code, 2);
+  const unknown = await exec(v5Args(dir, ["--ads-pin", "a".repeat(40), "--clearance-ref", "c"]));
+  assert.equal(unknown.code, 2);
+  assert.match(unknown.stderr, /UNKNOWN_ADS_PIN/);
+});
+
+// ---- R2 integration ----
+
+const GREEN = fx("gate-steps-green.log");
+const RED = fx("gate-steps-red.log");
+const noGate = (dir: string, extra: string[] = []) =>
+  dropFlag(dropFlag(baseArgs(dir), "--gate-log"), "--gate-sha").concat(extra);
+
+test("gate file@sha is OBSERVED: green on source_sha => STRICT_TERMINAL_SUCCESS", async () => {
+  const dir = await tmp();
+  const r = await exec(noGate(dir, ["--gate-log", `${GREEN}@${SHA}`]));
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.json.outcome_class, "STRICT_TERMINAL_SUCCESS");
+  assert.equal(r.json.profile, "v4");
+  assert.equal(r.json.mode, "dry-run");
+  assert.equal(r.json.versions, 2);
+  assert.equal(r.json.transitions.ADVANCE, 1);
+  assert.ok(r.json.labels.ACTION_CATEGORY > 0);
+  const p = parseReportComment(await readFile(join(dir, "out", "report.md"), "utf8"));
+  assert.ok(p.ok);
+  const vd = p.doc.data.verifier as { subject_sha: string; checked: string[] };
+  assert.equal(vd.subject_sha, SHA);
+  assert.ok(vd.checked.includes("task-check:test"));
+  assert.match(await readFile(join(dir, "out", "report.md"), "utf8"), /gap ADS #1258/);
+});
+
+test("gate without @sha is inferred from mtime => PARTIAL_PROGRESS with a limit", async () => {
+  const dir = await tmp();
+  const log = join(dir, "g.log");
+  await writeFile(log, await readFile(GREEN, "utf8"));
+  // run.txt fixture finishes 2026-10-22T13:12:00Z
+  const t = new Date("2026-10-22T14:00:00Z");
+  await utimes(log, t, t);
+  const r = await exec(noGate(dir, ["--gate-log", log]));
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.json.outcome_class, "PARTIAL_PROGRESS");
+  const body = await readFile(join(dir, "out", "report.md"), "utf8");
+  assert.match(body, /inferred from file mtime/);
+  assert.ok(!body.includes(log));
+});
+
+test("gate with mtime before the run finished has no subject (UNVERIFIED-ish, never strict)", async () => {
+  const dir = await tmp();
+  const log = join(dir, "g.log");
+  await writeFile(log, await readFile(GREEN, "utf8"));
+  const t = new Date("2026-10-22T10:00:00Z");
+  await utimes(log, t, t);
+  const r = await exec(noGate(dir, ["--gate-log", log]));
+  assert.equal(r.code, 0, r.stderr);
+  assert.notEqual(r.json.outcome_class, "STRICT_TERMINAL_SUCCESS");
+  assert.match(await readFile(join(dir, "out", "report.md"), "utf8"), /without subject binding/);
+});
+
+test("two contradicting gates on the same sha => UNVERIFIED", async () => {
+  const dir = await tmp();
+  const r = await exec(
+    noGate(dir, ["--gate-log", `${GREEN}@${SHA}`, "--gate-log", `${RED}@${SHA}`]),
+  );
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.json.outcome_class, "UNVERIFIED");
+});
+
+test("no gate log at all => UNVERIFIED, manifest still has all 7 roles", async () => {
+  const dir = await tmp();
+  const r = await exec(noGate(dir));
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.json.outcome_class, "UNVERIFIED");
+  const store = new EvidenceStore(join(dir, "store"));
+  const m = await store.readManifest(r.json.attempt_ref, 1);
+  assert.deepEqual(m.objects.map((o) => o.role).sort(), [
+    "aggregates",
+    "capability",
+    "labels",
+    "lineage",
+    "observations",
+    "summary",
+    "verifier",
+  ]);
+});
+
+test("lineage from a temp git repo; verifier ref attached; stored objects are private-clean", async () => {
+  const dir = await tmp();
+  const repo = join(dir, "repo");
+  await mkdir(repo);
+  const git = (...a: string[]) =>
+    execFileSync(
+      "git",
+      ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@example.invalid", ...a],
+      { encoding: "utf8" },
+    ).trim();
+  git("init", "-q");
+  await writeFile(join(repo, "a.txt"), "one\n");
+  git("add", ".");
+  git("commit", "-q", "-m", "one");
+  const c1 = git("rev-parse", "HEAD");
+  await writeFile(join(repo, "a.txt"), "one\ntwo\n");
+  git("commit", "-q", "-am", "two");
+  const c2 = git("rev-parse", "HEAD");
+  const run = (await readFile(fx("run.txt"), "utf8"))
+    .replace("fedcba9876543210fedcba9876543210fedcba98", c1)
+    .replace("0123456789abcdef0123456789abcdef01234567", c2);
+  const runFile = join(dir, "run.txt");
+  await writeFile(runFile, run);
+  const args = noGate(dir, ["--gate-log", `${GREEN}@${c2}`, "--git-dir", join(repo, ".git")]).map(
+    (a) => (a === fx("run.txt") ? runFile : a),
+  );
+  const a = await exec(args);
+  assert.equal(a.code, 0, a.stderr);
+  assert.equal(a.json.outcome_class, "STRICT_TERMINAL_SUCCESS");
+  const store = new EvidenceStore(join(dir, "store"));
+  const m = await store.readManifest(a.json.attempt_ref, 1);
+  const get = async (role: string) =>
+    store.getObject((m.objects.find((o) => o.role === role) as { digest: string }).digest);
+  const lineage = (await get("lineage")) as {
+    versions: { observability: string }[];
+    transitions: {
+      change: { insertions: number | null };
+      verifier_refs: string[];
+      run_segment_ref: string;
+    }[];
+  };
+  assert.equal(
+    lineage.versions.every((v) => v.observability === "COMMITTED"),
+    true,
+  );
+  assert.equal(lineage.transitions[0]?.change.insertions, 1);
+  assert.equal(lineage.transitions[0]?.verifier_refs.length, 1);
+  assert.match(
+    lineage.transitions[0]?.run_segment_ref ?? "",
+    /^zcode:run-record:sess-synth-0001#1$/,
+  );
+  for (const role of m.objects.map((o) => o.role)) {
+    const text = JSON.stringify(await get(role));
+    assertNoForbiddenContent(JSON.parse(text));
+    assert.ok(!text.includes("SENTINEL"), role);
+    assert.ok(!text.includes(dir.replaceAll("\\", "\\\\")), role);
+  }
+  // idempotent rerun with a moved clock
+  const b = await exec(args, new FakeClient(), new Date("2027-01-01T00:00:00.000Z"));
+  assert.equal(b.code, 0, b.stderr);
+  assert.equal(b.json.manifest.sha256, a.json.manifest.sha256);
 });
