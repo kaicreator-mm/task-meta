@@ -272,7 +272,7 @@ test("determinism: same input yields identical labels, ids and digest", () => {
   assert.ok(a.every((l) => /^[0-9a-f]{32}$/.test(l.label_id)));
   assert.equal(new Set(a.map((l) => l.label_id)).size, a.length);
   assert.equal(LABELER.name, "task-meta-rules");
-  assert.equal(LABELER.version, "1.0.0");
+  assert.equal(LABELER.version, "1.1.0");
   assert.match(LABELER.rules_digest, /^[0-9a-f]{64}$/);
   assert.equal(LABELER.rules_digest, LABELER.rules_digest);
   assert.ok(RULE_TABLE.loop_cluster.min_consecutive_test_calls === 3);
