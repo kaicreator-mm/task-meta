@@ -28,10 +28,14 @@ import {
 import { EvidenceStore, NotFoundError } from "./store/index.ts";
 import {
   assessVerifiers,
+  extractGateRecord,
   parseTaskCheckLog,
   type SubjectBinding,
   toVerifierOutcome,
 } from "./verifier/index.ts";
+
+const E2E_LIMIT =
+  "ADS v4.16 candidate 3041a1b used as isolated E2E test subject; not production adoption";
 
 export interface CliDeps {
   client?: GitHubClient;
@@ -53,7 +57,7 @@ export const EXIT = {
 } as const;
 
 const USAGE = `usage: collect --repo <owner/name> --issue <n> --headless <file>
-               [--model-io <file> | --zcode-rollout-dir <dir>] [--run <file>]
+               [--model-io <file> | --zcode-rollout-dir <dir>] [--zcode-hook-spool <dir>] [--run <file>]
                [--gate-log <file>[@<40hex>]]... [--gate-sha <40hex>] [--git-dir <dir>]
                --store <dir> --out <report.md>
                [--operator-id zcode] [--role builder] [--profile v4|v5] [--publish]
@@ -83,6 +87,8 @@ function optionsFrom(argv: string[]) {
       headless: { type: "string" },
       "model-io": { type: "string" },
       "zcode-rollout-dir": { type: "string" },
+      "zcode-hook-spool": { type: "string" },
+      "verifier-scope": { type: "string" },
       run: { type: "string", multiple: true },
       "gate-log": { type: "string", multiple: true },
       "git-dir": { type: "string" },
@@ -207,6 +213,7 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     ...(v.profile !== undefined ? { profile: v.profile as ReportProfile } : {}),
     ...(v["ads-pin"] !== undefined ? { adsPin: v["ads-pin"] } : {}),
     publish: v.publish === true,
+    repository: repo,
     adoption: loadAdoption(),
   });
   if (!resolution.ok) throw new UsageError(`${resolution.code}: ${resolution.message}`);
@@ -231,6 +238,7 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     headless,
   };
 
+  const extraLimits: string[] = [];
   let modelIo: string | undefined;
   const sessionId = parseHeadlessResult(headless)?.sessionId ?? null;
   if (v["model-io"] !== undefined) {
@@ -246,6 +254,18 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     }
   }
   if (modelIo !== undefined) input.modelIo = modelIo;
+  if (v["zcode-hook-spool"] !== undefined) {
+    if (sessionId === null || !SESSION_FILE_RE.test(sessionId)) {
+      throw new Failure(EXIT.FAILURE, "headless result has no usable sessionId");
+    }
+    try {
+      // The capture plugin sanitizes session ids to [A-Za-z0-9_-] for the file name.
+      const file = `${sessionId.replace(/[^A-Za-z0-9_-]/g, "_")}.jsonl`;
+      input.hookSpool = await readFile(join(v["zcode-hook-spool"], file), "utf8");
+    } catch {
+      extraLimits.push("no hook spool for this session (capture plugin not enabled or no events)");
+    }
+  }
   if (v.run !== undefined) {
     input.runRecords = [];
     for (const f of v.run) input.runRecords.push(await readText(f, "run record"));
@@ -275,6 +295,7 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     throw new Failure(EXIT.FAILURE, `collection failed: ${(e as Error).message}`);
   }
   const { observations, summary, profile: capability } = collection;
+  summary.limits.push(...extraLimits);
 
   // ---- R2: verifier assessment, lineage, labels, aggregates ----
   const runs: RunRecord[] = runTexts.map((t) => parseRunRecord(t));
@@ -287,7 +308,8 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     const ref = `gate-log:${sha256Hex(text).slice(0, 12)}`;
     let subject: string | null = spec.sha;
     let binding: SubjectBinding = spec.sha !== null ? "OBSERVED" : "UNKNOWN";
-    if (spec.sha === null) {
+    // A gate-recorded GATE_SUBJECT_SHA (written at run time) beats mtime inference.
+    if (spec.sha === null && extractGateRecord(text).sha === null) {
       let mtimeMs: number | null = null;
       try {
         mtimeMs = (await stat(spec.file)).mtimeMs;
@@ -302,10 +324,18 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     }
     records.push(parseTaskCheckLog(text, { ref, subject_sha: subject, subject_binding: binding }));
   }
+  // Required verifier scope is declared by the operator (e.g. a repo whose gate only runs tests);
+  // default is the full task-check scope.
+  const requiredScope = v["verifier-scope"]
+    ?.split(",")
+    .map((s) => s.trim())
+    .filter((s) => s !== "")
+    .map((s) => (s.startsWith("task-check:") ? s : `task-check:${s}`));
   const assessment = assessVerifiers({
     records,
     attempt_source_sha: summary.source_sha,
     run_exit_codes: runs.map((r) => r.exit_code),
+    ...(requiredScope && requiredScope.length > 0 ? { required_scope: requiredScope } : {}),
   });
   summary.verifier = toVerifierOutcome(assessment, summary.source_sha);
 
@@ -349,6 +379,7 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
       `${unboundCount} gate log(s) without subject binding (mtime not inferable)`,
     );
   }
+  if (resolution.mode === "E2E_TEST_SUBJECT") summary.limits.push(E2E_LIMIT);
   summary.limits.push(PUBLIC_GAP_LIMIT);
   summary.limits = [...new Set(summary.limits)];
 

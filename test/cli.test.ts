@@ -465,3 +465,53 @@ test("lineage from a temp git repo; verifier ref attached; stored objects are pr
   assert.equal(b.code, 0, b.stderr);
   assert.equal(b.json.manifest.sha256, a.json.manifest.sha256);
 });
+
+// ---- E2E test subject ----
+
+const E2E_REPO = "kaicreator-mm/task-meta-e2e";
+const e2eArgs = (dir: string, repo: string, extra: string[] = []) =>
+  v5Args(dir, [
+    "--ads-pin",
+    CANDIDATE,
+    "--clearance-ref",
+    "clearance:synthetic",
+    "--publish",
+    ...extra,
+  ]).map((a, i, all) => (all[i - 1] === "--repo" ? repo : a));
+
+test("E2E repo + candidate pin + --publish => PUBLISHED with the E2E limit in the body", async () => {
+  const dir = await tmp();
+  const client = new FakeClient();
+  const r = await exec(e2eArgs(dir, E2E_REPO), client);
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.json.outcome, "PUBLISHED");
+  assert.equal(client.creates, 1);
+  const p = parseReportComment(client.comments[0]?.body ?? "");
+  assert.ok(p.ok);
+  assert.equal(p.profile, "v5");
+  assert.ok(
+    (p.doc.data.limits as string[]).includes(
+      "ADS v4.16 candidate 3041a1b used as isolated E2E test subject; not production adoption",
+    ),
+  );
+});
+
+test("non-allowlisted repo + candidate pin + --publish => exit 2, nothing posted", async () => {
+  const dir = await tmp();
+  const client = new FakeClient();
+  const r = await exec(e2eArgs(dir, "other/repo"), client);
+  assert.equal(r.code, 2);
+  assert.match(r.stderr, /CANDIDATE_NOT_PUBLISHABLE/);
+  assert.equal(client.creates, 0);
+});
+
+test("gate log with GATE_SUBJECT_SHA and no @sha binds OBSERVED (no mtime inference)", async () => {
+  const dir = await tmp();
+  const log = join(import.meta.dirname, "fixtures", "verifier", "gate-recorded-cli.txt");
+  const r = await exec(noGate(dir, ["--gate-log", log]));
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.json.outcome_class, "STRICT_TERMINAL_SUCCESS");
+  const p = parseReportComment(await readFile(join(dir, "out", "report.md"), "utf8"));
+  assert.ok(p.ok);
+  assert.ok(!(p.doc.data.limits as string[]).some((l) => l.includes("inferred from file mtime")));
+});

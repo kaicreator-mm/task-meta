@@ -1,0 +1,17 @@
+{
+  "name": "dev-task-meta",
+  "plugins": [
+    {
+      "name": "task-meta-capture",
+      "source": "./task-meta-capture",
+      "version": "0.1.1",
+      "description": "Metadata-only lifecycle capture for task-meta: tool timing and outcome, no content.",
+      "displayName": "task-meta capture",
+      "displayName_i18n": { "zh-CN": "task-meta 执行采集" },
+      "description_i18n": {
+        "zh-CN": "为 task-meta 采集仅含元数据的生命周期事件(工具耗时与结果),不记录任何内容。"
+      },
+      "category": "developer-tools"
+    }
+  ]
+}

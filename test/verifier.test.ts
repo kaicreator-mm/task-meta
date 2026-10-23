@@ -244,3 +244,48 @@ test("existing parseGateLog still works", () => {
   assert.equal(g.exitCode, 0);
   assert.equal(g.greenMarker, true);
 });
+
+// ---- gate-recorded subject SHA ----
+
+const REC = "a".repeat(40);
+
+test("GATE_SUBJECT_SHA with no caller subject is used as OBSERVED => strict", () => {
+  const rec = parseTaskCheckLog(fx("gate-recorded.txt"), obs("g1", null, "UNKNOWN"));
+  assert.equal(rec.subject_sha, REC);
+  assert.equal(rec.qualifiers.find((q) => q.kind === "subject_binding")?.value, "OBSERVED");
+  assert.equal(rec.exit_code, 0);
+  const a = assessVerifiers({ records: [rec], attempt_source_sha: REC });
+  assert.equal(a.outcome_class, "STRICT_TERMINAL_SUCCESS");
+});
+
+test("caller sha equal to the recorded one stays OBSERVED", () => {
+  const rec = parseTaskCheckLog(fx("gate-recorded.txt"), obs("g1", REC, "INFERRED"));
+  assert.equal(rec.subject_sha, REC);
+  assert.equal(rec.qualifiers.find((q) => q.kind === "subject_binding")?.value, "OBSERVED");
+});
+
+test("invalid GATE_SUBJECT_SHA is ignored", () => {
+  const rec = parseTaskCheckLog(fx("gate-recorded-invalid.txt"), obs("g1", null, "UNKNOWN"));
+  assert.equal(rec.subject_sha, null);
+  assert.equal(rec.qualifiers.find((q) => q.kind === "subject_binding")?.value, "UNKNOWN");
+});
+
+test("GATE_TREE_CLEAN=no adds a working_tree_dirty qualifier and blocks strict success", () => {
+  const rec = parseTaskCheckLog(fx("gate-recorded-dirty.txt"), obs("g1", null, "UNKNOWN"));
+  assert.equal(rec.subject_sha, REC);
+  assert.equal(rec.qualifiers.find((q) => q.kind === "subject_binding")?.value, "OBSERVED");
+  const q = rec.qualifiers.find((x) => x.kind === "working_tree_dirty");
+  assert.deepEqual([q?.value, q?.epistemic], ["yes", "OBSERVED"]);
+  const a = assessVerifiers({ records: [rec], attempt_source_sha: REC });
+  assert.equal(a.outcome_class, "PARTIAL_PROGRESS");
+  assert.ok(a.limits.some((l) => l.includes("dirty working tree")));
+});
+
+test("caller sha differing from the recorded one is a conflict => UNVERIFIED", () => {
+  const rec = parseTaskCheckLog(fx("gate-recorded.txt"), obs("g1", OLD));
+  assert.equal(rec.subject_sha, null);
+  assert.ok(rec.qualifiers.some((q) => q.kind === "subject_conflict"));
+  assert.equal(rec.epistemic, "UNKNOWN");
+  const a = assessVerifiers({ records: [rec], attempt_source_sha: OLD });
+  assert.equal(a.outcome_class, "UNVERIFIED");
+});

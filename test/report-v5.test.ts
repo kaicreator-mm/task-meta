@@ -209,3 +209,51 @@ describe("v5 builder: publication", () => {
     }
   });
 });
+
+describe("v5 builder: verifier PARTIAL projection", () => {
+  const partial = (): AttemptSummary => ({
+    ...realistic(),
+    verifier: {
+      status: "PARTIAL",
+      subject_sha: "a".repeat(40),
+      checked: ["task-check:lint"],
+      failed: [],
+      skipped: ["task-check:typecheck"],
+      unchecked: ["task-acceptance", "task-check:test"],
+      coverage: "PARTIAL",
+      epistemic: "OBSERVED",
+      source_refs: ["gate-log:abc"],
+    },
+  });
+
+  it("downgrades PARTIAL to UNKNOWN with a public limit and validates", () => {
+    const doc = buildReportDocument(partial(), manifest, v5opts);
+    assert.deepEqual(validateReportDocument(doc, "v5"), { valid: true });
+    const v = doc.data.verifier as Record<string, unknown>;
+    assert.equal(v.status, "UNKNOWN");
+    assert.equal(v.subject_sha, null);
+    assert.deepEqual(v.checked, []);
+    assert.deepEqual(v.failed, []);
+    assert.equal(v.epistemic, "UNKNOWN");
+    assert.equal((v.currentness as { state: string }).state, "UNKNOWN");
+    assert.deepEqual(v.skipped, ["task-check:typecheck"]);
+    assert.deepEqual(v.unchecked, ["task-acceptance", "task-check:test"]);
+    assert.equal(v.coverage, "PARTIAL");
+    assert.ok(
+      (doc.data.limits as string[]).includes(
+        "verifier partial progress not representable in ads/github/v5; detail in private manifest",
+      ),
+    );
+  });
+
+  it("PASS still projects as PASS and carries no partial limit", () => {
+    const s: AttemptSummary = {
+      ...realistic(),
+      verifier: { ...partial().verifier, status: "PASS", checked: ["task-check:lint"] },
+    };
+    const doc = buildReportDocument(s, manifest, v5opts);
+    assert.deepEqual(validateReportDocument(doc, "v5"), { valid: true });
+    assert.equal((doc.data.verifier as { status: string }).status, "PASS");
+    assert.ok(!(doc.data.limits as string[]).some((l) => l.includes("not representable")));
+  });
+});

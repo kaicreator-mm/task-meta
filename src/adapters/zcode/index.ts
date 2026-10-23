@@ -13,7 +13,14 @@ import type {
   SourceCapabilityProfile,
   TokenUsage,
 } from "../../model.ts";
-import { ZCODE_CAPABILITY } from "./capability.ts";
+import { ZCODE_CAPABILITY, zcodeCapabilityWithHooks } from "./capability.ts";
+import {
+  analyzeHooks,
+  type HookAnalysis,
+  hookOnlyTool,
+  mergeHookTool,
+  parseHookSpool,
+} from "./hooks.ts";
 import {
   type ModelIoRecord,
   parseGateLog,
@@ -38,6 +45,8 @@ export interface ZcodeRunInput {
   gateLog?: string;
   /** Explicit commit the gate log is bound to; when absent the run record's head_after is used. */
   gateSha?: string;
+  /** Contents of the task-meta-capture hook spool for this session (`<sessionId>.jsonl`). */
+  hookSpool?: string;
 }
 
 export interface ZcodeCollection {
@@ -229,7 +238,67 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
       tools.push(o);
     }
   }
-  const observations = [...first.unique, ...tools];
+  // ---- hook spool (task-meta-capture): timing/status per tool call + segment boundaries ----
+  let hookAnalysis: HookAnalysis | null = null;
+  let hookEventCount = 0;
+  const hookObs: ObservationRecord[] = [];
+  if (input.hookSpool !== undefined) {
+    const parsed = parseHookSpool(input.hookSpool);
+    const mine = parsed.entries.filter((e) => e.session_id === sessionId);
+    const foreignHooks = parsed.entries.length - mine.length;
+    if (foreignHooks > 0) limits.push(`${foreignHooks} hook entr(ies) from other sessions ignored`);
+    if (parsed.skipped.length > 0) {
+      limits.push(`${parsed.skipped.length} hook spool line(s) skipped (truncated or invalid)`);
+    }
+    if (parsed.duplicates > 0) {
+      limits.push(`${parsed.duplicates} duplicate hook spool line(s) dropped`);
+    }
+    if (mine.length === 0) {
+      limits.push("hook spool has no usable entries for this session");
+    } else {
+      hookEventCount = mine.length;
+      hookAnalysis = analyzeHooks(mine);
+      if (hookAnalysis.conflicting > 0) {
+        limits.push(
+          `${hookAnalysis.conflicting} tool call(s) had several Pre/Post hook entries; first kept`,
+        );
+      }
+    }
+  }
+  const rolloutToolIds = new Set(tools.map((t) => t.source_event_id));
+  let toolsMerged = tools;
+  if (hookAnalysis) {
+    const hookById = new Map(hookAnalysis.tools.map((h) => [`tool:${h.callId}`, h]));
+    toolsMerged = tools.map((t) => {
+      const h = hookById.get(t.source_event_id);
+      return h ? mergeHookTool(t, h) : t;
+    });
+    for (const h of hookAnalysis.tools) {
+      if (rolloutToolIds.has(`tool:${h.callId}`)) continue;
+      hookObs.push(hookOnlyTool(h, skeleton(`tool:${h.callId}`, "TOOL_CALL", taskRef, sessionId)));
+    }
+    for (const seg of hookAnalysis.segments) {
+      const o = skeleton(
+        `hook-segment:${sessionId}:${seg.index}`,
+        "RUN_BOUNDARY",
+        taskRef,
+        sessionId,
+      );
+      o.started_at = seg.startedAt;
+      o.completed_at = seg.completedAt;
+      if (seg.startedAt && seg.completedAt) {
+        const d = Date.parse(seg.completedAt) - Date.parse(seg.startedAt);
+        if (d >= 0) o.duration_ms = d;
+      }
+      if (seg.source) o.status = `SESSION_${seg.source.toUpperCase()}`;
+      if (o.started_at) o.fields_epistemic.started_at = "OBSERVED";
+      if (o.completed_at) o.fields_epistemic.completed_at = "OBSERVED";
+      if (o.duration_ms !== null) o.fields_epistemic.duration_ms = "OBSERVED";
+      if (o.status) o.fields_epistemic.status = "OBSERVED";
+      hookObs.push(o);
+    }
+  }
+  const observations = [...first.unique, ...toolsMerged, ...hookObs];
 
   const summary = buildAttemptSummary({
     repository: input.repository,
@@ -246,10 +315,20 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
     duplicates: first.duplicates,
     revisions: first.revisions,
     limits: [...limits, "reasoning tokens unknown", "cost unknown (no billed cost exposed)"],
+    ...(hookAnalysis
+      ? {
+          hooks: {
+            eventCount: hookEventCount,
+            toolCalls: hookAnalysis.tools.length,
+            rolloutToolCalls: parsedIo !== null ? rolloutToolIds.size : null,
+            unclosedSegments: hookAnalysis.segments.filter((s) => s.completedAt === null).length,
+          },
+        }
+      : {}),
   });
 
   return {
-    profile: ZCODE_CAPABILITY,
+    profile: hookAnalysis ? zcodeCapabilityWithHooks(hookAnalysis.plugin) : ZCODE_CAPABILITY,
     observations,
     summary,
     rejected,

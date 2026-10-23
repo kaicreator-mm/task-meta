@@ -73,3 +73,32 @@ export const ZCODE_CAPABILITY: SourceCapabilityProfile = {
     "gate EXIT=0 proves lint/typecheck/test only, not task acceptance",
   ],
 };
+
+/**
+ * Capability profile when the task-meta-capture hook spool was ingested (DEFINITION §9).
+ * The base ZCODE_CAPABILITY is unchanged for runs without a spool.
+ */
+export function zcodeCapabilityWithHooks(plugin: string): SourceCapabilityProfile {
+  return {
+    ...ZCODE_CAPABILITY,
+    signals: {
+      ...ZCODE_CAPABILITY.signals,
+      tool_timing: {
+        supported: true,
+        epistemic: "OBSERVED",
+        notes: "PreToolUse/PostToolUse hook timestamps from the capture plugin (hook clock).",
+      },
+      tool_outcome: {
+        supported: true,
+        epistemic: "OBSERVED",
+        notes:
+          "success/failure/interrupt from PostToolUse/PostToolUseFailure hooks; no error text.",
+      },
+      capture_plugin: { supported: true, epistemic: "OBSERVED", notes: plugin },
+    },
+    known_gaps: [
+      ...ZCODE_CAPABILITY.known_gaps.filter((g) => !g.startsWith("no per-tool timing")),
+      "tool timing exists only for calls that ran while the capture plugin was enabled",
+    ],
+  };
+}

@@ -107,6 +107,16 @@ export interface SummaryInput {
   duplicates: number;
   revisions: string[];
   limits: string[];
+  /** Present only when a (non-empty) task-meta-capture hook spool was ingested. */
+  hooks?: {
+    eventCount: number;
+    /** Distinct tool call ids seen by hooks. */
+    toolCalls: number;
+    /** Distinct tool call ids in the rollout; null when no model-io was supplied. */
+    rolloutToolCalls: number | null;
+    /** Hook session segments opened by SessionStart that never saw a Stop event. */
+    unclosedSegments: number;
+  };
 }
 
 function metric(
@@ -257,7 +267,21 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
   if (input.duplicates > 0) {
     limits.push(`${input.duplicates} duplicate delivery record(s) dropped`);
   }
-  const degraded = mismatch || input.revisions.length > 0 || input.rejectedCount > 0;
+  const hookMismatch =
+    input.hooks !== undefined &&
+    input.hooks.rolloutToolCalls !== null &&
+    input.hooks.rolloutToolCalls !== input.hooks.toolCalls;
+  if (hookMismatch && input.hooks) {
+    limits.push(
+      `hook tool calls=${input.hooks.toolCalls} differ from rollout tool calls=${input.hooks.rolloutToolCalls}; hook timing coverage PARTIAL`,
+    );
+  }
+  const hookUnclosed = input.hooks?.unclosedSegments ?? 0;
+  if (hookUnclosed > 0) {
+    limits.push(`${hookUnclosed} hook session segment(s) without a Stop event`);
+  }
+  const degraded =
+    mismatch || input.revisions.length > 0 || input.rejectedCount > 0 || hookMismatch;
   const modelCov: Coverage = degraded ? "PARTIAL" : "COMPLETE";
 
   const metrics: MetricValue[] = [];
@@ -299,7 +323,14 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
       metric("cache_read_tokens", cr.value, "tokens", "OBSERVED", cov(cr.partial), refs),
       metric("cache_write_tokens", cw.value, "tokens", "OBSERVED", cov(cw.partial), refs),
       metric("reasoning_tokens", null, "tokens", "UNKNOWN", "UNKNOWN", []),
-      metric("tool_calls", toolCount, "count", "OBSERVED", modelCov, refs),
+      metric(
+        "tool_calls",
+        toolCount,
+        "count",
+        "OBSERVED",
+        hookMismatch && modelCov === "COMPLETE" ? "PARTIAL" : modelCov,
+        refs,
+      ),
     );
     const intervals: Array<[number, number]> = [];
     let missingTimes = false;
@@ -404,6 +435,43 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
       runRef,
     ]),
   );
+  if (input.hooks) {
+    const hookRef = `zcode:hook-spool:${sid}`;
+    const toolRecs = latestRevisions(input.observations.filter((o) => o.kind === "TOOL_CALL"));
+    const spans: Array<[number, number]> = [];
+    let untimed = 0;
+    for (const t of toolRecs) {
+      const s = t.started_at ? Date.parse(t.started_at) : Number.NaN;
+      const e = t.completed_at ? Date.parse(t.completed_at) : Number.NaN;
+      if (Number.isNaN(s) || Number.isNaN(e)) untimed += 1;
+      else spans.push([s, e]);
+    }
+    const failures = toolRecs.filter((t) => t.status === "failure").length;
+    const hookCtx: IdentityCtx = {
+      observation_id: hookRef,
+      window_id: isoWindow(
+        sid,
+        spans.map(([s]) => new Date(s).toISOString()),
+        spans.map(([, e]) => new Date(e).toISOString()),
+      ),
+      source_revision: 1,
+    };
+    for (const n of ["tool_wall_ms", "tool_failures", "hook_events"]) ctxs.set(n, hookCtx);
+    const toolCov: Coverage = hookMismatch || untimed > 0 ? "PARTIAL" : "COMPLETE";
+    metrics.push(
+      metric(
+        "tool_wall_ms",
+        spans.length > 0 ? unionIntervalMs(spans) : null,
+        "ms",
+        "OBSERVED",
+        toolCov,
+        [hookRef],
+      ),
+      metric("tool_failures", failures, "count", "OBSERVED", toolCov, [hookRef]),
+      metric("hook_events", input.hooks.eventCount, "count", "OBSERVED", "COMPLETE", [hookRef]),
+    );
+    if (untimed > 0) limits.push(`${untimed} tool call(s) without a complete hook start/end pair`);
+  }
   const withIdentity = metrics.map((m) => ({
     ...m,
     identity: identityFor(sid, m, ctxs.get(m.name)),
@@ -415,8 +483,9 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
 
   let capture: Coverage;
   if (!h && !haveModelIo) capture = "UNKNOWN";
-  else if (h && haveModelIo && haveRun && !degraded && runComplete) capture = "COMPLETE";
-  else capture = "PARTIAL";
+  else if (h && haveModelIo && haveRun && !degraded && runComplete && hookUnclosed === 0) {
+    capture = "COMPLETE";
+  } else capture = "PARTIAL";
 
   const last = segs[segs.length - 1];
   let sourceSha: string | null = null;
@@ -432,6 +501,7 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
   if (h) observationRefs.push(headlessRef);
   if (haveModelIo) observationRefs.push(modelIoRef);
   if (haveRun) observationRefs.push(runRef);
+  if (input.hooks) observationRefs.push(`zcode:hook-spool:${sid}`);
   observationRefs.push(...input.gate.source_refs.slice(0, 1));
 
   return {

@@ -22,6 +22,9 @@ export interface BuildOptions {
   adsRevision?: string;
 }
 
+export const V5_PARTIAL_LIMIT =
+  "verifier partial progress not representable in ads/github/v5; detail in private manifest";
+
 const UNWITNESSED = "collector did not witness current HEAD of the owning branch";
 
 function currentness() {
@@ -177,15 +180,22 @@ function buildV5(s: AttemptSummary, m: ManifestPointer, o: BuildOptions): Report
       "v5 BILLED cost requires accounting_ref/economic_scope_ref/billing_window_ref/cost_category",
     );
   }
-  if (s.verifier.status === "PARTIAL") {
-    throw new UnrepresentableError(
-      "VERIFIER_PARTIAL_UNREPRESENTABLE_IN_V5",
-      "v5 verifier.status has no PARTIAL value",
-    );
-  }
+  // v5 verifier.status has no PARTIAL: progress is downgraded to UNKNOWN, never PASS.
+  const partial = s.verifier.status === "PARTIAL";
   const pinned = s.source_sha !== null;
   const ran = s.verifier.status === "PASS" || s.verifier.status === "FAIL";
   const subjectSha = ran ? (s.verifier.subject_sha ?? s.source_sha) : s.verifier.subject_sha;
+  const verifierV5 = partial
+    ? {
+        ...verifierCore(s, null),
+        status: "UNKNOWN",
+        checked: [] as string[],
+        failed: [] as string[],
+        epistemic: "UNKNOWN",
+        currentness: currentness(),
+      }
+    : { ...verifierCore(s, subjectSha), status: s.verifier.status };
+  const limits = partial ? [...s.limits, V5_PARTIAL_LIMIT] : [...s.limits];
   const data = {
     ...head(s, o),
     subject: {
@@ -207,7 +217,7 @@ function buildV5(s: AttemptSummary, m: ManifestPointer, o: BuildOptions): Report
     actor: { ...s.actor },
     observed_at: s.observed_at,
     source_refs: [...s.observation_refs],
-    limits: [...s.limits],
+    limits,
     supersedes: o.supersedes,
     capture_coverage: s.capture_coverage,
     metrics: v5metrics,
@@ -222,7 +232,7 @@ function buildV5(s: AttemptSummary, m: ManifestPointer, o: BuildOptions): Report
       ...accounting,
     },
     aggregation: aggregation(s),
-    verifier: { ...verifierCore(s, subjectSha), status: s.verifier.status },
+    verifier: verifierV5,
     ...tail(s, m),
   };
   return {
