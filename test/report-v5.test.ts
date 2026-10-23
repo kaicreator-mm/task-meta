@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { collectZcodeRun, type ZcodeRunInput } from "../src/adapters/zcode/index.ts";
 import { canonicalDigest } from "../src/canonical.ts";
+import { publishReport, type GitHubClient, type IssueComment } from "../src/publish/index.ts";
 import type { AttemptSummary, CostObservation, ManifestPointer } from "../src/model.ts";
 import {
   ADS_V5_REVISION,
@@ -255,5 +256,56 @@ describe("v5 builder: verifier PARTIAL projection", () => {
     assert.deepEqual(validateReportDocument(doc, "v5"), { valid: true });
     assert.equal((doc.data.verifier as { status: string }).status, "PASS");
     assert.ok(!(doc.data.limits as string[]).some((l) => l.includes("not representable")));
+  });
+});
+
+describe("v0.3 FR00 direct publisher last-boundary admission", () => {
+  it("a schema-valid v5 candidate report cannot POST on an ordinary repo", async () => {
+    const doc = buildReportDocument(realistic(), manifest, v5opts);
+    assert.deepEqual(validateReportDocument(doc, "v5"), { valid: true });
+    const body = renderReportComment(doc);
+    let posts = 0;
+    let pages = 0;
+    const client: GitHubClient = {
+      async listIssueComments() {
+        pages++;
+        return { comments: [] as IssueComment[], hasNext: false };
+      },
+      async createIssueComment(): Promise<IssueComment> {
+        posts++;
+        throw Error("candidate publication must have been held before POST");
+      },
+    };
+    const out = await publishReport(client, {
+      repo: "kaicreator-mm/task-meta",
+      issue: 7,
+      body,
+      publish: true,
+    });
+    assert.equal(out.state, "NOT_PUBLISHED");
+    assert.equal(posts, 0);
+    assert.equal(pages, 0);
+  });
+  it("a manually forged E2E flag is not a normal-repository candidate capability", async () => {
+    const body = renderReportComment(buildReportDocument(realistic(), manifest, v5opts));
+    let posts = 0;
+    const client: GitHubClient = {
+      async listIssueComments() {
+        return { comments: [] as IssueComment[], hasNext: false };
+      },
+      async createIssueComment(): Promise<IssueComment> {
+        posts++;
+        throw Error("not allowlisted");
+      },
+    };
+    const out = await publishReport(client, {
+      repo: "kaicreator-mm/task-meta",
+      issue: 7,
+      body,
+      publish: true,
+      e2eTestOnly: true,
+    });
+    assert.equal(out.state, "NOT_PUBLISHED");
+    assert.equal(posts, 0);
   });
 });
