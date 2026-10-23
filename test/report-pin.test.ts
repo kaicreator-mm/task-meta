@@ -30,8 +30,12 @@ test("vendored schema blob constant matches the real git blob sha1", () => {
   );
 });
 
-test("shipped config lists no adopted main SHA", () => {
-  assert.deepEqual(loadAdoption().adopted, []);
+test("shipped v0.3 config adopts only the exact ADS v4.16 qualified main pin", () => {
+  const es = loadAdoption().adopted;
+  assert.equal(es.length, 1);
+  assert.equal(es[0]?.main_sha, QUALIFIED_V416_MAIN_SHA);
+  assert.equal(es[0]?.report_schema_blob, VENDORED_V416_SCHEMA_BLOB);
+  assert.equal(es[0]?.ads_version, "4.16.0");
 });
 
 test("no profile and empty adoption defaults to v4", () => {
