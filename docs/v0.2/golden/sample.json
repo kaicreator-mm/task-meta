@@ -1,0 +1,2018 @@
+[
+  {
+    "id": "02476d710a09",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Agent"
+  },
+  {
+    "id": "0313a6e8e9a3",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "196e087ff8c9",
+    "agent": "claude",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Glob",
+    "next_tool": "Read"
+  },
+  {
+    "id": "1dc28c51afae",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Write",
+    "next_tool": null
+  },
+  {
+    "id": "1e2d546a097e",
+    "agent": "claude",
+    "tool_name": "Glob",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Read"
+  },
+  {
+    "id": "20fcdcc3c57e",
+    "agent": "claude",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Edit"
+  },
+  {
+    "id": "2112081da807",
+    "agent": "claude",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "2ce5dc024eb4",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "2db3f3cdf839",
+    "agent": "claude",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Edit"
+  },
+  {
+    "id": "2fb8296cfb2d",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "303128413ab3",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "3ac2c3a038cf",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "3e91e790c121",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Agent",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "411e4027c33b",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "4488ada58e2b",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "failure",
+    "prev_tool": "PowerShell",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "4c818b3ae9b0",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "PowerShell",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "4cd72ae011b5",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "4ec4acc96e74",
+    "agent": "claude",
+    "tool_name": "Agent",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "512b2c46cadd",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "PowerShell",
+    "next_tool": "Read"
+  },
+  {
+    "id": "57c87ad0a669",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "583340b402cc",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "589d484c9901",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "unknown",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": null
+  },
+  {
+    "id": "59998758e05b",
+    "agent": "claude",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Edit"
+  },
+  {
+    "id": "5b54a2585f18",
+    "agent": "claude",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "66fb60f8b48e",
+    "agent": "claude",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Edit"
+  },
+  {
+    "id": "6a01872ba2dd",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "71d01136ca1c",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "failure",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "71f1f9fc53f0",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "mcp__ccd_turn__update_plan"
+  },
+  {
+    "id": "743ccb2ee469",
+    "agent": "claude",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "77fa0825a2c5",
+    "agent": "claude",
+    "tool_name": "Agent",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "mcp__ccd_turn__update_plan",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "7e830fd83777",
+    "agent": "claude",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "7eca42a3b3bb",
+    "agent": "claude",
+    "tool_name": "mcp__ccd_turn__update_plan",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "mcp__ccd_turn__wrap_up"
+  },
+  {
+    "id": "7f01fc6b41e4",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "827db9d18410",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "8346ba94f7e7",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "86b0d3997551",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "8e2b655c8d15",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "PowerShell",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "90a014a8e16d",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "PowerShell",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "9388ebe2533d",
+    "agent": "claude",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Read"
+  },
+  {
+    "id": "96cf5a746d26",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "97df19528b40",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "9d6af96b2cc6",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "a1233af66ee1",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "a1ef77573262",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "PowerShell",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "a3dfacff381a",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "a4c301f140d8",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "a5854983b35b",
+    "agent": "claude",
+    "tool_name": "mcp__ccd_turn__update_plan",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Agent"
+  },
+  {
+    "id": "a6ad1cfb7f0f",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": null,
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "a81bb53ab2bb",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "mcp__ccd_turn__wrap_up",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "aab76768dc20",
+    "agent": "claude",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "PowerShell",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "ab95c02c6d2b",
+    "agent": "claude",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "ac4d17d28cfc",
+    "agent": "claude",
+    "tool_name": "mcp__ccd_turn__wrap_up",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "mcp__ccd_turn__update_plan",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "af05e028306d",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "PowerShell",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "b6824e79364a",
+    "agent": "claude",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "c6bfa166ab36",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "failure",
+    "prev_tool": "PowerShell",
+    "next_tool": "Write"
+  },
+  {
+    "id": "d12bb4582c6d",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:FILE_WRITE",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "d2b3e91c9ba1",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "PowerShell",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "d5e5a3bd41c7",
+    "agent": "claude",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Edit"
+  },
+  {
+    "id": "d62094218b4f",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "d65d9765cd0e",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "d727542cad61",
+    "agent": "claude",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Read"
+  },
+  {
+    "id": "dbcdefaa9027",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "dd1a1f5fb86c",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Write"
+  },
+  {
+    "id": "dffa9dc15e3c",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "e15ea6b44795",
+    "agent": "claude",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "e3aaa7436642",
+    "agent": "claude",
+    "tool_name": "PowerShell",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "PowerShell",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "e40ac12aedb4",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "failure",
+    "prev_tool": null,
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "ed2f4f35cd47",
+    "agent": "claude",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Read"
+  },
+  {
+    "id": "f0286a1ec3c3",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "PowerShell"
+  },
+  {
+    "id": "f04ca30a86ea",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Agent",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "f2c66f9758c3",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "failure",
+    "prev_tool": "PowerShell",
+    "next_tool": "Glob"
+  },
+  {
+    "id": "f580ccef0645",
+    "agent": "claude",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "06be49338fbc",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": null
+  },
+  {
+    "id": "108247381574",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "1777204037fc",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "apply_patch:OTHER",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "2a1172dcfa80",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "2bf83ff0b0c2",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "3479a46532c0",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:FILE_WRITE"
+  },
+  {
+    "id": "35a32ac38f50",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:FILE_WRITE"
+  },
+  {
+    "id": "37c1756575c2",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:TEST",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "38ae303f317e",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "481374ba92c9",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "apply_patch:OTHER"
+  },
+  {
+    "id": "4aa9eefa0e05",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "apply_patch:OTHER"
+  },
+  {
+    "id": "576360d3ebd8",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "6db498af6c78",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "739e37d58f19",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "7e699ca7380e",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": null
+  },
+  {
+    "id": "7fe2d77af65d",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:FILE_WRITE",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "879dc35654e6",
+    "agent": "codex",
+    "tool_name": "apply_patch",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "891b87310f09",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "89d6ef525c5a",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "90ddb5b11980",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:FILE_WRITE",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "a19440f5464c",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "apply_patch:OTHER",
+    "next_tool": "Bash:TEST"
+  },
+  {
+    "id": "a523a83f175f",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:FILE_WRITE",
+    "next_tool": "Bash:FILE_WRITE"
+  },
+  {
+    "id": "b2fd0a6bfa20",
+    "agent": "codex",
+    "tool_name": "apply_patch",
+    "input_class": "OTHER",
+    "outcome": "unknown",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "b741b6e8e181",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "c00034944691",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:FILE_WRITE",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "c4ecbeed34f7",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "e5ca6b1ade6d",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "e7fab2a608cc",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": null,
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "ec76a1f335a7",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:FILE_WRITE"
+  },
+  {
+    "id": "f293c9240cdd",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": null,
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "f40c348b254f",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:FILE_WRITE",
+    "next_tool": "Bash:FILE_WRITE"
+  },
+  {
+    "id": "fdf3943b55cd",
+    "agent": "codex",
+    "tool_name": "Bash",
+    "input_class": "TEST",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "007b568c8dbc",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "021c3e73a594",
+    "agent": "zcode",
+    "tool_name": "TaskOutput",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "TaskStop"
+  },
+  {
+    "id": "0261304eda87",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "unknown",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:DEPENDENCY"
+  },
+  {
+    "id": "058a5ebbcd01",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Edit"
+  },
+  {
+    "id": "061b30a2a681",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "TEST",
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "0b0668c6d4f9",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "0b4f22b51847",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "0ca907d114cb",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Bash:FILE_WRITE",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "0cae6d6ae411",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Bash:TEST"
+  },
+  {
+    "id": "0cdf53f17b40",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "0d154ba776a9",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:FILE_WRITE"
+  },
+  {
+    "id": "0df9c178ee97",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "10e6c7aaeff2",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Read"
+  },
+  {
+    "id": "112c3350fc5b",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Edit"
+  },
+  {
+    "id": "11d8838fcae9",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "12eebf723e18",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Edit"
+  },
+  {
+    "id": "15bea3cfbc1a",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "15f40ba78844",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "17429a7b4302",
+    "agent": "zcode",
+    "tool_name": "TaskOutput",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "18456bbe17e3",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Bash:TEST"
+  },
+  {
+    "id": "1b1f84476f13",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "1fa68bdcd277",
+    "agent": "zcode",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "1fd2d5ba35ce",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Read"
+  },
+  {
+    "id": "23221dc7ebad",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:FILE_WRITE",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "258cef67777a",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "2adf4b7067cc",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "unknown",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "2ed3d6c29858",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "33002f940075",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "TodoWrite"
+  },
+  {
+    "id": "3392227790e4",
+    "agent": "zcode",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "35ea69ca1ae4",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "3ce85cf07448",
+    "agent": "zcode",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "3f543c9a716f",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Edit"
+  },
+  {
+    "id": "3fdfb02889d1",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": null,
+    "next_tool": "Read"
+  },
+  {
+    "id": "41d5bacba8cd",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "TodoWrite"
+  },
+  {
+    "id": "4821042d2ac3",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "TodoWrite"
+  },
+  {
+    "id": "4949b8e0ca45",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:FILE_WRITE"
+  },
+  {
+    "id": "4c018238c532",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Read"
+  },
+  {
+    "id": "4e1e03318d89",
+    "agent": "zcode",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "50361e1797e2",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "509e84b9971b",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Bash:FILE_WRITE"
+  },
+  {
+    "id": "50e27a0966f9",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": null,
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "5556f20bf3d7",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "56d7bc9ef807",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "unknown",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "57781a6e37ec",
+    "agent": "zcode",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "5905f6333c03",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "DEPENDENCY",
+    "outcome": "success",
+    "prev_tool": "TodoWrite",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "5923ba7d41b5",
+    "agent": "zcode",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "5987bcabb2ce",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "5b30c44b266d",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": null,
+    "next_tool": "Read"
+  },
+  {
+    "id": "5ea965a62b16",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Read"
+  },
+  {
+    "id": "62bb7abd7f64",
+    "agent": "zcode",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "63231304ec92",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "TaskStop"
+  },
+  {
+    "id": "63789f49e8af",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "unknown",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "63f6df5f1327",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "65732485652e",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "67d56017c2fa",
+    "agent": "zcode",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "6b119e1eebc4",
+    "agent": "zcode",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "TodoWrite"
+  },
+  {
+    "id": "6b8e98079107",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "6e85c40e8135",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "735ea7add043",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "7463036520da",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "77f4b9a099e7",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "unknown",
+    "prev_tool": "Bash:VCS",
+    "next_tool": null
+  },
+  {
+    "id": "782fbeb92961",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": null
+  },
+  {
+    "id": "7c50cbd93495",
+    "agent": "zcode",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Edit"
+  },
+  {
+    "id": "7d9601544b82",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "TodoWrite",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "7e5d3da10c5d",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "813d25cd2490",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "81f37636c20b",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "8a97d49d0f89",
+    "agent": "zcode",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "8a9c2f43fad0",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "TEST",
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "8e9b0cd141d0",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Write",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "8eeeeddf5b55",
+    "agent": "zcode",
+    "tool_name": "TaskStop",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "TaskOutput",
+    "next_tool": "Read"
+  },
+  {
+    "id": "93abf70abe45",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Bash:TEST"
+  },
+  {
+    "id": "9814ce4cec1d",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "99991114fdca",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:FILE_WRITE"
+  },
+  {
+    "id": "9ab4ca0c70f6",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "9cc1c1fa671a",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "TodoWrite"
+  },
+  {
+    "id": "9d36ae7a334e",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "unknown",
+    "prev_tool": "Write",
+    "next_tool": null
+  },
+  {
+    "id": "9e465d413a71",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "a044d4cce89b",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": null,
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "a144c19242f4",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "TodoWrite",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "a3301840e963",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "ab5b989cd97a",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Read"
+  },
+  {
+    "id": "abb5e536202b",
+    "agent": "zcode",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "aea08faf9cb8",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "unknown",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": null
+  },
+  {
+    "id": "b1e5b934fee1",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "TEST",
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "b2100cc4beb8",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "b28fe33a1fa3",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "b3d96d153733",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Read"
+  },
+  {
+    "id": "b46afb1d2ccd",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": null
+  },
+  {
+    "id": "b885cc673144",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Read"
+  },
+  {
+    "id": "b907003ef91c",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "bb4695024f01",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Edit"
+  },
+  {
+    "id": "beafeb22ad7b",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "c0440ab597e6",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "unknown",
+    "prev_tool": "Bash:VCS",
+    "next_tool": null
+  },
+  {
+    "id": "c057fa756efe",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "c0afe1718b7a",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "c0f03e7230d0",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "c0f9b6547638",
+    "agent": "zcode",
+    "tool_name": "TaskStop",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "c2044589a2d0",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "c3584e53c830",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "ce5e1810d791",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "cf6b50bb5cfb",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "d3000b898714",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Read"
+  },
+  {
+    "id": "d8a983fddb56",
+    "agent": "zcode",
+    "tool_name": "TodoWrite",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "d985b497145d",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "da876f7c66df",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "ddc20ecf8bd1",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "de35ee9ebef9",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "TaskOutput"
+  },
+  {
+    "id": "e03fbd8a05f0",
+    "agent": "zcode",
+    "tool_name": "Read",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "e28e25f73234",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Edit"
+  },
+  {
+    "id": "e3f2a96e6fa3",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "READ_SEARCH",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:READ_SEARCH"
+  },
+  {
+    "id": "e719add34bc9",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "efffc6bb20f5",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "OTHER",
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "f073b2df6999",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:VCS",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "f2dce7ec1481",
+    "agent": "zcode",
+    "tool_name": "Write",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "f34583a51be4",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "FILE_WRITE",
+    "outcome": "success",
+    "prev_tool": "Edit",
+    "next_tool": "Bash:OTHER"
+  },
+  {
+    "id": "f703076fc0c7",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "Bash:READ_SEARCH",
+    "next_tool": "Read"
+  },
+  {
+    "id": "f8337ccca3ec",
+    "agent": "zcode",
+    "tool_name": "Bash",
+    "input_class": "VCS",
+    "outcome": "success",
+    "prev_tool": "TodoWrite",
+    "next_tool": "Bash:VCS"
+  },
+  {
+    "id": "fce86e036aab",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Bash:OTHER",
+    "next_tool": "Edit"
+  },
+  {
+    "id": "fe0a1ee2b6a6",
+    "agent": "zcode",
+    "tool_name": "Edit",
+    "input_class": null,
+    "outcome": "success",
+    "prev_tool": "Read",
+    "next_tool": "Edit"
+  }
+]
