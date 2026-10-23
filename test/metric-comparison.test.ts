@@ -1,27 +1,43 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { MetricValue } from "../src/model.ts";
 import {
-  compareCounterMetrics, sumWitnessedBilledCost,
-  type ComparableMetricInput, type CostFact,
+  type ComparableMetricInput,
+  type CostFact,
+  compareCounterMetrics,
+  sumWitnessedBilledCost,
 } from "../src/metrics/comparison.ts";
+import type { MetricValue } from "../src/model.ts";
 
 function sample(
-  id: string, attempt: string, value: number | null = 12,
+  id: string,
+  attempt: string,
+  value: number | null = 12,
   over: Partial<ComparableMetricInput> = {},
 ): ComparableMetricInput {
   const metric: MetricValue = {
-    name: "input_tokens", value, unit: "token",
-    epistemic: "OBSERVED", coverage: "COMPLETE", source_refs: [`observed:${id}`],
+    name: "input_tokens",
+    value,
+    unit: "token",
+    epistemic: "OBSERVED",
+    coverage: "COMPLETE",
+    source_refs: [`observed:${id}`],
     identity: {
-      metric_id: `input:${id}`, observation_id: `obs:${id}`,
-      logical_call_ref: `call:${id}`, physical_attempt_ref: attempt,
-      adapter_id: "zcode", provider_run_ref: null, measurement_kind: "COUNTER_DELTA",
-      window_id: `window:${id}`, source_revision: 1,
+      metric_id: `input:${id}`,
+      observation_id: `obs:${id}`,
+      logical_call_ref: `call:${id}`,
+      physical_attempt_ref: attempt,
+      adapter_id: "zcode",
+      provider_run_ref: null,
+      measurement_kind: "COUNTER_DELTA",
+      window_id: `window:${id}`,
+      source_revision: 1,
     },
   };
   return {
-    metric, adsProfile: "v5", privacyClearance: "PUBLISHABLE", cohortRef: "qualified-cohort",
+    metric,
+    adsProfile: "v5",
+    privacyClearance: "PUBLISHABLE",
+    cohortRef: "qualified-cohort",
     ...over,
   };
 }
@@ -40,12 +56,15 @@ test("T03 distinct physical attempts are counted; identical deliveries not bille
 test("T03 unknown, restricted or mixed profile never yields a fabricated zero", () => {
   assert.equal(compareCounterMetrics([]).total, null);
   assert.equal(compareCounterMetrics([sample("zero", "attempt-1", null)]).total, null);
-  assert.equal(compareCounterMetrics([
-    sample("one", "attempt-1", 12, { adsProfile: "v4" }),
-  ]).state, "NOT_COMPARABLE");
-  assert.equal(compareCounterMetrics([
-    sample("one", "attempt-1", 12, { privacyClearance: "RESTRICTED" }),
-  ]).state, "NOT_COMPARABLE");
+  assert.equal(
+    compareCounterMetrics([sample("one", "attempt-1", 12, { adsProfile: "v4" })]).state,
+    "NOT_COMPARABLE",
+  );
+  assert.equal(
+    compareCounterMetrics([sample("one", "attempt-1", 12, { privacyClearance: "RESTRICTED" })])
+      .state,
+    "NOT_COMPARABLE",
+  );
 });
 
 test("T03 same economic/call physical identity with conflicting observations is held", () => {
@@ -62,18 +81,27 @@ test("T03 no input+cache token addition or inferred cumulative snapshot", () => 
   cache.metric.name = "cache_read_tokens";
   assert.equal(compareCounterMetrics([a, cache]).state, "NOT_COMPARABLE");
   const cumulative = sample("one", "attempt-1");
-  if (cumulative.metric.identity) cumulative.metric.identity.measurement_kind = "CUMULATIVE_SNAPSHOT";
+  if (cumulative.metric.identity)
+    cumulative.metric.identity.measurement_kind = "CUMULATIVE_SNAPSHOT";
   assert.equal(compareCounterMetrics([cumulative]).state, "NOT_COMPARABLE");
 });
 
 const billed = (value: number, scope = "scope-1", window = "invoice-1"): CostFact => ({
-  actualProviderReceipt: true, economicScope: scope, billingWindow: window,
+  actualProviderReceipt: true,
+  economicScope: scope,
+  billingWindow: window,
   observation: {
-    value, currency: "USD", basis: "BILLED", pricing_basis: "provider invoice",
-    epistemic: "OBSERVED", source_refs: [`invoice:${window}`],
+    value,
+    currency: "USD",
+    basis: "BILLED",
+    pricing_basis: "provider invoice",
+    epistemic: "OBSERVED",
+    source_refs: [`invoice:${window}`],
     accounting: {
-      accounting_ref: `acct:${window}`, economic_scope_ref: scope,
-      billing_window_ref: window, cost_category: "model",
+      accounting_ref: `acct:${window}`,
+      economic_scope_ref: scope,
+      billing_window_ref: window,
+      cost_category: "model",
     },
   },
 });
