@@ -26,9 +26,9 @@ function sourceSummary(): AttemptSummary {
     metrics: [], cost: { value: null, currency: null, basis: "UNKNOWN",
       pricing_basis: null, epistemic: "UNKNOWN", source_refs: [] },
     attempt_refs: ["actual-attempt-1"], excluded_attempt_refs: [],
-    verifier: { status: "NOT_RUN", subject_sha: null,
-      checked: [], failed: [], skipped: [], unchecked: ["independent verifier"],
-      coverage: "UNKNOWN", epistemic: "UNKNOWN", source_refs: [] },
+    verifier: { status: "PARTIAL", subject_sha: null,
+      checked: ["synthetic gate"], failed: [], skipped: [], unchecked: ["independent verifier"],
+      coverage: "PARTIAL", epistemic: "OBSERVED", source_refs: ["synthetic:gate"] },
     learning: { state: "UNKNOWN", source_refs: [] },
   };
 }
