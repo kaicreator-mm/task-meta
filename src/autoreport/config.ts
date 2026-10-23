@@ -18,6 +18,12 @@ export interface AutoReportConfig {
   gate_log_root: string | null;
   /** "auto" or 40 lowercase hex. */
   publisher_source_sha: string;
+  /**
+   * Required verifier scope per repository (`owner/name` → step names, e.g. ["test"]). A repo
+   * whose gate runs fewer steps than the task-check default declares them here; the scope is
+   * never inferred from what a gate happened to run.
+   */
+  verifier_scope: Record<string, string[]>;
 }
 
 export const DEFAULT_CONFIG_PATH = join(
@@ -73,7 +79,20 @@ export function loadAutoReportConfig(path?: string, home: string = homedir()): A
     max_revisions_per_session: Math.floor(num(j.max_revisions_per_session, 3, 1)),
     gate_log_root: gate === null ? null : expandHome(gate, home),
     publisher_source_sha: str(j.publisher_source_sha, "auto"),
+    verifier_scope: verifierScope(j.verifier_scope),
   };
+}
+
+/** Keep only `owner/name` keys with a non-empty list of step names. */
+function verifierScope(v: unknown): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return out;
+  for (const [repo, steps] of Object.entries(v as Record<string, unknown>)) {
+    if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) || !Array.isArray(steps)) continue;
+    const list = steps.filter((s): s is string => typeof s === "string" && s.trim() !== "");
+    if (list.length > 0) out[repo] = list.map((s) => s.trim());
+  }
+  return out;
 }
 
 const SHA_RE = /^[0-9a-f]{40}$/;

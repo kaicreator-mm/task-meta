@@ -525,6 +525,9 @@ async function drive(
       mode: resolution.mode,
       extraObservationRefs: wb.map((id) => `github:comment:${id}`),
       extraSummaryLimits,
+      requiredScope: cfg.verifier_scope[repo]?.map((s) =>
+        s.startsWith("task-check:") ? s : `task-check:${s}`,
+      ),
     });
   };
 

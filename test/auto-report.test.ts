@@ -342,6 +342,31 @@ describe("auto-report publish", () => {
     assert.equal(v.status, "PASS");
     assert.equal(v.subject_sha, H2);
   });
+
+  test("a test-only gate passes only when the repo declares verifier_scope [test]", async () => {
+    const testOnly = `GATE_SUBJECT_SHA=${H2}\nGATE_TREE_CLEAN=yes\nv24.0.0\n== test ==\nℹ tests 2\nℹ pass 2\nℹ fail 0\ntask-check: 全绿\nEXIT=0\n`;
+    const statusFor = async (cfg: Record<string, unknown>): Promise<string> => {
+      const env = await setup({ spool: GOOD(), cfg });
+      await mkdir(join(env.gates, "dh-i1296-zcode"), { recursive: true });
+      await writeFile(join(env.gates, "dh-i1296-zcode", "gate.log"), testOnly);
+      const gh = new FakeGh();
+      const r = await run(env, gh);
+      assert.equal(r.state, "PUBLISHED", r.reasons.join(";"));
+      return (
+        (bodyOf(gh.comments[0]).doc.data as Record<string, unknown>).verifier as {
+          status: string;
+        }
+      ).status;
+    };
+    // Default scope (lint, typecheck, test): a test-only gate is partial, never PASS.
+    assert.notEqual(await statusFor({}), "PASS");
+    assert.equal(await statusFor({ verifier_scope: { [REPO]: ["test"] } }), "PASS");
+    // A scope declared for another repository does not apply.
+    assert.notEqual(
+      await statusFor({ verifier_scope: { "kaicreator-mm/other": ["test"] } }),
+      "PASS",
+    );
+  });
 });
 
 describe("binding", () => {
