@@ -1,6 +1,12 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { findClaudeTranscripts } from "./adapters/claude/find.ts";
+import { collectClaudeRun } from "./adapters/claude/index.ts";
+import { parseClaudeTranscript } from "./adapters/claude/parse.ts";
+import { findCodexRollouts } from "./adapters/codex/find.ts";
+import { collectCodexRun } from "./adapters/codex/index.ts";
+import { parseCodexRollout } from "./adapters/codex/parse.ts";
 import { collectZcodeRun, type ZcodeRunInput } from "./adapters/zcode/index.ts";
 import {
   parseHeadlessResult,
@@ -8,12 +14,20 @@ import {
   parseRunRecord,
   type RunRecord,
 } from "./adapters/zcode/parse.ts";
-import { computeAggregates, PUBLIC_GAP_LIMIT } from "./aggregates/index.ts";
-import { canonicalDigest, sha256Hex } from "./canonical.ts";
-import { sortRunSegments } from "./correlate.ts";
-import { labelAttempt } from "./labels/index.ts";
-import { buildLineage, type GitExec, makeGitExec } from "./lineage/index.ts";
-import type { AttemptSummary, ManifestPointer, VerifierRecord } from "./model.ts";
+import { type AutoReportDeps, runAutoReportCommand } from "./autoreport/index.ts";
+import {
+  type AgentCollection,
+  buildEvidence,
+  countBy,
+  EXIT,
+  Failure,
+  type GateInput,
+  humanSummary,
+  manifestMatches,
+  persistRevision,
+  readManifestOrNull,
+} from "./collect-core.ts";
+import type { ManifestPointer } from "./model.ts";
 import { assertNoForbiddenContent } from "./privacy.ts";
 import { GhCliClient, type GitHubClient, publishReport } from "./publish/index.ts";
 import {
@@ -25,53 +39,43 @@ import {
   resolveProfile,
   UnrepresentableError,
 } from "./report/index.ts";
-import { EvidenceStore, NotFoundError } from "./store/index.ts";
-import {
-  assessVerifiers,
-  extractGateRecord,
-  parseTaskCheckLog,
-  type SubjectBinding,
-  toVerifierOutcome,
-} from "./verifier/index.ts";
+import { EvidenceStore } from "./store/index.ts";
 
-const E2E_LIMIT =
-  "ADS v4.16 candidate 3041a1b used as isolated E2E test subject; not production adoption";
+export { EXIT } from "./collect-core.ts";
 
 export interface CliDeps {
+  /** auto-report overrides (tests): sleep, env, inventory, adoption, settle wait. */
+  autoReport?: Partial<AutoReportDeps>;
   client?: GitHubClient;
   now?: () => Date;
   stdout?: (s: string) => void;
   stderr?: (s: string) => void;
 }
 
-export const EXIT = {
-  OK: 0,
-  FAILURE: 1,
-  USAGE: 2,
-  PRIVACY: 3,
-  REVISION_CONFLICT: 4,
-  STORE_VERIFY: 5,
-  UNREPRESENTABLE: 6,
-  NOT_PUBLISHED: 7,
-  HELD: 8,
-} as const;
-
 const USAGE = `usage: collect --repo <owner/name> --issue <n> --headless <file>
                [--model-io <file> | --zcode-rollout-dir <dir>] [--zcode-hook-spool <dir>] [--run <file>]
                [--gate-log <file>[@<40hex>]]... [--gate-sha <40hex>] [--git-dir <dir>]
                --store <dir> --out <report.md>
                [--operator-id zcode] [--role builder] [--profile v4|v5] [--publish]
-               [--ads-pin <sha>] [--clearance-ref <ref>] [--publisher-source-sha <40hex>]`;
+               [--ads-pin <sha>] [--clearance-ref <ref>] [--publisher-source-sha <40hex>]
+       collect-codex --repo <owner/name> --issue <n>
+               (--codex-session <rollout.jsonl>... | --codex-sessions-dir <dir> --session-id <id>)
+               [--codex-hook-spool <dir>] [--gate-log <file>[@<40hex>]]... [--gate-sha <40hex>]
+               [--git-dir <dir>] --store <dir> --out <report.md> [--operator-id codex]
+               [--role builder] [--profile v4|v5] [--publish] [--ads-pin <sha>]
+               [--clearance-ref <ref>] [--publisher-source-sha <40hex>]
+       collect-claude --repo <owner/name> --issue <n>
+               (--claude-transcript <session.jsonl>... | --claude-projects-dir <dir> --session-id <id>)
+               [--claude-hook-spool <dir>] [--gate-log <file>[@<40hex>]]... [--gate-sha <40hex>]
+               [--git-dir <dir>] --store <dir> --out <report.md> [--operator-id claude]
+               [--role builder] [--profile v4|v5] [--publish] [--ads-pin <sha>]
+               [--clearance-ref <ref>] [--publisher-source-sha <40hex>]
+       auto-report --agent zcode|claude|codex --session <id> [--trigger stop|session-end]
+               [--spool-dir <dir>] [--rollout-dir <dir>] [--projects-dir <dir>]
+               [--store <dir>] [--outbox <dir>] [--config <file>] [--dry-run]
+       auto-report --retry [--config <file>] [--outbox <dir>] [--dry-run]`;
 
 class UsageError extends Error {}
-class Failure extends Error {
-  readonly code: number;
-  constructor(code: number, message: string) {
-    super(message);
-    this.code = code;
-  }
-}
-
 const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SHA_RE = /^[0-9a-f]{40}$/;
 const SESSION_FILE_RE = /^[A-Za-z0-9_.-]+$/;
@@ -88,6 +92,13 @@ function optionsFrom(argv: string[]) {
       "model-io": { type: "string" },
       "zcode-rollout-dir": { type: "string" },
       "zcode-hook-spool": { type: "string" },
+      "codex-session": { type: "string", multiple: true },
+      "codex-sessions-dir": { type: "string" },
+      "codex-hook-spool": { type: "string" },
+      "claude-transcript": { type: "string", multiple: true },
+      "claude-projects-dir": { type: "string" },
+      "claude-hook-spool": { type: "string" },
+      "session-id": { type: "string" },
       "verifier-scope": { type: "string" },
       run: { type: "string", multiple: true },
       "gate-log": { type: "string", multiple: true },
@@ -121,50 +132,6 @@ function parseGateSpec(raw: string): GateSpec {
   return { file: raw, sha: null };
 }
 
-/** Subject = head_after of the finished segment whose end precedes the log mtime and the next start. */
-function inferSubject(segs: RunRecord[], mtimeMs: number): string | null {
-  for (let i = 0; i < segs.length; i++) {
-    const seg = segs[i] as RunRecord;
-    if (!seg.finished_at || !seg.head_after) continue;
-    const end = Date.parse(seg.finished_at);
-    if (Number.isNaN(end) || mtimeMs < end) continue;
-    const next = segs[i + 1];
-    const nextStart = next?.started_at ? Date.parse(next.started_at) : Number.NaN;
-    if (Number.isNaN(nextStart) || mtimeMs < nextStart) return seg.head_after;
-  }
-  return null;
-}
-
-function countBy(xs: string[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const x of xs) out[x] = (out[x] ?? 0) + 1;
-  return Object.fromEntries(Object.entries(out).sort(([a], [b]) => (a < b ? -1 : 1)));
-}
-
-function table(summary: AttemptSummary): string {
-  const rows = summary.metrics.map(
-    (m) =>
-      `| ${m.name} | ${m.value === null ? "unknown" : `${m.value} ${m.unit}`} | ${m.epistemic} | ${m.coverage} |`,
-  );
-  return ["| metric | value | epistemic | coverage |", "| --- | --- | --- | --- |", ...rows].join(
-    "\n",
-  );
-}
-
-function humanSummary(summary: AttemptSummary): string {
-  const lines = [
-    `**task-meta execution summary** for \`${summary.task_ref}\` (attempt \`${summary.attempt_ref}\`)`,
-    "",
-    `Capture coverage: **${summary.capture_coverage}**. Verifier: **${summary.verifier.status}**. Cost: unknown.`,
-    "",
-    table(summary),
-  ];
-  if (summary.limits.length > 0) {
-    lines.push("", "Limits:", ...summary.limits.map((l) => `- ${l}`));
-  }
-  return lines.join("\n");
-}
-
 async function readText(path: string, what: string): Promise<string> {
   try {
     return await readFile(path, "utf8");
@@ -176,7 +143,12 @@ async function readText(path: string, what: string): Promise<string> {
 async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Promise<number> {
   const now = deps.now ?? (() => new Date());
   const [command, ...rest] = argv;
-  if (command !== "collect") throw new UsageError(`unknown or missing command: ${command ?? ""}`);
+  if (command === "auto-report") return runAutoReportCommand(rest, deps, out);
+  if (command !== "collect" && command !== "collect-codex" && command !== "collect-claude") {
+    throw new UsageError(`unknown or missing command: ${command ?? ""}`);
+  }
+  const isCodex = command === "collect-codex";
+  const isClaude = command === "collect-claude";
 
   let parsed: ReturnType<typeof optionsFrom>;
   try {
@@ -186,8 +158,36 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
   }
   const v = parsed.values;
   if (parsed.positionals.length > 0) throw new UsageError("unexpected positional arguments");
-  for (const k of ["repo", "issue", "headless", "store", "out"] as const) {
+  for (const k of [
+    "repo",
+    "issue",
+    "store",
+    "out",
+    ...(isCodex || isClaude ? [] : ["headless" as const]),
+  ] as const) {
     if (v[k] === undefined) throw new UsageError(`missing --${k}`);
+  }
+  const ZCODE_ONLY = [
+    "headless",
+    "model-io",
+    "zcode-rollout-dir",
+    "zcode-hook-spool",
+    "run",
+  ] as const;
+  const CODEX_ONLY = ["codex-session", "codex-sessions-dir", "codex-hook-spool"] as const;
+  const CLAUDE_ONLY = ["claude-transcript", "claude-projects-dir", "claude-hook-spool"] as const;
+  if (isCodex || isClaude) {
+    for (const k of ZCODE_ONLY) {
+      if (v[k] !== undefined) throw new UsageError(`--${k} is not valid with ${command}`);
+    }
+    for (const k of isCodex ? CLAUDE_ONLY : CODEX_ONLY) {
+      if (v[k] !== undefined) throw new UsageError(`--${k} is not valid with ${command}`);
+    }
+  } else {
+    for (const k of [...CODEX_ONLY, ...CLAUDE_ONLY, "session-id" as const]) {
+      if (v[k] !== undefined)
+        throw new UsageError(`--${k} is only valid with collect-codex/collect-claude`);
+    }
   }
   const repo = v.repo as string;
   if (!REPO_RE.test(repo)) throw new UsageError("--repo must be <owner/name>");
@@ -223,106 +223,221 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     throw new UsageError("--profile v5 requires --publisher-source-sha <40 lowercase hex>");
   }
 
-  const headless = await readText(v.headless as string, "headless");
-  const input: ZcodeRunInput = {
-    repository: repo,
-    issue_number: issue,
-    actor: {
+  const extraLimits: string[] = [];
+  let runTexts: string[] = [];
+  let attemptRef: string;
+  let codexRun: RunRecord | null = null;
+  let collect: (clock: string) => AgentCollection;
+  if (isClaude) {
+    let texts: string[];
+    const files = v["claude-transcript"];
+    if (files !== undefined && files.length > 0) {
+      if (v["claude-projects-dir"] !== undefined || v["session-id"] !== undefined) {
+        throw new UsageError("--claude-transcript excludes --claude-projects-dir/--session-id");
+      }
+      texts = [];
+      for (const f of files) texts.push(await readText(f, "claude transcript"));
+    } else if (v["claude-projects-dir"] !== undefined && v["session-id"] !== undefined) {
+      if (!SESSION_FILE_RE.test(v["session-id"]))
+        throw new UsageError("--session-id is not a valid id");
+      const found = await findClaudeTranscripts(resolve(v["claude-projects-dir"]), v["session-id"]);
+      if (found.main.length === 0)
+        throw new Failure(EXIT.FAILURE, "no transcript file found for the session id");
+      texts = [];
+      for (const f of [...found.main, ...found.subagents])
+        texts.push(await readText(f, "claude transcript"));
+    } else {
+      throw new UsageError(
+        "collect-claude needs --claude-transcript <file> or --claude-projects-dir <dir> --session-id <id>",
+      );
+    }
+    const sid =
+      texts.map((t) => parseClaudeTranscript(t).sessionId).find((x) => x !== null) ?? null;
+    if (sid === null) throw new Failure(EXIT.FAILURE, "no session id found in the supplied inputs");
+    attemptRef = sid;
+    const actor = {
       role: v.role ?? "builder",
       operator_kind: "agent",
-      operator_id: v["operator-id"] ?? "zcode",
-      session_ref: "",
+      operator_id: v["operator-id"] ?? "claude",
+      session_ref: sid,
       transport_actor: null,
-    },
-    observed_at: "",
-    headless,
-  };
+    };
+    let hookSpool: string | undefined;
+    if (v["claude-hook-spool"] !== undefined) {
+      try {
+        const file = `${sid.replace(/[^A-Za-z0-9_-]/g, "_")}.jsonl`;
+        hookSpool = await readFile(join(v["claude-hook-spool"], file), "utf8");
+      } catch {
+        extraLimits.push(
+          "no hook spool for this session (capture plugin not enabled or no events)",
+        );
+      }
+    }
+    collect = (clock) => {
+      try {
+        const c = collectClaudeRun({
+          repository: repo,
+          issue_number: issue,
+          actor,
+          observed_at: clock,
+          transcript: texts,
+          ...(hookSpool !== undefined ? { hookSpool } : {}),
+        });
+        codexRun = c.run;
+        return c;
+      } catch (e) {
+        throw new Failure(EXIT.FAILURE, `collection failed: ${(e as Error).message}`);
+      }
+    };
+  } else if (isCodex) {
+    let texts: string[];
+    const files = v["codex-session"];
+    if (files !== undefined && files.length > 0) {
+      if (v["codex-sessions-dir"] !== undefined || v["session-id"] !== undefined) {
+        throw new UsageError("--codex-session excludes --codex-sessions-dir/--session-id");
+      }
+      texts = [];
+      for (const f of files) texts.push(await readText(f, "codex session"));
+    } else if (v["codex-sessions-dir"] !== undefined && v["session-id"] !== undefined) {
+      if (!SESSION_FILE_RE.test(v["session-id"]))
+        throw new UsageError("--session-id is not a valid id");
+      const found = await findCodexRollouts(resolve(v["codex-sessions-dir"]), v["session-id"]);
+      if (found.length === 0)
+        throw new Failure(EXIT.FAILURE, "no rollout file found for the session id");
+      texts = [];
+      for (const f of found) texts.push(await readText(f, "codex session"));
+    } else {
+      throw new UsageError(
+        "collect-codex needs --codex-session <file> or --codex-sessions-dir <dir> --session-id <id>",
+      );
+    }
+    const sid =
+      texts.map((t) => parseCodexRollout(t).session?.id ?? null).find((x) => x !== null) ?? null;
+    if (sid === null) throw new Failure(EXIT.FAILURE, "no session id found in the supplied inputs");
+    attemptRef = sid;
+    const actor = {
+      role: v.role ?? "builder",
+      operator_kind: "agent",
+      operator_id: v["operator-id"] ?? "codex",
+      session_ref: sid,
+      transport_actor: null,
+    };
+    let hookSpool: string | undefined;
+    if (v["codex-hook-spool"] !== undefined) {
+      try {
+        const file = `${sid.replace(/[^A-Za-z0-9_-]/g, "_")}.jsonl`;
+        hookSpool = await readFile(join(v["codex-hook-spool"], file), "utf8");
+      } catch {
+        extraLimits.push(
+          "no hook spool for this session (capture plugin not enabled or no events)",
+        );
+      }
+    }
+    collect = (clock) => {
+      try {
+        const c = collectCodexRun({
+          repository: repo,
+          issue_number: issue,
+          actor,
+          observed_at: clock,
+          rollout: texts,
+          ...(hookSpool !== undefined ? { hookSpool } : {}),
+        });
+        codexRun = c.run;
+        return c;
+      } catch (e) {
+        throw new Failure(EXIT.FAILURE, `collection failed: ${(e as Error).message}`);
+      }
+    };
+  } else {
+    const headless = await readText(v.headless as string, "headless");
+    const input: ZcodeRunInput = {
+      repository: repo,
+      issue_number: issue,
+      actor: {
+        role: v.role ?? "builder",
+        operator_kind: "agent",
+        operator_id: v["operator-id"] ?? "zcode",
+        session_ref: "",
+        transport_actor: null,
+      },
+      observed_at: "",
+      headless,
+    };
 
-  const extraLimits: string[] = [];
-  let modelIo: string | undefined;
-  const sessionId = parseHeadlessResult(headless)?.sessionId ?? null;
-  if (v["model-io"] !== undefined) {
-    modelIo = await readText(v["model-io"], "model-io");
-  } else if (v["zcode-rollout-dir"] !== undefined) {
-    if (sessionId === null || !SESSION_FILE_RE.test(sessionId)) {
-      throw new Failure(EXIT.FAILURE, "headless result has no usable sessionId");
+    let modelIo: string | undefined;
+    const sessionId = parseHeadlessResult(headless)?.sessionId ?? null;
+    if (v["model-io"] !== undefined) {
+      modelIo = await readText(v["model-io"], "model-io");
+    } else if (v["zcode-rollout-dir"] !== undefined) {
+      if (sessionId === null || !SESSION_FILE_RE.test(sessionId)) {
+        throw new Failure(EXIT.FAILURE, "headless result has no usable sessionId");
+      }
+      try {
+        modelIo = await readFile(
+          join(v["zcode-rollout-dir"], `model-io-${sessionId}.jsonl`),
+          "utf8",
+        );
+      } catch {
+        modelIo = undefined; // recorded as a limit by the adapter ("no model-io rollout")
+      }
     }
-    try {
-      modelIo = await readFile(join(v["zcode-rollout-dir"], `model-io-${sessionId}.jsonl`), "utf8");
-    } catch {
-      modelIo = undefined; // recorded as a limit by the adapter ("no model-io rollout")
+    if (modelIo !== undefined) input.modelIo = modelIo;
+    if (v["zcode-hook-spool"] !== undefined) {
+      if (sessionId === null || !SESSION_FILE_RE.test(sessionId)) {
+        throw new Failure(EXIT.FAILURE, "headless result has no usable sessionId");
+      }
+      try {
+        // The capture plugin sanitizes session ids to [A-Za-z0-9_-] for the file name.
+        const file = `${sessionId.replace(/[^A-Za-z0-9_-]/g, "_")}.jsonl`;
+        input.hookSpool = await readFile(join(v["zcode-hook-spool"], file), "utf8");
+      } catch {
+        extraLimits.push(
+          "no hook spool for this session (capture plugin not enabled or no events)",
+        );
+      }
     }
-  }
-  if (modelIo !== undefined) input.modelIo = modelIo;
-  if (v["zcode-hook-spool"] !== undefined) {
-    if (sessionId === null || !SESSION_FILE_RE.test(sessionId)) {
-      throw new Failure(EXIT.FAILURE, "headless result has no usable sessionId");
+    if (v.run !== undefined) {
+      input.runRecords = [];
+      for (const f of v.run) input.runRecords.push(await readText(f, "run record"));
     }
-    try {
-      // The capture plugin sanitizes session ids to [A-Za-z0-9_-] for the file name.
-      const file = `${sessionId.replace(/[^A-Za-z0-9_-]/g, "_")}.jsonl`;
-      input.hookSpool = await readFile(join(v["zcode-hook-spool"], file), "utf8");
-    } catch {
-      extraLimits.push("no hook spool for this session (capture plugin not enabled or no events)");
+    runTexts = input.runRecords ?? [];
+    const ref = sessionId ?? parseModelIo(modelIo ?? "").records[0]?.sessionId ?? null;
+    if (ref === null) {
+      throw new Failure(EXIT.FAILURE, "no session id found in the supplied inputs");
     }
+    attemptRef = ref;
+    input.actor.session_ref = ref;
+    collect = (clock) => {
+      input.observed_at = clock;
+      try {
+        return collectZcodeRun(input);
+      } catch (e) {
+        throw new Failure(EXIT.FAILURE, `collection failed: ${(e as Error).message}`);
+      }
+    };
   }
-  if (v.run !== undefined) {
-    input.runRecords = [];
-    for (const f of v.run) input.runRecords.push(await readText(f, "run record"));
-  }
-  const runTexts = input.runRecords ?? [];
-  const attemptRef = sessionId ?? parseModelIo(modelIo ?? "").records[0]?.sessionId ?? null;
-  if (attemptRef === null) {
-    throw new Failure(EXIT.FAILURE, "no session id found in the supplied inputs");
-  }
-  input.actor.session_ref = attemptRef;
 
   const store = new EvidenceStore(resolve(v.store as string));
   // Re-collecting the same inputs must be byte-identical: reuse the first revision's clock.
-  let existing: Awaited<ReturnType<EvidenceStore["readManifest"]>> | null = null;
-  try {
-    existing = await store.readManifest(attemptRef, 1);
-  } catch (e) {
-    if (!(e instanceof NotFoundError)) throw e;
-  }
+  const existing = await readManifestOrNull(store, attemptRef, 1);
   const clock = existing ? existing.created_at : now().toISOString();
-  input.observed_at = clock;
 
-  let collection: ReturnType<typeof collectZcodeRun>;
-  try {
-    collection = collectZcodeRun(input);
-  } catch (e) {
-    throw new Failure(EXIT.FAILURE, `collection failed: ${(e as Error).message}`);
-  }
-  const { observations, summary, profile: capability } = collection;
-  summary.limits.push(...extraLimits);
-
-  // ---- R2: verifier assessment, lineage, labels, aggregates ----
-  const runs: RunRecord[] = runTexts.map((t) => parseRunRecord(t));
-  const sorted = sortRunSegments(runs);
-  const records: VerifierRecord[] = [];
-  let inferredUsed = false;
-  let unboundCount = 0;
+  const collection = collect(clock);
+  const runs: RunRecord[] =
+    isCodex || isClaude ? (codexRun ? [codexRun] : []) : runTexts.map((t) => parseRunRecord(t));
+  const gates: GateInput[] = [];
   for (const spec of gateSpecs) {
     const text = await readText(spec.file, "gate log");
-    const ref = `gate-log:${sha256Hex(text).slice(0, 12)}`;
-    let subject: string | null = spec.sha;
-    let binding: SubjectBinding = spec.sha !== null ? "OBSERVED" : "UNKNOWN";
-    // A gate-recorded GATE_SUBJECT_SHA (written at run time) beats mtime inference.
-    if (spec.sha === null && extractGateRecord(text).sha === null) {
-      let mtimeMs: number | null = null;
+    let mtimeMs: number | null = null;
+    if (spec.sha === null) {
       try {
         mtimeMs = (await stat(spec.file)).mtimeMs;
       } catch {
         mtimeMs = null;
       }
-      subject = mtimeMs === null ? null : inferSubject(sorted, mtimeMs);
-      if (subject !== null) {
-        binding = "INFERRED";
-        inferredUsed = true;
-      } else unboundCount++;
     }
-    records.push(parseTaskCheckLog(text, { ref, subject_sha: subject, subject_binding: binding }));
+    gates.push({ text, sha: spec.sha, mtimeMs });
   }
   // Required verifier scope is declared by the operator (e.g. a repo whose gate only runs tests);
   // default is the full task-check scope.
@@ -331,110 +446,25 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     .map((s) => s.trim())
     .filter((s) => s !== "")
     .map((s) => (s.startsWith("task-check:") ? s : `task-check:${s}`));
-  const assessment = assessVerifiers({
-    records,
-    attempt_source_sha: summary.source_sha,
-    run_exit_codes: runs.map((r) => r.exit_code),
-    ...(requiredScope && requiredScope.length > 0 ? { required_scope: requiredScope } : {}),
-  });
-  summary.verifier = toVerifierOutcome(assessment, summary.source_sha);
-
-  const git: GitExec | undefined =
-    v["git-dir"] !== undefined ? makeGitExec(resolve(v["git-dir"])) : undefined;
-  const lineage = await buildLineage({
-    attempt_ref: attemptRef,
+  const evidence = await buildEvidence({
+    collection,
+    attemptRef,
     runs,
-    ...(git ? { git } : {}),
-    segmentRefs: runs.map((_, i) => `zcode:run-record:${attemptRef}#${i + 1}`),
+    segmentPrefix: isClaude ? "claude:transcript" : isCodex ? "codex:rollout" : "zcode:run-record",
+    gates,
+    requiredScope,
+    gitDir: v["git-dir"] !== undefined ? resolve(v["git-dir"]) : undefined,
+    extraLimits,
+    mode: resolution.mode,
   });
-  for (const t of lineage.transitions) {
-    if (t.to_version === null) continue;
-    for (const r of assessment.records) {
-      if (r.subject_sha !== null && t.to_version === `git:${r.subject_sha}`) {
-        const ref = r.source_refs[0];
-        if (ref !== undefined && !t.verifier_refs.includes(ref)) t.verifier_refs.push(ref);
-      }
-    }
-  }
-  const labels = labelAttempt({ observations, lineage, assessment });
-  const aggregates = computeAggregates({
-    summaryAttempts: [attemptRef],
-    excludedAttempts: [],
-    assessment,
-    lineage,
-    labels,
-  });
-  summary.limits.push(
-    `verifier outcome class: ${assessment.outcome_class}`,
-    `verifier conflicts: ${assessment.conflicts.length}`,
-    ...assessment.limits.slice(0, 5),
-  );
-  if (inferredUsed) {
-    summary.limits.push(
-      "gate log subject inferred from file mtime: after a finished run segment and before the next one starts",
-    );
-  }
-  if (unboundCount > 0) {
-    summary.limits.push(
-      `${unboundCount} gate log(s) without subject binding (mtime not inferable)`,
-    );
-  }
-  if (resolution.mode === "E2E_TEST_SUBJECT") summary.limits.push(E2E_LIMIT);
-  summary.limits.push(PUBLIC_GAP_LIMIT);
-  summary.limits = [...new Set(summary.limits)];
-
-  const values = {
-    observations,
-    summary,
-    capability,
-    verifier: assessment,
-    lineage,
-    labels,
-    aggregates,
-  };
-  try {
-    assertNoForbiddenContent(values);
-  } catch (e) {
-    throw new Failure(EXIT.PRIVACY, `privacy guard refused the evidence: ${(e as Error).message}`);
-  }
-  const ROLES = Object.keys(values) as (keyof typeof values)[];
-  if (existing) {
-    const same =
-      existing.objects.length === ROLES.length &&
-      ROLES.every(
-        (role) =>
-          existing.objects.find((o) => o.role === role)?.digest === canonicalDigest(values[role]),
-      );
-    if (!same) {
-      throw new Failure(
-        EXIT.REVISION_CONFLICT,
-        "attempt already has a different revision 1; revisions/supersedes are not supported by the v0.1 CLI",
-      );
-    }
-  }
-  const objects = [];
-  for (const role of ROLES) {
-    objects.push({ role, digest: (await store.putObject(values[role])).digest });
-  }
-  const written = await store.writeManifest({
-    attempt_ref: attemptRef,
-    revision: 1,
-    objects,
-    predecessor: null,
-    created_at: clock,
-  });
-  const pointer: ManifestPointer = {
-    ref: written.ref,
-    sha256: written.sha256,
-    access: written.access,
-  };
-  const verified = await store.verifyManifest(pointer.sha256);
-  if (!verified.ok) {
+  const { summary, assessment, lineage, labels } = evidence;
+  if (existing && !manifestMatches(existing, evidence)) {
     throw new Failure(
-      EXIT.STORE_VERIFY,
-      `store verification failed: missing=${verified.missing.length} tampered=${verified.tampered.length}`,
+      EXIT.REVISION_CONFLICT,
+      "attempt already has a different revision 1; revisions/supersedes are not supported by the v0.1 CLI",
     );
   }
+  const pointer: ManifestPointer = await persistRevision(store, evidence, 1, null, clock);
 
   const clearance = v["clearance-ref"];
   if (profile === "v5" && (clearance === undefined || clearance === "")) {

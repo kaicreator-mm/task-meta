@@ -2,13 +2,19 @@
 // Node built-ins only. Reads the ZCode hook input as JSON on stdin, appends ONE line
 // `{"d":"<sha256 hex of RFC8785 JCS(e)>","e":e}` to <spool>/<sessionId>.jsonl, prints nothing,
 // and ALWAYS exits 0. On failure only an error class name is logged to <spool>/_errors.log.
-import { createHash } from "node:crypto";
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
-export const PLUGIN_VERSION = "0.1.1";
+import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { extractRefs, parseWorktreeName } from "./lib/binding-extract.mjs";
+import { gitInfo } from "./lib/git-meta.mjs";
+
+export const PLUGIN_VERSION = "0.2.1";
+const HERE = dirname(fileURLToPath(import.meta.url));
+const MAX_BINDING_REFS = 32;
 export const SCHEMA = "task-meta/zcode-hook/v1";
 const EVENTS = new Set([
   "SessionStart",
@@ -136,6 +142,43 @@ export function classifyCommand(cmd) {
   return cls;
 }
 
+// ---- task binding inputs (refs only; the prompt text is examined in memory and dropped) ----
+let inventoryCache;
+function inventory() {
+  if (inventoryCache === undefined) {
+    try {
+      const j = JSON.parse(readFileSync(join(HERE, "lib", "repo-aliases.json"), "utf8"));
+      inventoryCache = { aliases: j.aliases ?? {}, knownRepos: j.repos ?? [] };
+    } catch {
+      inventoryCache = { aliases: {}, knownRepos: [] };
+    }
+  }
+  return inventoryCache;
+}
+
+/** Git facts and name-derived refs for the session cwd; all-null on any failure. */
+export function gitFields(cwd) {
+  const out = { git_head: null, git_dirty: null, git_remote_repo: null, worktree_refs: null };
+  if (typeof cwd !== "string" || cwd === "") return out;
+  try {
+    const g = gitInfo(cwd);
+    out.git_head = g.git_head;
+    out.git_dirty = g.git_dirty;
+    out.git_remote_repo = g.git_remote_repo;
+    const inv = inventory();
+    const refs = [];
+    for (const r of parseWorktreeName(basename(cwd), inv).refs)
+      refs.push({ source: "WORKTREE", ...r });
+    if (g.branch !== null) {
+      for (const r of parseWorktreeName(g.branch, inv).refs) refs.push({ source: "BRANCH", ...r });
+    }
+    out.worktree_refs = refs.slice(0, MAX_BINDING_REFS);
+  } catch {
+    // keep nulls
+  }
+  return out;
+}
+
 // ---- entry construction (allowlist only) ----
 function wellFormed(s) {
   return !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(s);
@@ -192,6 +235,11 @@ export function buildEntry(input, now = new Date()) {
     session_source: null,
     model: null,
     prompt_bytes: null,
+    binding_refs: null,
+    git_head: null,
+    git_dirty: null,
+    git_remote_repo: null,
+    worktree_refs: null,
     cwd_digest: typeof input.cwd === "string" && input.cwd !== "" ? sha256Hex(input.cwd) : null,
   };
   if (
@@ -223,8 +271,12 @@ export function buildEntry(input, now = new Date()) {
     e.session_source = typeof src === "string" ? (SESSION_SOURCES.has(src) ? src : "OTHER") : null;
     e.model = bounded(input.model, 128);
   } else if (event === "UserPromptSubmit") {
-    if (typeof input.prompt === "string") e.prompt_bytes = Buffer.byteLength(input.prompt, "utf8");
+    if (typeof input.prompt === "string") {
+      e.prompt_bytes = Buffer.byteLength(input.prompt, "utf8");
+      e.binding_refs = extractRefs(input.prompt, inventory()).refs.slice(0, MAX_BINDING_REFS);
+    }
   }
+  if (event === "SessionStart" || event === "Stop") Object.assign(e, gitFields(input.cwd));
   return e;
 }
 
@@ -243,6 +295,48 @@ function logError(dir, err) {
   }
 }
 
+function namedError(name) {
+  const e = new Error(name);
+  e.name = name;
+  return e;
+}
+
+/** Path of the task-meta CLI from env TASK_META_HOME or plugin-local config.json, else null. */
+export function taskMetaCli() {
+  let home = process.env.TASK_META_HOME;
+  if (!home) {
+    try {
+      const c = JSON.parse(readFileSync(join(HERE, "..", "config.json"), "utf8"));
+      if (typeof c.taskMetaHome === "string") home = c.taskMetaHome;
+    } catch {
+      // no config
+    }
+  }
+  return home ? { home, cli: join(home, "src", "cli.ts") } : null;
+}
+
+/** Start `task-meta auto-report` detached; returns immediately. Never throws. */
+function triggerAutoReport(sessionId, dir, trigger) {
+  try {
+    if (process.env.TASK_META_AUTO_REPORT === "0") return;
+    if (sessionId.startsWith("-")) return;
+    const t = taskMetaCli();
+    if (t === null || !existsSync(t.cli)) {
+      logError(dir, namedError("AutoReportCliMissing"));
+      return;
+    }
+    const child = spawn(
+      process.execPath,
+      [t.cli, "auto-report", "--agent", "zcode", "--session", sessionId, "--trigger", trigger],
+      { cwd: t.home, detached: true, stdio: "ignore", windowsHide: true },
+    );
+    child.on("error", () => {});
+    child.unref();
+  } catch (err) {
+    logError(dir, err);
+  }
+}
+
 export function capture(raw) {
   const dir = spoolDir();
   try {
@@ -250,6 +344,7 @@ export function capture(raw) {
     const line = `{"d":"${sha256Hex(jcs(e))}","e":${jcs(e)}}\n`;
     mkdirSync(dir, { recursive: true });
     appendFileSync(join(dir, `${sanitizeSessionId(e.session_id)}.jsonl`), line);
+    if (e.event === "Stop") triggerAutoReport(e.session_id, dir, "stop");
   } catch (err) {
     logError(dir, err);
   }

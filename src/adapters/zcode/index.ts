@@ -47,6 +47,8 @@ export interface ZcodeRunInput {
   gateSha?: string;
   /** Contents of the task-meta-capture hook spool for this session (`<sessionId>.jsonl`). */
   hookSpool?: string;
+  /** Explicit session id (UI sessions have no headless result; the hook spool carries it). */
+  sessionId?: string;
 }
 
 export interface ZcodeCollection {
@@ -132,9 +134,21 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
   const parsedIo = input.modelIo !== undefined ? parseModelIo(input.modelIo) : null;
   const limits: string[] = [];
 
-  const sessionId = headless?.sessionId ?? parsedIo?.records[0]?.sessionId ?? null;
+  if (
+    input.headless === undefined &&
+    input.modelIo === undefined &&
+    input.hookSpool === undefined
+  ) {
+    throw new Error(
+      "zcode adapter: no session source: need at least one of headless result, model-io or hook spool",
+    );
+  }
+  const sessionId =
+    input.sessionId ?? headless?.sessionId ?? parsedIo?.records[0]?.sessionId ?? null;
   if (!sessionId) {
-    throw new Error("zcode adapter: no session id (neither headless result nor model-io provided)");
+    throw new Error(
+      "zcode adapter: no session id (neither headless result nor model-io nor explicit id provided)",
+    );
   }
 
   const taskRef = `${input.repository}#${input.issue_number}`;
@@ -143,11 +157,62 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
   if (foreign > 0) limits.push(`${foreign} model_io line(s) from other sessions ignored`);
   const rejected = parsedIo?.rejected ?? [];
 
+  // ---- hook spool parse (limits replayed later to keep their order) ----
+  let hookAnalysis: HookAnalysis | null = null;
+  let hookEventCount = 0;
+  const hookLimits: string[] = [];
+  if (input.hookSpool !== undefined) {
+    const parsed = parseHookSpool(input.hookSpool);
+    const mine = parsed.entries.filter((e) => e.session_id === sessionId);
+    const foreignHooks = parsed.entries.length - mine.length;
+    if (foreignHooks > 0) {
+      hookLimits.push(`${foreignHooks} hook entr(ies) from other sessions ignored`);
+    }
+    if (parsed.skipped.length > 0) {
+      hookLimits.push(`${parsed.skipped.length} hook spool line(s) skipped (truncated or invalid)`);
+    }
+    if (parsed.duplicates > 0) {
+      hookLimits.push(`${parsed.duplicates} duplicate hook spool line(s) dropped`);
+    }
+    if (mine.length === 0) {
+      hookLimits.push("hook spool has no usable entries for this session");
+    } else {
+      hookEventCount = mine.length;
+      hookAnalysis = analyzeHooks(mine);
+      if (hookAnalysis.conflicting > 0) {
+        hookLimits.push(
+          `${hookAnalysis.conflicting} tool call(s) had several Pre/Post hook entries; first kept`,
+        );
+      }
+    }
+  }
+
   const runTexts = [
     ...(input.runRecord !== undefined ? [input.runRecord] : []),
     ...(input.runRecords ?? []),
   ];
-  const runs = sortRunSegments(runTexts.map((t) => parseRunRecord(t)));
+  let runs = sortRunSegments(runTexts.map((t) => parseRunRecord(t)));
+  // No run.txt (UI session): derive run segments from SessionStart/Stop git heads (plugin >= 0.2.0).
+  let derivedRuns = false;
+  if (runs.length === 0 && hookAnalysis) {
+    const derived = hookAnalysis.segments
+      .filter((sg) => sg.headBefore !== null || sg.headAfter !== null)
+      .map((sg) => ({
+        started_at: sg.startedAt,
+        finished_at: sg.completedAt,
+        exit_code: null,
+        head_before: sg.headBefore,
+        head_after: sg.headAfter,
+      }));
+    if (derived.length > 0) {
+      runs = sortRunSegments(derived);
+      derivedRuns = true;
+      limits.push("run segments derived from hook git heads (no run.txt); exit code unknown");
+      if (hookAnalysis.segments.some((sg) => sg.dirtyAfter === true)) {
+        limits.push("working tree dirty at Stop; source_sha is HEAD, not the working tree");
+      }
+    }
+  }
   const gateSubject = input.gateSha ?? witnessedHead(runs) ?? null;
   const gate = parseGateLog(input.gateLog ?? "", gateSubject);
   if (input.gateLog !== undefined && gate.exitCode === 0 && !gate.greenMarker) {
@@ -181,6 +246,8 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
   }
 
   for (const [idx, run] of runs.entries()) {
+    // Derived segments already appear as hook-segment boundaries below.
+    if (derivedRuns) break;
     if (!(run.started_at || run.finished_at || run.exit_code !== null)) continue;
     const o = skeleton(
       runs.length === 1 ? `run:${sessionId}` : `run:${sessionId}:${idx + 1}`,
@@ -239,32 +306,8 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
     }
   }
   // ---- hook spool (task-meta-capture): timing/status per tool call + segment boundaries ----
-  let hookAnalysis: HookAnalysis | null = null;
-  let hookEventCount = 0;
   const hookObs: ObservationRecord[] = [];
-  if (input.hookSpool !== undefined) {
-    const parsed = parseHookSpool(input.hookSpool);
-    const mine = parsed.entries.filter((e) => e.session_id === sessionId);
-    const foreignHooks = parsed.entries.length - mine.length;
-    if (foreignHooks > 0) limits.push(`${foreignHooks} hook entr(ies) from other sessions ignored`);
-    if (parsed.skipped.length > 0) {
-      limits.push(`${parsed.skipped.length} hook spool line(s) skipped (truncated or invalid)`);
-    }
-    if (parsed.duplicates > 0) {
-      limits.push(`${parsed.duplicates} duplicate hook spool line(s) dropped`);
-    }
-    if (mine.length === 0) {
-      limits.push("hook spool has no usable entries for this session");
-    } else {
-      hookEventCount = mine.length;
-      hookAnalysis = analyzeHooks(mine);
-      if (hookAnalysis.conflicting > 0) {
-        limits.push(
-          `${hookAnalysis.conflicting} tool call(s) had several Pre/Post hook entries; first kept`,
-        );
-      }
-    }
-  }
+  limits.push(...hookLimits);
   const rolloutToolIds = new Set(tools.map((t) => t.source_event_id));
   let toolsMerged = tools;
   if (hookAnalysis) {

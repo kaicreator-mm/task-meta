@@ -1,0 +1,16 @@
+{
+  "name": "dev-task-meta",
+  "description": "task-meta development plugins (metadata-only capture).",
+  "owner": {
+    "name": "kaicreator-mm"
+  },
+  "plugins": [
+    {
+      "name": "task-meta-capture",
+      "source": "./task-meta-capture",
+      "version": "0.2.1",
+      "description": "Metadata-only lifecycle capture for task-meta: tool timing and outcome, git heads, session boundaries; no content.",
+      "category": "developer-tools"
+    }
+  ]
+}

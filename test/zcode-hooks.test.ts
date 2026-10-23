@@ -349,6 +349,8 @@ async function cli(extra: string[], dir: string) {
       join(dir, "store"),
       "--out",
       join(dir, "out", "report.md"),
+      "--profile",
+      "v4",
       ...extra,
     ],
     {

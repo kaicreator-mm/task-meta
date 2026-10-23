@@ -1,5 +1,6 @@
 // Ingestion of the task-meta-capture ZCode plugin spool (plugins/zcode/task-meta-capture).
 // The spool holds metadata-only lifecycle entries; see DEFINITION §9.
+import type { BindingRef, BindingSources } from "../../binding/types.ts";
 import { canonicalDigest } from "../../canonical.ts";
 import type { Epistemic, ObservationRecord } from "../../model.ts";
 
@@ -36,6 +37,20 @@ export interface HookEntry {
   model: string | null;
   prompt_bytes: number | null;
   cwd_digest: string | null;
+  /** v0.2 fields (plugin >= 0.2.0); null/absent in 0.1.x lines. Refs only, never prompt text. */
+  binding_refs?: BindingRef[] | null | undefined;
+  git_head?: string | null | undefined;
+  git_dirty?: boolean | null | undefined;
+  git_remote_repo?: string | null | undefined;
+  worktree_refs?: Array<BindingRef & { source: "WORKTREE" | "BRANCH" }> | null | undefined;
+}
+
+/** The slice of a hook-spool entry the binding resolver reads (ZCode and Codex spools share it). */
+export interface BindingSpoolEntry {
+  event: string;
+  binding_refs?: BindingRef[] | null | undefined;
+  git_remote_repo?: string | null | undefined;
+  worktree_refs?: Array<BindingRef & { source: "WORKTREE" | "BRANCH" }> | null | undefined;
 }
 
 export interface HookSpoolParse {
@@ -57,6 +72,32 @@ const EVENTS = new Set<string>([
 const strOrNull = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const numOrNull = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;
+
+const HEAD_RE = /^[0-9a-f]{40}$/;
+const REMOTE_RE = /^[\w.-]+\/[\w.-]+$/;
+const MAX_REFS = 64;
+
+export function toRefs(v: unknown, withSource: boolean): BindingRef[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: BindingRef[] = [];
+  for (const x of v.slice(0, MAX_REFS)) {
+    if (typeof x !== "object" || x === null) continue;
+    const o = x as Record<string, unknown>;
+    if (o.kind !== "ISSUE" && o.kind !== "PR" && o.kind !== "REPO") continue;
+    const repo = typeof o.repo === "string" && o.repo.length <= 100 ? o.repo : null;
+    const number =
+      typeof o.number === "number" && Number.isSafeInteger(o.number) && o.number > 0
+        ? o.number
+        : null;
+    const ref: BindingRef & { source?: string } = { kind: o.kind, repo, number };
+    if (withSource) {
+      if (o.source !== "WORKTREE" && o.source !== "BRANCH") continue;
+      ref.source = o.source;
+    }
+    out.push(ref);
+  }
+  return out;
+}
 
 /** Allowlist projection: unknown fields in a spool line are never carried further. */
 function toEntry(e: unknown): HookEntry | null {
@@ -87,6 +128,14 @@ function toEntry(e: unknown): HookEntry | null {
     model: strOrNull(o.model),
     prompt_bytes: numOrNull(o.prompt_bytes),
     cwd_digest: strOrNull(o.cwd_digest),
+    binding_refs: toRefs(o.binding_refs, false),
+    git_head: typeof o.git_head === "string" && HEAD_RE.test(o.git_head) ? o.git_head : null,
+    git_dirty: typeof o.git_dirty === "boolean" ? o.git_dirty : null,
+    git_remote_repo:
+      typeof o.git_remote_repo === "string" && REMOTE_RE.test(o.git_remote_repo)
+        ? o.git_remote_repo
+        : null,
+    worktree_refs: toRefs(o.worktree_refs, true) as HookEntry["worktree_refs"],
   };
 }
 
@@ -168,6 +217,12 @@ export interface HookSegment {
   source: string | null;
   startedAt: string | null;
   completedAt: string | null;
+  /** SessionStart git HEAD (plugin >= 0.2.0), else null. */
+  headBefore: string | null;
+  /** HEAD of the latest Stop in the segment, else null. */
+  headAfter: string | null;
+  /** git_dirty of the latest Stop (null = unknown). */
+  dirtyAfter: boolean | null;
 }
 
 export interface HookAnalysis {
@@ -196,13 +251,22 @@ export function analyzeHooks(entries: HookEntry[]): HookAnalysis {
   const segments: HookSegment[] = [];
   let cur: HookSegment | null = null;
   const open = (source: string | null, startedAt: string | null): HookSegment => {
-    const s: HookSegment = { index: segments.length + 1, source, startedAt, completedAt: null };
+    const s: HookSegment = {
+      index: segments.length + 1,
+      source,
+      startedAt,
+      completedAt: null,
+      headBefore: null,
+      headAfter: null,
+      dirtyAfter: null,
+    };
     segments.push(s);
     return s;
   };
   for (const e of entries) {
     if (e.event === "SessionStart") {
       cur = open(e.session_source, iso(e.hook_ts));
+      cur.headBefore = e.git_head ?? null;
     } else if (e.event === "Stop") {
       cur ??= open(null, null);
       const t = iso(e.hook_ts);
@@ -211,6 +275,11 @@ export function analyzeHooks(entries: HookEntry[]): HookAnalysis {
         (cur.completedAt === null || Date.parse(t) >= Date.parse(cur.completedAt))
       ) {
         cur.completedAt = t;
+        cur.headAfter = e.git_head ?? null;
+        cur.dirtyAfter = e.git_dirty ?? null;
+      } else if (t === null && cur.completedAt === null && cur.headAfter === null) {
+        cur.headAfter = e.git_head ?? null;
+        cur.dirtyAfter = e.git_dirty ?? null;
       }
     }
     if (e.tool_call_id === null) continue;
@@ -299,4 +368,42 @@ export function hookOnlyTool(h: HookTool, skeleton: ObservationRecord): Observat
   }
   applyTiming(o, h);
   return o;
+}
+
+/**
+ * Binding inputs from a parsed spool: prompt refs (UserPromptSubmit), worktree/branch refs and
+ * the git remote (SessionStart/Stop). Normalized refs only. The caller supplies the inventory
+ * to `resolveBinding`.
+ */
+export function bindingInputFromSpool(entries: BindingSpoolEntry[]): BindingSources {
+  const promptRefs: BindingRef[] = [];
+  const worktreeRefs: BindingRef[] = [];
+  const branchRefs: BindingRef[] = [];
+  let gitRemoteRepo: string | null = null;
+  const plain = (r: BindingRef): BindingRef => ({ kind: r.kind, repo: r.repo, number: r.number });
+  for (const e of entries) {
+    if (e.event === "UserPromptSubmit") {
+      for (const r of e.binding_refs ?? []) promptRefs.push(plain(r));
+    } else if (e.event === "SessionStart" || e.event === "Stop") {
+      for (const r of e.worktree_refs ?? []) {
+        (r.source === "BRANCH" ? branchRefs : worktreeRefs).push(plain(r));
+      }
+      if (e.git_remote_repo != null) gitRemoteRepo = e.git_remote_repo;
+    }
+  }
+  const dedupe = (rs: BindingRef[]): BindingRef[] => {
+    const seen = new Set<string>();
+    return rs.filter((r) => {
+      const k = `${r.kind}|${r.repo}|${r.number}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  };
+  return {
+    promptRefs: dedupe(promptRefs),
+    worktreeRefs: dedupe(worktreeRefs),
+    branchRefs: dedupe(branchRefs),
+    gitRemoteRepo,
+  };
 }

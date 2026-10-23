@@ -177,3 +177,88 @@ test("candidate dry run is unaffected by the allowlist; default stays v4", () =>
   const def = resolveProfile({ publish: true, repository: E2E_REPO, adoption: e2e() });
   assert.ok(def.ok && def.profile === "v4" && def.mode === "V4_DEFAULT");
 });
+
+// ---- owner authorization (DEFINITION v0.2 section 1.1) ----
+
+const owner = (over: Record<string, unknown> = {}): Adoption => ({
+  adopted: [],
+  owner_authorized: [
+    {
+      ads_version: "4.16",
+      ads_pin: CANDIDATE_PIN,
+      report_schema_blob: VENDORED_V416_SCHEMA_BLOB,
+      profile: "v5",
+      scope: "all",
+      authorization_ref: "owner-authorization:2026-10-23:kaicreator-mm",
+      authorized_on: "2026-10-23",
+      ...over,
+    },
+  ],
+});
+
+test("shipped config carries the v4.16 owner authorization", () => {
+  const e = (loadAdoption().owner_authorized ?? [])[0];
+  assert.equal(e?.ads_pin, CANDIDATE_PIN);
+  assert.equal(e?.report_schema_blob, VENDORED_V416_SCHEMA_BLOB);
+  assert.equal(e?.scope, "all");
+  assert.equal(e?.authorization_ref, "owner-authorization:2026-10-23:kaicreator-mm");
+});
+
+test("default is v5 OWNER_AUTHORIZED for any repository, publish or not", () => {
+  for (const publish of [true, false]) {
+    const r = resolveProfile({ publish, repository: "any/repo", adoption: owner() });
+    assert.deepEqual(r, {
+      ok: true,
+      profile: "v5",
+      mode: "OWNER_AUTHORIZED",
+      adsRevision: CANDIDATE_PIN,
+    });
+  }
+  const shipped = resolveProfile({ publish: true, repository: "x/y", adoption: loadAdoption() });
+  assert.ok(shipped.ok && shipped.mode === "OWNER_AUTHORIZED");
+});
+
+test("explicit v4 is honoured; without owner_authorized the default is v4 again", () => {
+  const v4 = resolveProfile({ profile: "v4", publish: true, adoption: owner() });
+  assert.ok(v4.ok && v4.profile === "v4" && v4.mode === "V4_DEFAULT");
+  const none = resolveProfile({ publish: true, adoption: { adopted: [] } });
+  assert.ok(none.ok && none.profile === "v4" && none.mode === "V4_DEFAULT");
+});
+
+test("an adopted main entry wins over the owner authorization", () => {
+  const both: Adoption = { ...adopted(), owner_authorized: owner().owner_authorized as never };
+  const r = resolveProfile({ publish: true, adoption: both });
+  assert.deepEqual(r, { ok: true, profile: "v5", mode: "ADOPTED", adsRevision: MAIN });
+});
+
+test("owner authorization with a mismatching schema blob is refused", () => {
+  const r = resolveProfile({
+    publish: true,
+    repository: "x/y",
+    adoption: owner({ report_schema_blob: "c".repeat(40) }),
+  });
+  assert.ok(!r.ok && r.code === "SCHEMA_BLOB_MISMATCH");
+});
+
+test("owner scope list limits the default to those repositories", () => {
+  const scoped = owner({ scope: ["kaicreator-mm/a"] });
+  const inScope = resolveProfile({
+    publish: true,
+    repository: "kaicreator-mm/a",
+    adoption: scoped,
+  });
+  assert.ok(inScope.ok && inScope.mode === "OWNER_AUTHORIZED");
+  const out = resolveProfile({ publish: true, repository: "kaicreator-mm/b", adoption: scoped });
+  assert.ok(out.ok && out.profile === "v4");
+});
+
+test("explicit candidate pin still needs the E2E allowlist to publish (owner default unaffected)", () => {
+  const r = resolveProfile({
+    profile: "v5",
+    adsPin: CANDIDATE_PIN,
+    publish: true,
+    repository: "other/repo",
+    adoption: owner(),
+  });
+  assert.ok(!r.ok && r.code === "CANDIDATE_NOT_PUBLISHABLE");
+});
