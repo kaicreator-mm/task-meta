@@ -122,18 +122,40 @@ test("cross-attempt A->B->A revisit kept as provenance", async () => {
   assert.equal(d.revisits[0]?.transition_ids.length, 1);
 });
 
-test("duplicate attempt dedups, no new versions", async () => {
+test("different real Attempts with identical Git transitions MUST both survive", async () => {
   const runs = [seg(1, S.c0 as string, S.c1 as string)];
   const d = await buildIssueDag({
     ...base,
     git,
     attempts: [await att("a1", 1, runs), await att("a2", 2, runs)],
   });
-  assert.equal(d.versions.length, 2);
+  assert.equal(d.versions.length, 2, "shared code VersionState may coalesce");
+  assert.deepEqual(d.attempts, ["a1", "a2"]);
+  assert.equal(d.edges.filter((e) => e.kind === "TRANSITION").length, 2);
+  assert.equal(d.gaps.filter((x) => x.kind === "DUPLICATE_ATTEMPT").length, 0);
+  assert.equal(d.versions[0]?.observed_in.length, 2, "both actual attempts remain witnessed");
+});
+
+test("same Attempt + identical source content is duplicate delivery, not second attempt", async () => {
+  const a = await att("a1", 1, [seg(1, S.c0 as string, S.c1 as string)]);
+  const d = await buildIssueDag({ ...base, git, attempts: [a, structuredClone(a)] });
   assert.deepEqual(d.attempts, ["a1"]);
   assert.equal(d.edges.filter((e) => e.kind === "TRANSITION").length, 1);
   assert.ok(d.gaps.some((x) => x.kind === "DUPLICATE_ATTEMPT"));
-  assert.equal(d.versions[0]?.observed_in.length, 1);
+});
+
+test("same Attempt ID with differing source content is held, never last-write wins", async () => {
+  const d = await buildIssueDag({
+    ...base,
+    git,
+    attempts: [
+      await att("a1", 1, [seg(1, S.c0 as string, S.c1 as string)]),
+      await att("a1", 2, [seg(1, S.c1 as string, S.c2 as string)]),
+    ],
+  });
+  assert.deepEqual(d.attempts, []);
+  assert.ok(d.gaps.some((x) => x.kind === "ATTEMPT_SOURCE_CONFLICT" && x.ref === "a1"));
+  assert.equal(d.edges.filter((e) => e.kind === "TRANSITION").length, 0);
 });
 
 test("observed_in unions across attempts", async () => {
