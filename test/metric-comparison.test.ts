@@ -75,6 +75,19 @@ test("T03 same economic/call physical identity with conflicting observations is 
   assert.equal(r.total, null);
 });
 
+test("T03 superseding revision of one observation is never summed additively", () => {
+  const rev1 = sample("one", "attempt-1", 12);
+  const rev2 = sample("one", "attempt-1", 23);
+  if (rev2.metric.identity) rev2.metric.identity.source_revision = 2;
+  const r = compareCounterMetrics([rev1, rev2]);
+  assert.equal(r.state, "NOT_COMPARABLE");
+  assert.equal(r.total, null);
+  assert.ok(
+    r.limits.some((l) => l.includes("superseding revisions")),
+    `expected superseding-revision refusal, got: ${JSON.stringify(r.limits)}`,
+  );
+});
+
 test("T03 no input+cache token addition or inferred cumulative snapshot", () => {
   const a = sample("one", "attempt-1");
   const cache = sample("two", "attempt-1");

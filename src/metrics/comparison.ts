@@ -65,6 +65,7 @@ export function compareCounterMetrics(inputs: ComparableMetricInput[]): MetricCo
   }
   let total = 0;
   const seen = new Map<string, string>();
+  const revisions = new Map<string, number>();
   const refs = new Set<string>();
   let duplicates = 0;
   for (const { metric: m, adsProfile, privacyClearance, cohortRef } of inputs) {
@@ -101,14 +102,24 @@ export function compareCounterMetrics(inputs: ComparableMetricInput[]): MetricCo
     }
     // Physical leaf/retry and observation revision define source identity, not
     // the current GitHub login, model label, or report arrival order.
-    const key = JSON.stringify([
+    const identity = JSON.stringify([
       id.adapter_id,
       id.observation_id,
       id.physical_attempt_ref,
       id.metric_id,
       id.window_id,
-      id.source_revision,
     ]);
+    // A revision bump restates the same source event (src/correlate.ts: latest
+    // revisions only); summing both occurrences would double count it.
+    const priorRevision = revisions.get(identity);
+    if (priorRevision !== undefined && priorRevision !== id.source_revision) {
+      return refuse(
+        "superseding revisions of one physical observation cannot be summed into one delta",
+        inputs.length,
+      );
+    }
+    revisions.set(identity, id.source_revision);
+    const key = JSON.stringify([identity, id.source_revision]);
     const digest = canonicalDigest({
       value: m.value,
       name: m.name,
