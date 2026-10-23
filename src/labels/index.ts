@@ -41,6 +41,11 @@ export const RULE_TABLE = {
     ls: "DIAGNOSIS",
     todowrite: "PLANNING",
     taskoutput: "OTHER",
+    // v1.1.0: owner adjudication of the T19 golden set (docs/v0.2/golden/disagreements.md).
+    agent: "OTHER",
+    taskstop: "OTHER",
+    mcp__ccd_turn__update_plan: "PLANNING",
+    mcp__ccd_turn__wrap_up: "OTHER",
   },
   bash_input_class: {
     TEST: "TEST",
@@ -66,7 +71,7 @@ export const RULE_TABLE = {
 
 export const LABELER = {
   name: "task-meta-rules",
-  version: "1.0.0",
+  version: "1.1.0",
   rules_digest: canonicalDigest(RULE_TABLE),
 } as const;
 

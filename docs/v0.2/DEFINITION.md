@@ -238,3 +238,22 @@ resume ends a session with SessionEnd.
   (stale after `watch_max_seconds`); a second one ends `ALREADY_WATCHING`.
 - Kill switch checked every iteration: `enabled:false` in config or a file `<outbox>/STOP`
   (`TASK_META_AUTO_REPORT=0` is invisible to a WMI process); outbox state `DISABLED`.
+
+## 13. T19 golden set status (#16)
+
+- Sample: 224 real tool-call events (zcode 120, claude 72, codex 32) from the capture-plugin hook
+  spools of this v0.2 development, stratified by agent and tool_name/input_class (cap 15 per stratum,
+  fixed seed); metadata only (`docs/v0.2/golden/sample.json`, no session ids, timestamps or paths).
+- Labeler A = rule labeler v1; labeler B = independent blind labeling (`labeler-b.json`), committed
+  before agreement was computed. Both cover ACTION_CATEGORY only.
+- Cohen's kappa 0.960 (raw agreement 96.9%); per agent: claude 0.899, codex 1.000, zcode 0.979.
+- 7 disagreements (all A=UNKNOWN because the rule table has no entry for Agent, TaskStop,
+  update_plan, wrap_up); listed in `disagreements.md`. UNKNOWN share: A 29.9%, B 26.8%.
+- Caveat: most agreement is structural (both map the same shell input_class); the informative
+  signal is the UNKNOWN-heavy Bash:OTHER / PowerShell residue, which metadata cannot resolve.
+- Owner adjudication (2026-10-23): all 7 rows decided (Agent, TaskStop, wrap_up → OTHER;
+  update_plan → PLANNING); the four tools were added to the rule table as labeler v1.1.0. After
+  adjudication: 100% / kappa 1.000 in-sample (not out-of-sample evidence), A UNKNOWN 26.8%.
+- Note: `scripts/golden-agreement.ts` regenerates `agreement.md`/`disagreements.md` and would
+  drop the appended adjudication; keep the committed files as the record.
+- Regenerate: `node scripts/golden-sample.ts`, `node scripts/golden-agreement.ts`.
