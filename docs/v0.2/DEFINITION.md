@@ -148,3 +148,15 @@ Delivered on `task/tm-t17-sonnet`:
 - Edges: per-attempt `TRANSITION` plus real `GIT_PARENT` ancestry between DAG versions only (transitively reduced, `intermediate_commits`, bounded by `maxAncestryDepth`, default 200).
 - Relations per attempt pair: CONTINUES / BRANCHES_FROM / RESTARTS_FROM_BASE / UNRELATED / UNKNOWN with evidence; without git only exact SHA equality is decided.
 - Gaps: SHA_NOT_IN_REPO, UNFINISHED_ATTEMPT, NO_GIT, STALE_VERSION, CONCURRENT_BRANCHES, ANCESTRY_DEPTH_EXCEEDED. Cross-attempt revisits listed, not judged.
+
+## 10. T18 status (live fault injection)
+
+Delivered on `task/tm-t18-sonnet`:
+- `scripts/e2e-fault-injection.ts`: repeatable live harness, hard-restricted to `kaicreator-mm/task-meta-e2e`;
+  ran twice against Issue #3 (lost ACK, crash after POST, concurrent publishers, auto-report session lock,
+  in-place edit, pagination); evidence per scenario under the `--evidence` dir.
+- `test/publish-faults.test.ts`: offline fake-client mirror of every scenario, incl. a deterministic race
+  and 429/5xx/403 handling (the only coverage of scenario 6; not forced live).
+- Results: `docs/v0.2/fault-injection.md`. No defect in `src/publish`. Uncoordinated concurrent publishers
+  can both POST (equal-digest duplicate, then `ALREADY_PUBLISHED`); `auto-report`'s outbox lock prevents it
+  within one outbox directory only.
