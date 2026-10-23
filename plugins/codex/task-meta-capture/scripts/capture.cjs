@@ -12,7 +12,7 @@ const { basename, join } = require("node:path");
 const { extractRefs, parseWorktreeName } = require("./lib/binding-extract.cjs");
 const { gitInfo } = require("./lib/git-meta.cjs");
 
-const PLUGIN_VERSION = "0.2.3";
+const PLUGIN_VERSION = "0.2.4";
 const MAX_BINDING_REFS = 32;
 const SCHEMA = "task-meta/codex-hook/v1";
 const EVENTS = new Set([
@@ -344,7 +344,11 @@ function taskMetaCli() {
   return home ? { home, cli: join(home, "src", "cli.ts") } : null;
 }
 
-/** Start `task-meta auto-report --agent codex` detached; returns immediately. Never throws. */
+/**
+ * Start `task-meta auto-report --agent codex` detached; returns immediately. Never throws.
+ * Stop/SessionEnd always spawn directly (on Windows the slow PowerShell path cannot finish
+ * before Codex kills the job); only the SessionStart `watch` trigger uses WMI.
+ */
 function triggerAutoReport(sessionId, dir, trigger) {
   try {
     if (process.env.TASK_META_AUTO_REPORT === "0") return;
@@ -364,17 +368,19 @@ function triggerAutoReport(sessionId, dir, trigger) {
       "--trigger",
       trigger,
     ];
-    if (spawnMode() === "wmi") {
-      // Codex on Windows runs hooks inside a job object and kills the whole job when the session
-      // exits, taking a detached child with it (observed: no auto-report after a real `codex exec`).
-      // A process created through WMI is parented to the WMI service, outside that job.
-      const r = spawnSync("powershell.exe", wmiCreateArgs(process.execPath, args, t.home), {
-        stdio: "ignore",
-        windowsHide: true,
-        timeout: 4000,
-      });
-      if (r.status === 0) return;
-      logError(dir, namedError("AutoReportWmiSpawnFailed"));
+    if (trigger === "watch") {
+      // SessionStart has time to spare: start a long-lived watcher OUTSIDE Codex's job object
+      // (a process created through WMI is parented to the WMI service). Codex kills the job as
+      // soon as the session exits, which takes any hook-spawned child with it.
+      if (spawnMode() === "wmi") {
+        const r = spawnSync("powershell.exe", wmiCreateArgs(process.execPath, args, t.home), {
+          stdio: "ignore",
+          windowsHide: true,
+          timeout: 4000,
+        });
+        if (r.status === 0) return;
+        logError(dir, namedError("AutoReportWmiSpawnFailed"));
+      }
     }
     const child = spawn(process.execPath, args, {
       cwd: t.home,
@@ -417,6 +423,7 @@ function capture(raw) {
     appendFileSync(join(dir, `${sanitizeSessionId(e.session_id)}.jsonl`), line);
     if (e.event === "Stop") triggerAutoReport(e.session_id, dir, "stop");
     else if (e.event === "SessionEnd") triggerAutoReport(e.session_id, dir, "session-end");
+    else if (e.event === "SessionStart") triggerAutoReport(e.session_id, dir, "watch");
   } catch (err) {
     logError(dir, err);
   }
@@ -444,6 +451,7 @@ module.exports = {
   sanitizeSessionId,
   spoolDir,
   taskMetaCli,
+  triggerAutoReport,
   gitFacts,
   capture,
   main,

@@ -167,7 +167,7 @@ test("claude: the CLI entry accepts --agent claude --trigger and honours the kil
     { stderr: (s) => (err += s), stdout: () => {} },
   );
   assert.equal(bad, 2);
-  assert.match(err, /--trigger must be stop or session-end/);
+  assert.match(err, /--trigger must be stop, session-end or watch/);
 });
 
 test("claude: explicit --spool-dir / --projects-dir override the config", async () => {

@@ -112,7 +112,19 @@ test("0.2.0 lifecycle: worktree/binding refs, git facts, prompt never stored, St
   const env = { TASK_META_HOME: home, MARKER: marker };
   const head = git(repo, "rev-parse", "HEAD");
 
-  assert.equal(run(hook("SessionStart", repo, { source: "startup" }), spool, env).code, 0);
+  const startMarker = join(await tmp(), "start-marker.txt");
+  assert.equal(
+    run(hook("SessionStart", repo, { source: "startup" }), spool, {
+      ...env,
+      MARKER: startMarker,
+    }).code,
+    0,
+  );
+  assert.ok(await waitFor(startMarker), "SessionStart did not spawn the watcher");
+  assert.equal(
+    readFileSync(startMarker, "utf8"),
+    `auto-report --agent codex --session ${SID} --trigger watch`,
+  );
   assert.equal(
     run(
       hook("UserPromptSubmit", repo, {
@@ -139,7 +151,7 @@ test("0.2.0 lifecycle: worktree/binding refs, git facts, prompt never stored, St
     Record<string, unknown>,
     Record<string, unknown>,
   ];
-  assert.equal(start.plugin_version, "0.2.3");
+  assert.equal(start.plugin_version, "0.2.4");
   assert.equal(start.git_head, head);
   assert.equal(start.git_remote_repo, "kaicreator-mm/domain-harness");
   const wt = [
@@ -191,7 +203,10 @@ test("SessionEnd also triggers; other events do not", async () => {
   const home = await stubHome();
   const marker = join(await tmp(), "marker.txt");
   const env = { TASK_META_HOME: home, MARKER: marker };
-  run(hook("SessionStart", repo), spool, env);
+  run(hook("SessionStart", repo), spool, {
+    ...env,
+    MARKER: join(await tmp(), "start-marker.txt"),
+  });
   run(
     hook("PreToolUse", repo, { tool_name: "exec", tool_use_id: "c1", tool_input: {} }),
     spool,
@@ -221,11 +236,11 @@ test("missing task-meta CLI logs a class name and skips; non-git cwd still captu
   assert.match(log[0] as string, /^\S+ AutoReportCliMissing$/);
 });
 
-test("shipped config.json, manifest and CJS lib build are in place at 0.2.3", () => {
+test("shipped config.json, manifest and CJS lib build are in place at 0.2.4", () => {
   const c = JSON.parse(readFileSync(join(PLUGIN, "config.json"), "utf8"));
   assert.equal(c.taskMetaHome, "~/.task-meta/app");
   const m = JSON.parse(readFileSync(join(PLUGIN, ".codex-plugin", "plugin.json"), "utf8"));
-  assert.equal(m.version, "0.2.3");
+  assert.equal(m.version, "0.2.4");
   for (const f of ["binding-extract.cjs", "git-meta.cjs", "repo-aliases.json"]) {
     assert.ok(existsSync(join(PLUGIN, "scripts", "lib", f)), f);
   }
