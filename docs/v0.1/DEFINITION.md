@@ -180,6 +180,22 @@ PARTIAL_PROGRESS (gate subjects only INFERRED; one log inside the unfinished seg
 privacy sweep clean. v5 (candidate pin) exits 6 for this attempt because v5 has no PARTIAL verifier status; with an
 operator-stated `@sha` binding it renders. Not run: live publication, Tally reader, billed cost, ADS v4.16 main adoption.
 
+### 8.5 E2E test-subject publication, v5 verifier projection, gate-recorded subject (T12)
+
+- `config/ads-adoption.json` `e2e_test_subjects` allowlists `{repository, ads_pin, profile, report_schema_blob}`.
+  The candidate pin (`3041a1b`) plus `--publish` is allowed only when `--repo` and the pin match an entry (and the
+  blob equals the vendored schema): mode `E2E_TEST_SUBJECT`. Any other repository stays `CANDIDATE_NOT_PUBLISHABLE`.
+  This is not production adoption: the effective default stays v4 unless `adopted` lists a v5 main entry. The report
+  carries the public limit "ADS v4.16 candidate 3041a1b used as isolated E2E test subject; not production adoption".
+- v5 has no PARTIAL verifier status. A PARTIAL verifier is projected as `status` UNKNOWN, `subject_sha` null, empty
+  `checked`/`failed`, epistemic and currentness UNKNOWN, `skipped`/`unchecked` kept, coverage PARTIAL, plus the limit
+  "verifier partial progress not representable in ads/github/v5; detail in private manifest". Never PASS.
+  `VERIFIER_PARTIAL_UNREPRESENTABLE_IN_V5` is removed; v4 is unchanged.
+- Gate logs may carry `GATE_SUBJECT_SHA=<40hex>` and `GATE_TREE_CLEAN=yes|no`. A valid recorded SHA is the subject
+  with binding OBSERVED (preferred over mtime inference). `GATE_TREE_CLEAN=no` adds qualifier `working_tree_dirty`
+  and the record cannot support STRICT_TERMINAL_SUCCESS. A supplied `@sha` that differs from the recorded one is a
+  `subject_conflict`: the record is UNKNOWN and the outcome UNVERIFIED; it is never silently overridden.
+
 ## 9. ZCode capture plugin (task-meta-capture)
 
 `plugins/zcode/task-meta-capture` (v0.1.0, marketplace `dev-task-meta`) is a real ZCode plugin that closes the

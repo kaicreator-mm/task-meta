@@ -1,4 +1,13 @@
 {
-  "note": "ADS v4.16 main adoption entries. Empty until a qualified main v4.16 adoption SHA exists (ADS §16.7); version/v4.16 3041a1b is CANDIDATE_ONLY. An entry: { ads_version, main_sha (40 hex), report_schema_blob, profile: v5 }.",
-  "adopted": []
+  "note": "ADS v4.16 main adoption entries. Empty until a qualified main v4.16 adoption SHA exists (ADS §16.7); version/v4.16 3041a1b is CANDIDATE_ONLY. An entry: { ads_version, main_sha (40 hex), report_schema_blob, profile: v5 }. e2e_test_subjects: isolated E2E repositories that may receive the exact candidate pin; this is not production adoption and never changes the effective default pin.",
+  "adopted": [],
+  "e2e_test_subjects": [
+    {
+      "repository": "kaicreator-mm/task-meta-e2e",
+      "ads_pin": "3041a1be3f130e5cc5e676c2e56a99882adfd97c",
+      "profile": "v5",
+      "report_schema_blob": "7478313cc006162432649d734e59c5cd77db5106",
+      "note": "isolated E2E test subject; not production adoption"
+    }
+  ]
 }

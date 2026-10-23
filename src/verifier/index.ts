@@ -26,6 +26,21 @@ export interface ParseTaskCheckOptions {
   subject_binding: SubjectBinding;
 }
 
+const HEX40 = /^[0-9a-f]{40}$/;
+
+/** `GATE_SUBJECT_SHA=<40hex>` / `GATE_TREE_CLEAN=yes|no` lines recorded by the gate at run time. */
+export function extractGateRecord(text: string): { sha: string | null; clean: boolean | null } {
+  let sha: string | null = null;
+  let clean: boolean | null = null;
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^GATE_SUBJECT_SHA=(\S+)\s*$/.exec(line);
+    if (m && sha === null && HEX40.test(m[1] as string)) sha = m[1] as string;
+    const c = /^GATE_TREE_CLEAN=(yes|no)\s*$/.exec(line);
+    if (c && clean === null) clean = c[1] === "yes";
+  }
+  return { sha, clean };
+}
+
 function isStep(s: string): s is Step {
   return (STEPS as readonly string[]).includes(s);
 }
@@ -92,16 +107,47 @@ export function parseTaskCheckLog(text: string, opts: ParseTaskCheckOptions): Ve
   checked = [...new Set(checked)];
 
   const qualifiers: VerifierQualifier[] = [];
+  const recorded = extractGateRecord(text);
+  let subjectSha = opts.subject_sha;
+  let binding: SubjectBinding = opts.subject_binding;
+  let subjectConflict = false;
+  if (recorded.sha !== null) {
+    if (opts.subject_sha === null) {
+      subjectSha = recorded.sha;
+      binding = "OBSERVED";
+    } else if (opts.subject_sha === recorded.sha) {
+      binding = "OBSERVED";
+    } else {
+      subjectConflict = true;
+      subjectSha = null;
+      binding = "UNKNOWN";
+    }
+  }
   qualifiers.push({
     kind: "subject_binding",
-    value: opts.subject_binding,
-    epistemic: opts.subject_binding,
+    value: binding,
+    epistemic: binding,
     source_ref: opts.ref,
-    limits:
-      opts.subject_binding === "OBSERVED"
-        ? []
-        : [`verifier subject binding ${opts.subject_binding}`],
+    limits: binding === "OBSERVED" ? [] : [`verifier subject binding ${binding}`],
   });
+  if (subjectConflict) {
+    qualifiers.push({
+      kind: "subject_conflict",
+      value: "gate_recorded_sha_differs_from_supplied",
+      epistemic: "OBSERVED",
+      source_ref: opts.ref,
+      limits: ["supplied subject sha differs from the sha recorded by the gate; not verified"],
+    });
+  }
+  if (recorded.sha !== null && recorded.clean === false) {
+    qualifiers.push({
+      kind: "working_tree_dirty",
+      value: "yes",
+      epistemic: "OBSERVED",
+      source_ref: opts.ref,
+      limits: ["gate ran on a dirty working tree; uncommitted bytes were tested"],
+    });
+  }
   if (verdict !== null && exitCode === null) {
     qualifiers.push({
       kind: "exit_code_capture",
@@ -140,7 +186,7 @@ export function parseTaskCheckLog(text: string, opts: ParseTaskCheckOptions): Ve
       }
     : { total: null, passed: null, failed: null, skipped: null, epistemic: "UNKNOWN" };
 
-  const epistemic: Epistemic = hasEnd ? "OBSERVED" : "UNKNOWN";
+  const epistemic: Epistemic = hasEnd && !subjectConflict ? "OBSERVED" : "UNKNOWN";
   const environment: Record<string, string> = {};
   if (nodeMajor !== null) environment.node_major = nodeMajor;
 
@@ -148,7 +194,7 @@ export function parseTaskCheckLog(text: string, opts: ParseTaskCheckOptions): Ve
     verifier_id: "task-check",
     verifier_version: null,
     contract_ref: null,
-    subject_sha: opts.subject_sha,
+    subject_sha: subjectSha,
     environment,
     required_scope: requiredScope,
     checked: checkedIds,
@@ -195,8 +241,13 @@ function verdictOf(r: VerifierRecord): Verdict {
   return complete ? "PASS" : "PARTIAL";
 }
 
+function isDirty(r: VerifierRecord): boolean {
+  return r.qualifiers.some((q) => q.kind === "working_tree_dirty");
+}
+
 function isStrictEligible(r: VerifierRecord): boolean {
   return (
+    !isDirty(r) &&
     r.currentness === "CURRENT" &&
     r.subject_sha !== null &&
     bindingOf(r) === "OBSERVED" &&
@@ -302,7 +353,9 @@ export function assessVerifiers(input: AssessInput): VerifierAssessment {
       else if (v === "PARTIAL" || v === "NONE")
         limits.push(`verifier ${ref} did not check the full required scope`);
       else if (v === "PASS") {
-        if (r.currentness === "STALE")
+        if (isDirty(r))
+          limits.push(`verifier ${ref} ran on a dirty working tree; strict success not claimed`);
+        else if (r.currentness === "STALE")
           limits.push(`verifier ${ref} subject is stale against the attempt source`);
         else if (r.currentness === "UNKNOWN")
           limits.push(`verifier ${ref} currentness unknown; subject not matched to attempt source`);

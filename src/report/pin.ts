@@ -9,9 +9,18 @@ export interface AdoptionEntry {
   profile: "v5";
 }
 
+export interface E2eTestSubject {
+  repository: string;
+  ads_pin: string;
+  profile: "v5";
+  report_schema_blob: string;
+  note?: string;
+}
+
 export interface Adoption {
   note?: string;
   adopted: AdoptionEntry[];
+  e2e_test_subjects?: E2eTestSubject[];
 }
 
 /** Git blob sha1 of the vendored version/v4.16 report.schema.json. */
@@ -34,7 +43,7 @@ export function loadAdoption(): Adoption {
   return JSON.parse(readFileSync(url, "utf8")) as Adoption;
 }
 
-export type ProfileMode = "ADOPTED" | "CANDIDATE" | "V4_DEFAULT";
+export type ProfileMode = "ADOPTED" | "CANDIDATE" | "E2E_TEST_SUBJECT" | "V4_DEFAULT";
 
 export type ProfileResolution =
   | { ok: true; profile: ReportProfile; mode: ProfileMode; adsRevision: string }
@@ -44,6 +53,8 @@ export interface ResolveInput {
   profile?: ReportProfile;
   adsPin?: string;
   publish: boolean;
+  /** Target repository (owner/name); needed to match an e2e_test_subjects entry. */
+  repository?: string;
   adoption: Adoption;
 }
 
@@ -72,6 +83,19 @@ export function resolveProfile(input: ResolveInput): ProfileResolution {
   }
   if (pin === CANDIDATE_PIN) {
     if (input.publish) {
+      const subject = (input.adoption.e2e_test_subjects ?? []).find(
+        (e) =>
+          e.profile === "v5" && e.repository === input.repository && e.ads_pin === CANDIDATE_PIN,
+      );
+      if (subject) {
+        if (subject.report_schema_blob !== VENDORED_V416_SCHEMA_BLOB) {
+          return fail(
+            "SCHEMA_BLOB_MISMATCH",
+            `e2e test subject report_schema_blob ${subject.report_schema_blob} differs from the vendored v4.16 schema`,
+          );
+        }
+        return { ok: true, profile: "v5", mode: "E2E_TEST_SUBJECT", adsRevision: pin };
+      }
       return fail(
         "CANDIDATE_NOT_PUBLISHABLE",
         "version/v4.16 candidate pin is CANDIDATE_ONLY; publishing needs a qualified main adoption SHA",
