@@ -10,6 +10,7 @@ export {
   type Adoption,
   type AdoptionEntry,
   CANDIDATE_PIN,
+  type E2eTestSubject,
   gitBlobSha1,
   loadAdoption,
   type ProfileResolution,

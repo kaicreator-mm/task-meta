@@ -1,0 +1,31 @@
+GATE_SUBJECT_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+GATE_TREE_CLEAN=yes
+v24.21.0
+== lint ==
+
+> pkg@1.0.0 lint
+✖ 1 problem (0 errors, 1 warning)
+
+== typecheck ==
+> tsc --noEmit
+== test ==
+✔ case one (1.2ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 12.5
+✔ case two (0.3ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4.1
+task-check: 全绿
+EXIT=0

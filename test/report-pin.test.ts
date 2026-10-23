@@ -104,3 +104,76 @@ test("default flips to v5 (adopted pin) once adoption lists a v5 entry", () => {
   const bad = resolveProfile({ publish: false, adoption: adopted("c".repeat(40)) });
   assert.ok(!bad.ok && bad.code === "SCHEMA_BLOB_MISMATCH");
 });
+
+// ---- E2E test-subject allowlist ----
+
+const E2E_REPO = "kaicreator-mm/task-meta-e2e";
+const e2e = (over: Record<string, string> = {}): Adoption => ({
+  adopted: [],
+  e2e_test_subjects: [
+    {
+      repository: E2E_REPO,
+      ads_pin: CANDIDATE_PIN,
+      profile: "v5",
+      report_schema_blob: VENDORED_V416_SCHEMA_BLOB,
+      ...over,
+    },
+  ],
+});
+
+test("shipped config allowlists the E2E repo only", () => {
+  const subjects = loadAdoption().e2e_test_subjects ?? [];
+  assert.deepEqual(
+    subjects.map((s) => [s.repository, s.ads_pin]),
+    [[E2E_REPO, CANDIDATE_PIN]],
+  );
+});
+
+test("candidate + publish: allowlisted repository => E2E_TEST_SUBJECT", () => {
+  const r = resolveProfile({
+    profile: "v5",
+    adsPin: CANDIDATE_PIN,
+    publish: true,
+    repository: E2E_REPO,
+    adoption: e2e(),
+  });
+  assert.deepEqual(r, {
+    ok: true,
+    profile: "v5",
+    mode: "E2E_TEST_SUBJECT",
+    adsRevision: CANDIDATE_PIN,
+  });
+});
+
+test("candidate + publish: other repository, missing repository, wrong pin or blob are refused", () => {
+  const base = { profile: "v5", adsPin: CANDIDATE_PIN, publish: true } as const;
+  const other = resolveProfile({ ...base, repository: "other/repo", adoption: e2e() });
+  assert.ok(!other.ok && other.code === "CANDIDATE_NOT_PUBLISHABLE");
+  const none = resolveProfile({ ...base, adoption: e2e() });
+  assert.ok(!none.ok && none.code === "CANDIDATE_NOT_PUBLISHABLE");
+  const wrongPin = resolveProfile({
+    ...base,
+    repository: E2E_REPO,
+    adoption: e2e({ ads_pin: "d".repeat(40) }),
+  });
+  assert.ok(!wrongPin.ok && wrongPin.code === "CANDIDATE_NOT_PUBLISHABLE");
+  const blob = resolveProfile({
+    ...base,
+    repository: E2E_REPO,
+    adoption: e2e({ report_schema_blob: "c".repeat(40) }),
+  });
+  assert.ok(!blob.ok && blob.code === "SCHEMA_BLOB_MISMATCH");
+});
+
+test("candidate dry run is unaffected by the allowlist; default stays v4", () => {
+  const dry = resolveProfile({
+    profile: "v5",
+    adsPin: CANDIDATE_PIN,
+    publish: false,
+    repository: "other/repo",
+    adoption: e2e(),
+  });
+  assert.ok(dry.ok && dry.mode === "CANDIDATE");
+  const def = resolveProfile({ publish: true, repository: E2E_REPO, adoption: e2e() });
+  assert.ok(def.ok && def.profile === "v4" && def.mode === "V4_DEFAULT");
+});

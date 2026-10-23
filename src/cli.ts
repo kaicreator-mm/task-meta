@@ -28,10 +28,14 @@ import {
 import { EvidenceStore, NotFoundError } from "./store/index.ts";
 import {
   assessVerifiers,
+  extractGateRecord,
   parseTaskCheckLog,
   type SubjectBinding,
   toVerifierOutcome,
 } from "./verifier/index.ts";
+
+const E2E_LIMIT =
+  "ADS v4.16 candidate 3041a1b used as isolated E2E test subject; not production adoption";
 
 export interface CliDeps {
   client?: GitHubClient;
@@ -207,6 +211,7 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     ...(v.profile !== undefined ? { profile: v.profile as ReportProfile } : {}),
     ...(v["ads-pin"] !== undefined ? { adsPin: v["ads-pin"] } : {}),
     publish: v.publish === true,
+    repository: repo,
     adoption: loadAdoption(),
   });
   if (!resolution.ok) throw new UsageError(`${resolution.code}: ${resolution.message}`);
@@ -287,7 +292,8 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     const ref = `gate-log:${sha256Hex(text).slice(0, 12)}`;
     let subject: string | null = spec.sha;
     let binding: SubjectBinding = spec.sha !== null ? "OBSERVED" : "UNKNOWN";
-    if (spec.sha === null) {
+    // A gate-recorded GATE_SUBJECT_SHA (written at run time) beats mtime inference.
+    if (spec.sha === null && extractGateRecord(text).sha === null) {
       let mtimeMs: number | null = null;
       try {
         mtimeMs = (await stat(spec.file)).mtimeMs;
@@ -349,6 +355,7 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
       `${unboundCount} gate log(s) without subject binding (mtime not inferable)`,
     );
   }
+  if (resolution.mode === "E2E_TEST_SUBJECT") summary.limits.push(E2E_LIMIT);
   summary.limits.push(PUBLIC_GAP_LIMIT);
   summary.limits = [...new Set(summary.limits)];
 
