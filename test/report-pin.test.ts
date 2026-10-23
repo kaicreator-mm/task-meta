@@ -68,7 +68,7 @@ test("candidate pin: dry run ok (CANDIDATE), publish refused", () => {
     publish: true,
     adoption: adopted(),
   });
-  assert.ok(!pub.ok && pub.code === "CANDIDATE_NOT_PUBLISHABLE");
+  assert.ok(!pub.ok && pub.code === "CANDIDATE_TEST_PURPOSE_REQUIRED");
 });
 
 test("adopted main pin is ADOPTED and publishable", () => {
@@ -252,6 +252,7 @@ test("explicit candidate pin still needs the E2E allowlist to publish (owner def
     adsPin: CANDIDATE_PIN,
     publish: true,
     repository: "other/repo",
+    e2eTestOnly: true,
     adoption: owner(),
   });
   assert.ok(!r.ok && r.code === "CANDIDATE_TEST_PURPOSE_REQUIRED");
