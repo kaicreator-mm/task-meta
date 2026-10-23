@@ -387,3 +387,13 @@ test("CLI --zcode-hook-spool reads <dir>/<sessionId>.jsonl; missing file is a li
   assert.doesNotMatch(body2, /\| tool_wall_ms \|/);
   assert.match(body2, /no hook spool for this session/);
 });
+
+test("a hook session segment without Stop is a limit and keeps capture PARTIAL", () => {
+  const start = ent({ event: "SessionStart", hook_ts: T("09:58.000"), session_source: "startup" });
+  const stop = ent({ event: "Stop", hook_ts: T("11:00.000"), tool_call_count: 0 });
+  const open = collectZcodeRun(base({ hookSpool: spoolOf(start) }));
+  assert.ok(open.summary.limits.includes("1 hook session segment(s) without a Stop event"));
+  assert.equal(open.summary.capture_coverage, "PARTIAL");
+  const closed = collectZcodeRun(base({ hookSpool: spoolOf(start, stop) }));
+  assert.ok(!closed.summary.limits.some((l) => l.includes("without a Stop event")));
+});

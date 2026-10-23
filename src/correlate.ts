@@ -114,6 +114,8 @@ export interface SummaryInput {
     toolCalls: number;
     /** Distinct tool call ids in the rollout; null when no model-io was supplied. */
     rolloutToolCalls: number | null;
+    /** Hook session segments opened by SessionStart that never saw a Stop event. */
+    unclosedSegments: number;
   };
 }
 
@@ -273,6 +275,10 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
     limits.push(
       `hook tool calls=${input.hooks.toolCalls} differ from rollout tool calls=${input.hooks.rolloutToolCalls}; hook timing coverage PARTIAL`,
     );
+  }
+  const hookUnclosed = input.hooks?.unclosedSegments ?? 0;
+  if (hookUnclosed > 0) {
+    limits.push(`${hookUnclosed} hook session segment(s) without a Stop event`);
   }
   const degraded =
     mismatch || input.revisions.length > 0 || input.rejectedCount > 0 || hookMismatch;
@@ -477,8 +483,9 @@ export function buildAttemptSummary(input: SummaryInput): AttemptSummary {
 
   let capture: Coverage;
   if (!h && !haveModelIo) capture = "UNKNOWN";
-  else if (h && haveModelIo && haveRun && !degraded && runComplete) capture = "COMPLETE";
-  else capture = "PARTIAL";
+  else if (h && haveModelIo && haveRun && !degraded && runComplete && hookUnclosed === 0) {
+    capture = "COMPLETE";
+  } else capture = "PARTIAL";
 
   const last = segs[segs.length - 1];
   let sourceSha: string | null = null;

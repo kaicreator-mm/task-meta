@@ -321,6 +321,7 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
             eventCount: hookEventCount,
             toolCalls: hookAnalysis.tools.length,
             rolloutToolCalls: parsedIo !== null ? rolloutToolIds.size : null,
+            unclosedSegments: hookAnalysis.segments.filter((s) => s.completedAt === null).length,
           },
         }
       : {}),
