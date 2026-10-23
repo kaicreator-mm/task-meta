@@ -277,6 +277,53 @@ export interface VersionLineage {
   limits: string[];
 }
 
+/** T17 (#15): one edge of the cross-attempt version DAG. Direction is earlier state to later state. */
+export interface DagEdge {
+  /** TRANSITION: an attempt's observed before-to-after change. GIT_PARENT: real git ancestry between two versions present in the DAG. */
+  kind: "TRANSITION" | "GIT_PARENT";
+  from_version: string;
+  to_version: string;
+  attempt_ref: string | null;
+  transition_id: string | null;
+  /** TRANSITION edges only: the underlying transition kind (REVISIT edges point back to an earlier state). */
+  transition_kind: TransitionKind | null;
+  /** GIT_PARENT edges only: commits strictly between the two versions on the ancestry path (never materialized as versions). */
+  intermediate_commits: number | null;
+}
+
+/** T17: how a later attempt relates to an earlier one (by start time). Evidence only, no intent judged. */
+export type AttemptRelationKind =
+  | "CONTINUES"
+  | "BRANCHES_FROM"
+  | "RESTARTS_FROM_BASE"
+  | "UNRELATED"
+  | "UNKNOWN";
+
+/** T17: pairwise attempt relation with bounded evidence strings (short SHAs only). */
+export interface AttemptRelation {
+  earlier_attempt: string;
+  later_attempt: string;
+  relation: AttemptRelationKind;
+  evidence: string[];
+}
+
+/** T17 (#15): branch DAG of source versions across all attempts of one Issue. Never an ADS Task DAG. */
+export interface IssueVersionDag {
+  repository: string;
+  issue_number: number;
+  attempts: string[];
+  versions: VersionState[];
+  edges: DagEdge[];
+  /** Versions with no outgoing (non-revisit) edge. */
+  heads: string[];
+  /** Distinct heads; two or more means divergent attempts. */
+  branches: string[];
+  attempt_relations: AttemptRelation[];
+  /** Cross-attempt returns to a state the DAG had already moved past; raw provenance, not judged. */
+  revisits: { version_id: string; transition_ids: string[] }[];
+  gaps: { kind: string; ref: string; detail: string }[];
+}
+
 export type LabelKind =
   | "ACTION_CATEGORY"
   | "EDIT_MAGNITUDE"

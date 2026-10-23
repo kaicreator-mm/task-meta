@@ -107,3 +107,13 @@ Delivered on `task/tm-t13-sonnet`:
   `bindingInputFromSpool(entries)` feeds the resolver.
 T14 must implement the `auto-report` command and PR-to-Issue resolution; the spawned CLI path is
 `src/cli.ts` run with the hook's `node` (needs Node >= 24 for native TypeScript).
+
+## 8. T17 status (multi-attempt branch DAG)
+
+Delivered on `task/tm-t17-sonnet`:
+- `src/lineage/dag.ts`: pure `buildIssueDag({repository, issue_number, attempts, git?, maxAncestryDepth?, defaultBranchRef?})`;
+  types `IssueVersionDag`, `DagEdge`, `AttemptRelation` in `src/model.ts`. Not wired into CLI/auto-report (T14).
+- Versions dedup by SHA across attempts (`observed_in` is `<attempt_ref>#<segment>`); identical-transition attempts are dropped with a `DUPLICATE_ATTEMPT` gap.
+- Edges: per-attempt `TRANSITION` plus real `GIT_PARENT` ancestry between DAG versions only (transitively reduced, `intermediate_commits`, bounded by `maxAncestryDepth`, default 200).
+- Relations per attempt pair: CONTINUES / BRANCHES_FROM / RESTARTS_FROM_BASE / UNRELATED / UNKNOWN with evidence; without git only exact SHA equality is decided.
+- Gaps: SHA_NOT_IN_REPO, UNFINISHED_ATTEMPT, NO_GIT, STALE_VERSION, CONCURRENT_BRANCHES, ANCESTRY_DEPTH_EXCEEDED. Cross-attempt revisits listed, not judged.

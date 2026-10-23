@@ -220,3 +220,5 @@ export async function buildLineage(input: LineageInput): Promise<VersionLineage>
 
   return { versions, transitions, revisits, limits: [...new Set(limits)] };
 }
+
+export { type BuildIssueDagInput, buildIssueDag } from "./dag.ts";
