@@ -479,6 +479,7 @@ const e2eArgs = (dir: string, repo: string, extra: string[] = []) =>
     "--clearance-ref",
     "clearance:synthetic",
     "--publish",
+    "--e2e-test-only",
     ...extra,
   ]).map((a, i, all) => (all[i - 1] === "--repo" ? repo : a));
 
