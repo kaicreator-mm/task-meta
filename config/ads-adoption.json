@@ -1,6 +1,13 @@
 {
-  "note": "ADS v4.16 main adoption entries. Empty until a qualified main v4.16 adoption SHA exists (ADS §16.7); version/v4.16 3041a1b is CANDIDATE_ONLY. owner_authorized: project-owner authorization of the v4.16 candidate pin as the default profile (not ADS-main qualified). An adopted entry: { ads_version, main_sha (40 hex), report_schema_blob, profile: v5 }. e2e_test_subjects: isolated E2E repositories that may receive the exact candidate pin; this is not production adoption and never changes the effective default pin.",
-  "adopted": [],
+  "note": "v0.3: ADS v4.16 immutable qualified main source 718fb02e33b31f568736447b2b905883cc6fcc3a confirmed against GAIP v4.17 §16.7; existing unchanged strict v5 schema blob 7478313cc006162432649d734e59c5cd77db5106. Ordinary publication requires additional actual source/privacy clearance and live GitHub permission readback; config selection alone never proves those. Historical owner_authorized version-branch candidate retained as inert audit record only. E2E allowlist test purpose must be explicit.",
+  "adopted": [
+    {
+      "ads_version": "4.16.0",
+      "main_sha": "718fb02e33b31f568736447b2b905883cc6fcc3a",
+      "report_schema_blob": "7478313cc006162432649d734e59c5cd77db5106",
+      "profile": "v5"
+    }
+  ],
   "owner_authorized": [
     {
       "ads_version": "4.16",
