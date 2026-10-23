@@ -15,6 +15,14 @@ PostToolUseFailure, Stop), schema `task-meta/zcode-hook/v1`:
 - Stop: tool call count; SessionStart: source and model id; UserPromptSubmit: prompt size in bytes
 - `cwd_digest`: SHA-256 of the working directory (never the path)
 
+## Auto-report (0.2.x)
+
+Stop starts `task-meta auto-report --agent zcode --session <id> --trigger stop` detached
+(`TASK_META_HOME` or the plugin-local `config.json`; kill switch `TASK_META_AUTO_REPORT=0`).
+Since 0.2.1 the run waits `settle_seconds` (default 180) for the session to go quiet and defers to
+a later Stop if another turn starts, so a multi-turn session does not post one report per turn
+(`max_revisions_per_session`, default 3).
+
 ## What is NOT captured
 
 Tool input and response, result preview, prompts, attachments, model text (responseText,

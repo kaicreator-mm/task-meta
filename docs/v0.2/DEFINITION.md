@@ -148,3 +148,67 @@ Delivered on `task/tm-t17-sonnet`:
 - Edges: per-attempt `TRANSITION` plus real `GIT_PARENT` ancestry between DAG versions only (transitively reduced, `intermediate_commits`, bounded by `maxAncestryDepth`, default 200).
 - Relations per attempt pair: CONTINUES / BRANCHES_FROM / RESTARTS_FROM_BASE / UNRELATED / UNKNOWN with evidence; without git only exact SHA equality is decided.
 - Gaps: SHA_NOT_IN_REPO, UNFINISHED_ATTEMPT, NO_GIT, STALE_VERSION, CONCURRENT_BRANCHES, ANCESTRY_DEPTH_EXCEEDED. Cross-attempt revisits listed, not judged.
+
+## 10. T15 status (per-turn flood guard, Claude Code adapter + plugin)
+
+Delivered on `task/tm-t15-sonnet`.
+
+**Flood guard (all agents).** Codex fires Stop at the end of every turn (ZCode desktop likely does
+too), so a multi-turn session must not publish one report revision per turn:
+- Plugins pass `auto-report ... --trigger stop|session-end` (ZCode 0.2.1: Stop => `stop`; Codex 0.2.1:
+  Stop => `stop`, SessionEnd => `session-end`; Claude Code 0.2.1 likewise). Absent trigger (manual
+  CLI) and `--retry` behave like `session-end`.
+- `settle_seconds` (config, default 180): a `stop` run waits, before taking the session lock, until the
+  spool has had no new activity for that long (polls every <= 2 s; total bound `settle_seconds` + 30 s
+  of wall clock). Activity = any new spool entry except late `PostToolUse`/`PostToolUseFailure`/
+  `SubagentStop` lines. If activity arrives the run ends with outbox state `SUPERSEDED_BY_ACTIVITY`
+  (nothing published, not retried by `--retry`); the next Stop's run handles the report. Dry runs
+  never wait. `session-end` publishes immediately (a SessionEnd spool line also ends the Stop wait).
+- `max_revisions_per_session` (config, default 3): a `stop` run whose data changed after that many
+  revisions ends HELD with reason `REVISION_CAP` (store not advanced). A `session-end` run, `--retry`
+  or a manual run may publish ONE final revision (cap + 1, `supersedes` = the previous revision);
+  unchanged data stays idempotent (`ALREADY_PUBLISHED`) for every trigger.
+
+**Claude Code adapter** (`src/adapters/claude/*`, `collect-claude`, `auto-report --agent claude`;
+spool `~/.task-meta/claude-spool`, transcripts `~/.claude/projects`, both overridable in
+`config/auto-report.json`):
+- Transcripts `~/.claude/projects/<slug>/<sessionId>.jsonl` plus subagent files
+  `<slug>/<sessionId>/subagents/agent-<agentId>.jsonl` (same `sessionId`, `isSidechain:true`, `agentId`).
+  Sidechain lines inside the main file are handled too. One API response is written as several lines
+  (one per content block) repeating `message.id`, `requestId` and `usage`; they are folded by
+  `message.id` (identical in all 183/183 repeated ids of the specimen; if they ever differ the line with
+  the largest `output_tokens` wins and a limit is added). `<synthetic>` placeholders are not requests.
+- Anthropic `input_tokens` EXCLUDES cache reads/writes. Normalized to the task-meta convention:
+  `input_tokens` = input + `cache_read_input_tokens` + `cache_creation_input_tokens` (UNKNOWN unless all
+  three are present); `cache_read_tokens`, `cache_write_tokens` (= cache creation, 5m + 1h) exposed;
+  `output_tokens` includes thinking; `reasoning_tokens` = `output_tokens_details.thinking_tokens`
+  (exposed since the 2.1.x line seen locally), UNKNOWN (never 0) when absent.
+- Observations: MODEL_REQUEST per unique message id; TOOL_CALL per `tool_use` id with status from the
+  paired `tool_result` (`is_error`, permission denial => `denied`, none => `NO_RESULT`) and hook
+  `interrupt`; RUN_BOUNDARY per human prompt (turn end = last main-chain activity before the next prompt,
+  INFERRED). Metrics `model_requests`, `subagent_requests`, token metrics, `tool_calls`, `tool_failures`,
+  `tool_wall_ms`, `run_wall_ms`, `hook_events`; `model_wall_ms` and cost UNKNOWN. A subagent invocation
+  (`Agent`/`Task` tool) without a transcript file is a limit and makes the subagent metrics PARTIAL.
+- Never stored: text, thinking, signatures, tool input/output (`toolUseResult`), attachments, cwd,
+  branch, file paths, session title, `cost-state` estimates.
+
+**Claude Code plugin** `plugins/claude/task-meta-capture` 0.2.1 (marketplace `plugins/claude`, name
+`dev-task-meta`): ESM `.mjs` like ZCode, hooks in exec form (`command: node`, `args`), spool schema
+`task-meta/claude-hook/v1`. SessionStart/Stop record git heads + remote + worktree refs;
+SessionEnd records only HEAD + dirty (hard ~0.9 s ceiling: Claude Code cuts SessionEnd at 1.5 s);
+UserPromptSubmit records binding refs (in memory); tool events record outcome, class, size and Claude's
+own `duration_ms`. The transcript path is NOT recorded: the adapter locates it by session id.
+
+Hook contract, verified against the installed Claude Code 2.1.261 (strings of the shipped binary and
+`claude plugin validate`, read-only): event names SessionStart, UserPromptSubmit, PreToolUse,
+PostToolUse, PostToolUseFailure, Stop, SubagentStop, SessionEnd, PreCompact, Notification; common stdin
+fields `session_id`, `transcript_path`, `cwd`, `permission_mode`, `agent_id`; PreToolUse
+`tool_name/tool_input/tool_use_id`; PostToolUse `tool_response/duration_ms`; PostToolUseFailure
+`error/is_interrupt/duration_ms`; SessionStart `source` (startup|resume|clear|compact|fork), `model`;
+SessionEnd `reason` (clear|resume|logout|prompt_input_exit|other); hook entry fields `command`, `args`
+(exec form, `${CLAUDE_PLUGIN_ROOT}` substituted per element), `timeout` (seconds), `async`; SessionEnd
+default hook timeout 1500 ms; `claude plugin validate` accepts the plugin and the marketplace and
+rejects a bad hook entry. Assumed (not exercised against a live session in this task): that the
+desktop app (2.1.308 locally) fires plugin hooks identically, that async hooks of a `claude -p` run
+are not killed before they write (Stop/SessionEnd are therefore synchronous), and that `/clear` or a
+resume ends a session with SessionEnd.

@@ -245,7 +245,7 @@ test("classifier parity with src/adapters/zcode/parse.ts classifyCommand", async
 test("manifest, marketplace and hooks.json follow the ZCode contract", () => {
   const manifest = JSON.parse(readFileSync(join(PLUGIN, ".zcode-plugin", "plugin.json"), "utf8"));
   assert.equal(manifest.name, "task-meta-capture");
-  assert.equal(manifest.version, "0.2.0");
+  assert.equal(manifest.version, "0.2.1");
   assert.equal(manifest.hooks, "./hooks/hooks.json");
   const hooks = JSON.parse(readFileSync(join(PLUGIN, "hooks", "hooks.json"), "utf8")).hooks;
   assert.deepEqual(Object.keys(hooks).sort(), [

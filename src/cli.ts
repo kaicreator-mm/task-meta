@@ -1,6 +1,9 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { findClaudeTranscripts } from "./adapters/claude/find.ts";
+import { collectClaudeRun } from "./adapters/claude/index.ts";
+import { parseClaudeTranscript } from "./adapters/claude/parse.ts";
 import { findCodexRollouts } from "./adapters/codex/find.ts";
 import { collectCodexRun } from "./adapters/codex/index.ts";
 import { parseCodexRollout } from "./adapters/codex/parse.ts";
@@ -61,7 +64,14 @@ const USAGE = `usage: collect --repo <owner/name> --issue <n> --headless <file>
                [--git-dir <dir>] --store <dir> --out <report.md> [--operator-id codex]
                [--role builder] [--profile v4|v5] [--publish] [--ads-pin <sha>]
                [--clearance-ref <ref>] [--publisher-source-sha <40hex>]
-       auto-report --agent zcode|codex --session <id> [--spool-dir <dir>] [--rollout-dir <dir>]
+       collect-claude --repo <owner/name> --issue <n>
+               (--claude-transcript <session.jsonl>... | --claude-projects-dir <dir> --session-id <id>)
+               [--claude-hook-spool <dir>] [--gate-log <file>[@<40hex>]]... [--gate-sha <40hex>]
+               [--git-dir <dir>] --store <dir> --out <report.md> [--operator-id claude]
+               [--role builder] [--profile v4|v5] [--publish] [--ads-pin <sha>]
+               [--clearance-ref <ref>] [--publisher-source-sha <40hex>]
+       auto-report --agent zcode|claude|codex --session <id> [--trigger stop|session-end]
+               [--spool-dir <dir>] [--rollout-dir <dir>] [--projects-dir <dir>]
                [--store <dir>] [--outbox <dir>] [--config <file>] [--dry-run]
        auto-report --retry [--config <file>] [--outbox <dir>] [--dry-run]`;
 
@@ -85,6 +95,9 @@ function optionsFrom(argv: string[]) {
       "codex-session": { type: "string", multiple: true },
       "codex-sessions-dir": { type: "string" },
       "codex-hook-spool": { type: "string" },
+      "claude-transcript": { type: "string", multiple: true },
+      "claude-projects-dir": { type: "string" },
+      "claude-hook-spool": { type: "string" },
       "session-id": { type: "string" },
       "verifier-scope": { type: "string" },
       run: { type: "string", multiple: true },
@@ -131,10 +144,11 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
   const now = deps.now ?? (() => new Date());
   const [command, ...rest] = argv;
   if (command === "auto-report") return runAutoReportCommand(rest, deps, out);
-  if (command !== "collect" && command !== "collect-codex") {
+  if (command !== "collect" && command !== "collect-codex" && command !== "collect-claude") {
     throw new UsageError(`unknown or missing command: ${command ?? ""}`);
   }
   const isCodex = command === "collect-codex";
+  const isClaude = command === "collect-claude";
 
   let parsed: ReturnType<typeof optionsFrom>;
   try {
@@ -149,28 +163,30 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     "issue",
     "store",
     "out",
-    ...(isCodex ? [] : ["headless" as const]),
+    ...(isCodex || isClaude ? [] : ["headless" as const]),
   ] as const) {
     if (v[k] === undefined) throw new UsageError(`missing --${k}`);
   }
-  if (isCodex) {
-    for (const k of [
-      "headless",
-      "model-io",
-      "zcode-rollout-dir",
-      "zcode-hook-spool",
-      "run",
-    ] as const) {
-      if (v[k] !== undefined) throw new UsageError(`--${k} is not valid with collect-codex`);
+  const ZCODE_ONLY = [
+    "headless",
+    "model-io",
+    "zcode-rollout-dir",
+    "zcode-hook-spool",
+    "run",
+  ] as const;
+  const CODEX_ONLY = ["codex-session", "codex-sessions-dir", "codex-hook-spool"] as const;
+  const CLAUDE_ONLY = ["claude-transcript", "claude-projects-dir", "claude-hook-spool"] as const;
+  if (isCodex || isClaude) {
+    for (const k of ZCODE_ONLY) {
+      if (v[k] !== undefined) throw new UsageError(`--${k} is not valid with ${command}`);
+    }
+    for (const k of isCodex ? CLAUDE_ONLY : CODEX_ONLY) {
+      if (v[k] !== undefined) throw new UsageError(`--${k} is not valid with ${command}`);
     }
   } else {
-    for (const k of [
-      "codex-session",
-      "codex-sessions-dir",
-      "codex-hook-spool",
-      "session-id",
-    ] as const) {
-      if (v[k] !== undefined) throw new UsageError(`--${k} is only valid with collect-codex`);
+    for (const k of [...CODEX_ONLY, ...CLAUDE_ONLY, "session-id" as const]) {
+      if (v[k] !== undefined)
+        throw new UsageError(`--${k} is only valid with collect-codex/collect-claude`);
     }
   }
   const repo = v.repo as string;
@@ -212,7 +228,68 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
   let attemptRef: string;
   let codexRun: RunRecord | null = null;
   let collect: (clock: string) => AgentCollection;
-  if (isCodex) {
+  if (isClaude) {
+    let texts: string[];
+    const files = v["claude-transcript"];
+    if (files !== undefined && files.length > 0) {
+      if (v["claude-projects-dir"] !== undefined || v["session-id"] !== undefined) {
+        throw new UsageError("--claude-transcript excludes --claude-projects-dir/--session-id");
+      }
+      texts = [];
+      for (const f of files) texts.push(await readText(f, "claude transcript"));
+    } else if (v["claude-projects-dir"] !== undefined && v["session-id"] !== undefined) {
+      if (!SESSION_FILE_RE.test(v["session-id"]))
+        throw new UsageError("--session-id is not a valid id");
+      const found = await findClaudeTranscripts(resolve(v["claude-projects-dir"]), v["session-id"]);
+      if (found.main.length === 0)
+        throw new Failure(EXIT.FAILURE, "no transcript file found for the session id");
+      texts = [];
+      for (const f of [...found.main, ...found.subagents])
+        texts.push(await readText(f, "claude transcript"));
+    } else {
+      throw new UsageError(
+        "collect-claude needs --claude-transcript <file> or --claude-projects-dir <dir> --session-id <id>",
+      );
+    }
+    const sid =
+      texts.map((t) => parseClaudeTranscript(t).sessionId).find((x) => x !== null) ?? null;
+    if (sid === null) throw new Failure(EXIT.FAILURE, "no session id found in the supplied inputs");
+    attemptRef = sid;
+    const actor = {
+      role: v.role ?? "builder",
+      operator_kind: "agent",
+      operator_id: v["operator-id"] ?? "claude",
+      session_ref: sid,
+      transport_actor: null,
+    };
+    let hookSpool: string | undefined;
+    if (v["claude-hook-spool"] !== undefined) {
+      try {
+        const file = `${sid.replace(/[^A-Za-z0-9_-]/g, "_")}.jsonl`;
+        hookSpool = await readFile(join(v["claude-hook-spool"], file), "utf8");
+      } catch {
+        extraLimits.push(
+          "no hook spool for this session (capture plugin not enabled or no events)",
+        );
+      }
+    }
+    collect = (clock) => {
+      try {
+        const c = collectClaudeRun({
+          repository: repo,
+          issue_number: issue,
+          actor,
+          observed_at: clock,
+          transcript: texts,
+          ...(hookSpool !== undefined ? { hookSpool } : {}),
+        });
+        codexRun = c.run;
+        return c;
+      } catch (e) {
+        throw new Failure(EXIT.FAILURE, `collection failed: ${(e as Error).message}`);
+      }
+    };
+  } else if (isCodex) {
     let texts: string[];
     const files = v["codex-session"];
     if (files !== undefined && files.length > 0) {
@@ -347,11 +424,8 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
   const clock = existing ? existing.created_at : now().toISOString();
 
   const collection = collect(clock);
-  const runs: RunRecord[] = isCodex
-    ? codexRun
-      ? [codexRun]
-      : []
-    : runTexts.map((t) => parseRunRecord(t));
+  const runs: RunRecord[] =
+    isCodex || isClaude ? (codexRun ? [codexRun] : []) : runTexts.map((t) => parseRunRecord(t));
   const gates: GateInput[] = [];
   for (const spec of gateSpecs) {
     const text = await readText(spec.file, "gate log");
@@ -376,7 +450,7 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     collection,
     attemptRef,
     runs,
-    segmentPrefix: isCodex ? "codex:rollout" : "zcode:run-record",
+    segmentPrefix: isClaude ? "claude:transcript" : isCodex ? "codex:rollout" : "zcode:run-record",
     gates,
     requiredScope,
     gitDir: v["git-dir"] !== undefined ? resolve(v["git-dir"]) : undefined,

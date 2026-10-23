@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { extractRefs, parseWorktreeName } from "./lib/binding-extract.mjs";
 import { gitInfo } from "./lib/git-meta.mjs";
 
-export const PLUGIN_VERSION = "0.2.0";
+export const PLUGIN_VERSION = "0.2.1";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAX_BINDING_REFS = 32;
 export const SCHEMA = "task-meta/zcode-hook/v1";
@@ -316,7 +316,7 @@ export function taskMetaCli() {
 }
 
 /** Start `task-meta auto-report` detached; returns immediately. Never throws. */
-function triggerAutoReport(sessionId, dir) {
+function triggerAutoReport(sessionId, dir, trigger) {
   try {
     if (process.env.TASK_META_AUTO_REPORT === "0") return;
     if (sessionId.startsWith("-")) return;
@@ -327,7 +327,7 @@ function triggerAutoReport(sessionId, dir) {
     }
     const child = spawn(
       process.execPath,
-      [t.cli, "auto-report", "--agent", "zcode", "--session", sessionId],
+      [t.cli, "auto-report", "--agent", "zcode", "--session", sessionId, "--trigger", trigger],
       { cwd: t.home, detached: true, stdio: "ignore", windowsHide: true },
     );
     child.on("error", () => {});
@@ -344,7 +344,7 @@ export function capture(raw) {
     const line = `{"d":"${sha256Hex(jcs(e))}","e":${jcs(e)}}\n`;
     mkdirSync(dir, { recursive: true });
     appendFileSync(join(dir, `${sanitizeSessionId(e.session_id)}.jsonl`), line);
-    if (e.event === "Stop") triggerAutoReport(e.session_id, dir);
+    if (e.event === "Stop") triggerAutoReport(e.session_id, dir, "stop");
   } catch (err) {
     logError(dir, err);
   }

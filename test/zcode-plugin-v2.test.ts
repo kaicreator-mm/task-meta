@@ -121,7 +121,7 @@ test("0.2.0 session lifecycle: git heads, remote, worktree refs, binding refs, a
     Record<string, unknown>,
     Record<string, unknown>,
   ];
-  assert.equal(start.plugin_version, "0.2.0");
+  assert.equal(start.plugin_version, "0.2.1");
   assert.equal(start.git_head, head);
   assert.equal(start.git_dirty, false);
   assert.equal(start.git_remote_repo, "kaicreator-mm/domain-harness");
@@ -148,7 +148,10 @@ test("0.2.0 session lifecycle: git heads, remote, worktree refs, binding refs, a
   assert.deepEqual(stopE.worktree_refs, wt);
 
   assert.ok(await waitFor(marker), "auto-report was not spawned");
-  assert.equal(readFileSync(marker, "utf8"), "auto-report --agent zcode --session sess-synth-0001");
+  assert.equal(
+    readFileSync(marker, "utf8"),
+    "auto-report --agent zcode --session sess-synth-0001 --trigger stop",
+  );
 });
 
 test("TASK_META_AUTO_REPORT=0 disables the Stop trigger", async () => {
@@ -212,11 +215,11 @@ test("shipped config.json points at the default task-meta home", () => {
   assert.equal(c.taskMetaHome, "C:\\xDev\\kAiCreator\\task-meta\\main");
 });
 
-test("manifest and marketplace are at 0.2.0", () => {
+test("manifest and marketplace are at 0.2.1", () => {
   const manifest = JSON.parse(readFileSync(join(PLUGIN, ".zcode-plugin", "plugin.json"), "utf8"));
   const market = JSON.parse(
     readFileSync(join(ROOT, "plugins", "zcode", "marketplace.json"), "utf8"),
   );
-  assert.equal(manifest.version, "0.2.0");
-  assert.equal(market.plugins[0].version, "0.2.0");
+  assert.equal(manifest.version, "0.2.1");
+  assert.equal(market.plugins[0].version, "0.2.1");
 });
