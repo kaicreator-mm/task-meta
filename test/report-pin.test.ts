@@ -214,7 +214,7 @@ test("legacy all-repository candidate default is HELD for ordinary publishing", 
   const r = resolveProfile({ publish: true, repository: "any/repo", adoption: owner() });
   assert.ok(!r.ok && r.code === "UNQUALIFIED_CANDIDATE_DEFAULT");
   const shipped = resolveProfile({ publish: true, repository: "x/y", adoption: loadAdoption() });
-  assert.ok(!shipped.ok && shipped.code === "UNQUALIFIED_CANDIDATE_DEFAULT");
+  assert.ok(shipped.ok && shipped.mode === "ADOPTED" && shipped.adsRevision === MAIN);
   // An owner authorization is historical evidence, not an effective v5 dry-run pin.
   const dry = resolveProfile({ publish: false, repository: "any/repo", adoption: owner() });
   assert.ok(dry.ok && dry.profile === "v4" && dry.mode === "V4_DEFAULT");
@@ -259,7 +259,7 @@ test("explicit candidate pin still needs the E2E allowlist to publish (owner def
     e2eTestOnly: true,
     adoption: owner(),
   });
-  assert.ok(!r.ok && r.code === "CANDIDATE_TEST_PURPOSE_REQUIRED");
+  assert.ok(!r.ok && r.code === "CANDIDATE_NOT_PUBLISHABLE");
 });
 
 test("explicit ordinary candidate is denied even if owner authorization is all-repositories", () => {
