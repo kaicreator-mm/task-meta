@@ -313,3 +313,26 @@ export interface DiagnosticAggregate {
   /** Public field reference when the effective ADS schema has one; null = NOT_PUBLISHABLE. */
   publication_field: string | null;
 }
+
+// ---- v0.2: task binding (docs/v0.2/DEFINITION.md §2) ----
+
+export type BindingState = "RESOLVED" | "AMBIGUOUS" | "UNRESOLVED";
+
+/** One piece of evidence for which repository/Issue a session worked on. Never prompt text. */
+export interface BindingEvidence {
+  kind: "PROMPT_REF" | "WORKTREE_NAME" | "BRANCH_NAME" | "GIT_REMOTE" | "OPERATOR";
+  /** Normalized ref only, e.g. "kaicreator-mm/domain-harness#1296" or "kaicreator-mm/x". */
+  value: string;
+  epistemic: Epistemic;
+}
+
+/** Which repository and Issue (and optionally PR) a session's report belongs to. */
+export interface TaskBinding {
+  repository: string | null;
+  issue_number: number | null;
+  pr_number: number | null;
+  state: BindingState;
+  evidence: BindingEvidence[];
+  /** Why the binding is AMBIGUOUS/UNRESOLVED (bounded, no content). */
+  reasons: string[];
+}
