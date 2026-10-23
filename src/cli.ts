@@ -88,6 +88,7 @@ function optionsFrom(argv: string[]) {
       "model-io": { type: "string" },
       "zcode-rollout-dir": { type: "string" },
       "zcode-hook-spool": { type: "string" },
+      "verifier-scope": { type: "string" },
       run: { type: "string", multiple: true },
       "gate-log": { type: "string", multiple: true },
       "git-dir": { type: "string" },
@@ -323,10 +324,18 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     }
     records.push(parseTaskCheckLog(text, { ref, subject_sha: subject, subject_binding: binding }));
   }
+  // Required verifier scope is declared by the operator (e.g. a repo whose gate only runs tests);
+  // default is the full task-check scope.
+  const requiredScope = v["verifier-scope"]
+    ?.split(",")
+    .map((s) => s.trim())
+    .filter((s) => s !== "")
+    .map((s) => (s.startsWith("task-check:") ? s : `task-check:${s}`));
   const assessment = assessVerifiers({
     records,
     attempt_source_sha: summary.source_sha,
     run_exit_codes: runs.map((r) => r.exit_code),
+    ...(requiredScope && requiredScope.length > 0 ? { required_scope: requiredScope } : {}),
   });
   summary.verifier = toVerifierOutcome(assessment, summary.source_sha);
 

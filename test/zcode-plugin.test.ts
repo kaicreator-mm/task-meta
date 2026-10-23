@@ -245,7 +245,7 @@ test("classifier parity with src/adapters/zcode/parse.ts classifyCommand", async
 test("manifest, marketplace and hooks.json follow the ZCode contract", () => {
   const manifest = JSON.parse(readFileSync(join(PLUGIN, ".zcode-plugin", "plugin.json"), "utf8"));
   assert.equal(manifest.name, "task-meta-capture");
-  assert.equal(manifest.version, "0.1.0");
+  assert.equal(manifest.version, "0.1.1");
   assert.equal(manifest.hooks, "./hooks/hooks.json");
   const hooks = JSON.parse(readFileSync(join(PLUGIN, "hooks", "hooks.json"), "utf8")).hooks;
   assert.deepEqual(Object.keys(hooks).sort(), [
@@ -256,13 +256,17 @@ test("manifest, marketplace and hooks.json follow the ZCode contract", () => {
     "Stop",
     "UserPromptSubmit",
   ]);
-  for (const groups of Object.values(hooks) as Array<Array<Record<string, unknown>>>) {
+  for (const [event, groups] of Object.entries(hooks) as Array<
+    [string, Array<Record<string, unknown>>]
+  >) {
     assert.equal(groups.length, 1);
     const list = groups[0]?.hooks as Array<Record<string, unknown>>;
     const hook = list[0] ?? {};
     assert.equal(hook.type, "command");
     assert.equal(hook.command, `node "${ROOT_VAR}/scripts/capture.mjs"`);
-    assert.equal(hook.async, true);
+    // Stop runs in the foreground: a headless run exits right after Stop and would kill a
+    // background hook (observed in the first real E2E run: no Stop entry captured).
+    assert.equal(hook.async, event !== "Stop", event);
     assert.equal(hook.timeout, 5);
   }
   const market = JSON.parse(

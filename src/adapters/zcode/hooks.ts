@@ -4,7 +4,7 @@ import { canonicalDigest } from "../../canonical.ts";
 import type { Epistemic, ObservationRecord } from "../../model.ts";
 
 export const HOOK_SCHEMA = "task-meta/zcode-hook/v1";
-export const CAPTURE_PLUGIN = "task-meta-capture@0.1.0";
+export const CAPTURE_PLUGIN_NAME = "task-meta-capture";
 
 export type HookEvent =
   | "SessionStart"
@@ -175,6 +175,8 @@ export interface HookAnalysis {
   segments: HookSegment[];
   /** Tool calls seen with more than one distinct Pre or Post entry (first one wins). */
   conflicting: number;
+  /** `task-meta-capture@<versions seen in the spool>`; "unknown" when entries carry none. */
+  plugin: string;
 }
 
 function ms(ts: string | null): number | null {
@@ -249,7 +251,11 @@ export function analyzeHooks(entries: HookEntry[]): HookAnalysis {
       inputClass: r.pre?.input_class ?? r.post?.input_class ?? null,
     });
   }
-  return { tools, segments, conflicting };
+  const versions = [
+    ...new Set(entries.map((e) => e.plugin_version).filter((v) => v !== "")),
+  ].sort();
+  const plugin = `${CAPTURE_PLUGIN_NAME}@${versions.length > 0 ? versions.join("+") : "unknown"}`;
+  return { tools, segments, conflicting, plugin };
 }
 
 /**

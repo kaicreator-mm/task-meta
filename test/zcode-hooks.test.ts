@@ -21,7 +21,7 @@ const T = (s: string) => `2026-10-22T13:${s}Z`; // "10:05.000" -> 13:10:05.000
 function ent(over: Partial<HookEntry> & Pick<HookEntry, "event">): HookEntry {
   return {
     schema: "task-meta/zcode-hook/v1",
-    plugin_version: "0.1.0",
+    plugin_version: "0.1.1",
     session_id: SID,
     turn_id: "turn-1",
     trace_id: "trace-1",
@@ -142,7 +142,7 @@ test("Pre+Post gives started/completed/duration/status, hook metrics and capabil
   assert.equal(r.profile.signals.tool_timing?.supported, true);
   assert.equal(r.profile.signals.tool_timing?.epistemic, "OBSERVED");
   assert.equal(r.profile.signals.tool_outcome?.supported, true);
-  assert.equal(r.profile.signals.capture_plugin?.notes, "task-meta-capture@0.1.0");
+  assert.equal(r.profile.signals.capture_plugin?.notes, "task-meta-capture@0.1.1");
   assert.deepEqual(findForbiddenContent(r.observations), []);
 });
 

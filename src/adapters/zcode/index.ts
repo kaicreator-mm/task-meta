@@ -16,7 +16,6 @@ import type {
 import { ZCODE_CAPABILITY, zcodeCapabilityWithHooks } from "./capability.ts";
 import {
   analyzeHooks,
-  CAPTURE_PLUGIN,
   type HookAnalysis,
   hookOnlyTool,
   mergeHookTool,
@@ -328,7 +327,7 @@ export function collectZcodeRun(input: ZcodeRunInput): ZcodeCollection {
   });
 
   return {
-    profile: hookAnalysis ? zcodeCapabilityWithHooks(CAPTURE_PLUGIN) : ZCODE_CAPABILITY,
+    profile: hookAnalysis ? zcodeCapabilityWithHooks(hookAnalysis.plugin) : ZCODE_CAPABILITY,
     observations,
     summary,
     rejected,
