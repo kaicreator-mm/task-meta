@@ -90,3 +90,20 @@ Not in v0.2: Tally reader leg (#8/#14), #7, #9, #17 publication (ADS field), bil
    duplicate report, CONFLICT surfaced.
 4. Golden set: agreement and confusion matrix published in the repo; owner adjudication done.
 5. `tools/task-check.sh` 全绿.
+
+## 7. T13 status (binding resolver + ZCode plugin 0.2.0)
+
+Delivered on `task/tm-t13-sonnet`:
+- `plugins/shared/binding-extract.mjs` (`extractRefs`, `parseWorktreeName`) and `git-meta.mjs`
+  (`gitInfo`, 2 s per call / 3.5 s total budget); copied into plugins by `npm run sync-plugins`
+  (also copies `config/repo-aliases.json`); a test fails the gate on drift.
+- `src/binding/index.ts`: `resolveBinding`, `loadRepoInventory`. A bare `REPO` mention in the prompt
+  is weak: it binds the repository only when no prompt ref, worktree, branch or remote names one.
+  Git remotes outside `kaicreator-mm/*` are ignored with a reason.
+- ZCode plugin 0.2.0: `binding_refs` (UserPromptSubmit), `git_head`/`git_dirty`/`git_remote_repo`/
+  `worktree_refs` (SessionStart, Stop); Stop spawns `node <TASK_META_HOME|config.json>/src/cli.ts
+  auto-report --agent zcode --session <id>` detached (`TASK_META_AUTO_REPORT=0` disables).
+- Ingestion: without run.txt, run segments derive from Stop/SessionStart git heads;
+  `bindingInputFromSpool(entries)` feeds the resolver.
+T14 must implement the `auto-report` command and PR-to-Issue resolution; the spawned CLI path is
+`src/cli.ts` run with the hook's `node` (needs Node >= 24 for native TypeScript).

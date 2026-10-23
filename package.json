@@ -10,6 +10,7 @@
   "scripts": {
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
+    "sync-plugins": "node scripts/sync-plugin-shared.mjs",
     "test": "node --test \"test/**/*.test.ts\""
   },
   "dependencies": {
