@@ -6,12 +6,13 @@ import {
   CANDIDATE_PIN,
   gitBlobSha1,
   loadAdoption,
+  QUALIFIED_V416_MAIN_SHA,
   resolveProfile,
   VENDORED_V416_SCHEMA_BLOB,
   vendoredV416SchemaBlob,
 } from "../src/report/index.ts";
 
-const MAIN = "a".repeat(40);
+const MAIN = QUALIFIED_V416_MAIN_SHA;
 const empty: Adoption = { adopted: [] };
 const adopted = (blob = VENDORED_V416_SCHEMA_BLOB): Adoption => ({
   adopted: [{ ads_version: "4.16.0", main_sha: MAIN, report_schema_blob: blob, profile: "v5" }],
@@ -135,6 +136,7 @@ test("candidate + publish: allowlisted repository => E2E_TEST_SUBJECT", () => {
     adsPin: CANDIDATE_PIN,
     publish: true,
     repository: E2E_REPO,
+    e2eTestOnly: true,
     adoption: e2e(),
   });
   assert.deepEqual(r, {
@@ -146,7 +148,7 @@ test("candidate + publish: allowlisted repository => E2E_TEST_SUBJECT", () => {
 });
 
 test("candidate + publish: other repository, missing repository, wrong pin or blob are refused", () => {
-  const base = { profile: "v5", adsPin: CANDIDATE_PIN, publish: true } as const;
+  const base = { profile: "v5", adsPin: CANDIDATE_PIN, publish: true, e2eTestOnly: true } as const;
   const other = resolveProfile({ ...base, repository: "other/repo", adoption: e2e() });
   assert.ok(!other.ok && other.code === "CANDIDATE_NOT_PUBLISHABLE");
   const none = resolveProfile({ ...base, adoption: e2e() });
@@ -204,18 +206,14 @@ test("shipped config carries the v4.16 owner authorization", () => {
   assert.equal(e?.authorization_ref, "owner-authorization:2026-10-23:kaicreator-mm");
 });
 
-test("default is v5 OWNER_AUTHORIZED for any repository, publish or not", () => {
-  for (const publish of [true, false]) {
-    const r = resolveProfile({ publish, repository: "any/repo", adoption: owner() });
-    assert.deepEqual(r, {
-      ok: true,
-      profile: "v5",
-      mode: "OWNER_AUTHORIZED",
-      adsRevision: CANDIDATE_PIN,
-    });
-  }
+test("legacy all-repository candidate default is HELD for ordinary publishing", () => {
+  const r = resolveProfile({ publish: true, repository: "any/repo", adoption: owner() });
+  assert.ok(!r.ok && r.code === "UNQUALIFIED_CANDIDATE_DEFAULT");
   const shipped = resolveProfile({ publish: true, repository: "x/y", adoption: loadAdoption() });
-  assert.ok(shipped.ok && shipped.mode === "OWNER_AUTHORIZED");
+  assert.ok(!shipped.ok && shipped.code === "UNQUALIFIED_CANDIDATE_DEFAULT");
+  // An owner authorization is historical evidence, not an effective v5 dry-run pin.
+  const dry = resolveProfile({ publish: false, repository: "any/repo", adoption: owner() });
+  assert.ok(dry.ok && dry.profile === "v4" && dry.mode === "V4_DEFAULT");
 });
 
 test("explicit v4 is honoured; without owner_authorized the default is v4 again", () => {
@@ -231,25 +229,21 @@ test("an adopted main entry wins over the owner authorization", () => {
   assert.deepEqual(r, { ok: true, profile: "v5", mode: "ADOPTED", adsRevision: MAIN });
 });
 
-test("owner authorization with a mismatching schema blob is refused", () => {
+test("legacy owner authorization never bypasses admission, even with a matching schema", () => {
   const r = resolveProfile({
     publish: true,
     repository: "x/y",
     adoption: owner({ report_schema_blob: "c".repeat(40) }),
   });
-  assert.ok(!r.ok && r.code === "SCHEMA_BLOB_MISMATCH");
+  assert.ok(!r.ok && r.code === "UNQUALIFIED_CANDIDATE_DEFAULT");
 });
 
-test("owner scope list limits the default to those repositories", () => {
+test("legacy scoped owner authorization does not grant a v5 default to any repository", () => {
   const scoped = owner({ scope: ["kaicreator-mm/a"] });
-  const inScope = resolveProfile({
-    publish: true,
-    repository: "kaicreator-mm/a",
-    adoption: scoped,
-  });
-  assert.ok(inScope.ok && inScope.mode === "OWNER_AUTHORIZED");
-  const out = resolveProfile({ publish: true, repository: "kaicreator-mm/b", adoption: scoped });
-  assert.ok(out.ok && out.profile === "v4");
+  for (const repo of ["kaicreator-mm/a", "kaicreator-mm/b"]) {
+    const r = resolveProfile({ publish: true, repository: repo, adoption: scoped });
+    assert.ok(!r.ok && r.code === "UNQUALIFIED_CANDIDATE_DEFAULT");
+  }
 });
 
 test("explicit candidate pin still needs the E2E allowlist to publish (owner default unaffected)", () => {
@@ -260,5 +254,31 @@ test("explicit candidate pin still needs the E2E allowlist to publish (owner def
     repository: "other/repo",
     adoption: owner(),
   });
+  assert.ok(!r.ok && r.code === "CANDIDATE_TEST_PURPOSE_REQUIRED");
+});
+
+test("explicit ordinary candidate is denied even if owner authorization is all-repositories", () => {
+  const r = resolveProfile({
+    profile: "v5", adsPin: CANDIDATE_PIN, publish: true,
+    repository: "kaicreator-mm/ordinary", e2eTestOnly: true, adoption: owner(),
+  });
   assert.ok(!r.ok && r.code === "CANDIDATE_NOT_PUBLISHABLE");
+});
+
+test("allowlisted test repository still requires explicit test purpose", () => {
+  const r = resolveProfile({
+    profile: "v5", adsPin: CANDIDATE_PIN, publish: true,
+    repository: E2E_REPO, adoption: e2e(),
+  });
+  assert.ok(!r.ok && r.code === "CANDIDATE_TEST_PURPOSE_REQUIRED");
+});
+
+test("qualified v4.16 main pin is required; merely shaped 40-hex adoption fails", () => {
+  const fake: Adoption = {
+    adopted: [{ ads_version: "4.16.0", main_sha: "a".repeat(40),
+      report_schema_blob: VENDORED_V416_SCHEMA_BLOB, profile: "v5" }],
+  };
+  const r = resolveProfile({ profile: "v5", adsPin: "a".repeat(40), publish: true,
+    repository: "example/repo", adoption: fake });
+  assert.ok(!r.ok && r.code === "UNQUALIFIED_MAIN_PIN");
 });
