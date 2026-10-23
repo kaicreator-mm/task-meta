@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { CostObservation, MetricValue } from "../src/model.ts";
+import type { MetricValue } from "../src/model.ts";
 import {
   compareCounterMetrics, sumWitnessedBilledCost,
   type ComparableMetricInput, type CostFact,
