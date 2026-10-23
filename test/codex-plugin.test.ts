@@ -376,7 +376,7 @@ test("end to end: plugin spool + rollout => source_sha, hook metrics, honest cap
   assert.equal(r.run.head_after, head);
   assert.equal(r.run.head_before, head);
   assert.equal(r.summary.metrics.find((m) => m.name === "hook_events")?.value, 3);
-  assert.equal(r.profile.signals.capture_plugin?.notes, "task-meta-capture@0.2.2");
+  assert.equal(r.profile.signals.capture_plugin?.notes, "task-meta-capture@0.2.3");
   assert.equal(r.profile.signals.source_head?.epistemic, "OBSERVED");
   assert.ok(r.summary.observation_refs.includes(`codex:hook-spool:${SID}`));
   assert.ok(!r.limits.some((l) => /source SHA at the end/.test(l)));

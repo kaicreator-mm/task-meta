@@ -5,14 +5,14 @@
 // and ALWAYS exits 0. On failure only an error class name is logged to <spool>/_errors.log.
 "use strict";
 const { createHash } = require("node:crypto");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const { appendFileSync, existsSync, mkdirSync, readFileSync } = require("node:fs");
 const { homedir } = require("node:os");
 const { basename, join } = require("node:path");
 const { extractRefs, parseWorktreeName } = require("./lib/binding-extract.cjs");
 const { gitInfo } = require("./lib/git-meta.cjs");
 
-const PLUGIN_VERSION = "0.2.2";
+const PLUGIN_VERSION = "0.2.3";
 const MAX_BINDING_REFS = 32;
 const SCHEMA = "task-meta/codex-hook/v1";
 const EVENTS = new Set([
@@ -354,16 +354,58 @@ function triggerAutoReport(sessionId, dir, trigger) {
       logError(dir, namedError("AutoReportCliMissing"));
       return;
     }
-    const child = spawn(
-      process.execPath,
-      [t.cli, "auto-report", "--agent", "codex", "--session", sessionId, "--trigger", trigger],
-      { cwd: t.home, detached: true, stdio: "ignore", windowsHide: true },
-    );
+    const args = [
+      t.cli,
+      "auto-report",
+      "--agent",
+      "codex",
+      "--session",
+      sessionId,
+      "--trigger",
+      trigger,
+    ];
+    if (spawnMode() === "wmi") {
+      // Codex on Windows runs hooks inside a job object and kills the whole job when the session
+      // exits, taking a detached child with it (observed: no auto-report after a real `codex exec`).
+      // A process created through WMI is parented to the WMI service, outside that job.
+      const r = spawnSync("powershell.exe", wmiCreateArgs(process.execPath, args, t.home), {
+        stdio: "ignore",
+        windowsHide: true,
+        timeout: 4000,
+      });
+      if (r.status === 0) return;
+      logError(dir, namedError("AutoReportWmiSpawnFailed"));
+    }
+    const child = spawn(process.execPath, args, {
+      cwd: t.home,
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
     child.on("error", () => {});
     child.unref();
   } catch (err) {
     logError(dir, err);
   }
+}
+
+/** "wmi" on Windows unless TASK_META_SPAWN_MODE=direct (tests); "direct" elsewhere. */
+function spawnMode() {
+  const m = process.env.TASK_META_SPAWN_MODE;
+  if (m === "direct" || m === "wmi") return m;
+  return process.platform === "win32" ? "wmi" : "direct";
+}
+
+/** PowerShell argv that creates `exe args...` via Win32_Process.Create in `cwd`. */
+function wmiCreateArgs(exe, args, cwd) {
+  const q = (s) => `"${String(s).replace(/"/g, '\\"')}"`;
+  const commandLine = [exe, ...args].map(q).join(" ");
+  const ps = (s) => `'${String(s).replace(/'/g, "''")}'`;
+  const script =
+    "$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments " +
+    `@{ CommandLine = ${ps(commandLine)}; CurrentDirectory = ${ps(cwd)} }; ` +
+    "if ($r.ReturnValue -ne 0) { exit 1 }";
+  return ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script];
 }
 
 function capture(raw) {
@@ -391,6 +433,8 @@ function main() {
 }
 
 module.exports = {
+  spawnMode,
+  wmiCreateArgs,
   PLUGIN_VERSION,
   SCHEMA,
   jcs,

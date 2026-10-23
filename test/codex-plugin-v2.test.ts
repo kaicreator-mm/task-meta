@@ -63,6 +63,7 @@ function run(stdin: string, spool: string, env: Record<string, string | undefine
     TASK_META_CODEX_SPOOL: spool,
     TASK_META_HOME: undefined,
     TASK_META_AUTO_REPORT: undefined,
+    TASK_META_SPAWN_MODE: "direct",
     ...env,
   };
   const r = spawnSync(process.execPath, [RUN], {
@@ -138,7 +139,7 @@ test("0.2.0 lifecycle: worktree/binding refs, git facts, prompt never stored, St
     Record<string, unknown>,
     Record<string, unknown>,
   ];
-  assert.equal(start.plugin_version, "0.2.2");
+  assert.equal(start.plugin_version, "0.2.3");
   assert.equal(start.git_head, head);
   assert.equal(start.git_remote_repo, "kaicreator-mm/domain-harness");
   const wt = [
@@ -220,11 +221,11 @@ test("missing task-meta CLI logs a class name and skips; non-git cwd still captu
   assert.match(log[0] as string, /^\S+ AutoReportCliMissing$/);
 });
 
-test("shipped config.json, manifest and CJS lib build are in place at 0.2.2", () => {
+test("shipped config.json, manifest and CJS lib build are in place at 0.2.3", () => {
   const c = JSON.parse(readFileSync(join(PLUGIN, "config.json"), "utf8"));
   assert.equal(c.taskMetaHome, "~/.task-meta/app");
   const m = JSON.parse(readFileSync(join(PLUGIN, ".codex-plugin", "plugin.json"), "utf8"));
-  assert.equal(m.version, "0.2.2");
+  assert.equal(m.version, "0.2.3");
   for (const f of ["binding-extract.cjs", "git-meta.cjs", "repo-aliases.json"]) {
     assert.ok(existsSync(join(PLUGIN, "scripts", "lib", f)), f);
   }
