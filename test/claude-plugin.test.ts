@@ -200,7 +200,7 @@ test("full lifecycle: sentinels never reach the spool; binding refs and git head
   const [start, prompt, pre, post, fail, subStop, compact, note, stopE] = lines(spool) as Array<
     Record<string, unknown>
   >;
-  assert.equal(start?.plugin_version, "0.2.1");
+  assert.equal(start?.plugin_version, "0.2.2");
   assert.equal(start?.agent, "claude");
   assert.equal(start?.session_source, "startup");
   assert.equal(start?.model, "claude-opus-5-5");
@@ -396,13 +396,13 @@ test("manifest, marketplace and hooks.json follow the Claude Code contract", () 
     readFileSync(join(PLUGIN, ".claude-plugin", "plugin.json"), "utf8"),
   ) as Record<string, unknown>;
   assert.equal(manifest.name, "task-meta-capture");
-  assert.equal(manifest.version, "0.2.1");
+  assert.equal(manifest.version, "0.2.2");
   const market = JSON.parse(
     readFileSync(join(MARKET, ".claude-plugin", "marketplace.json"), "utf8"),
   ) as { name: string; plugins: Array<Record<string, unknown>> };
   assert.equal(market.name, "dev-task-meta");
   assert.equal(market.plugins[0]?.name, "task-meta-capture");
-  assert.equal(market.plugins[0]?.version, "0.2.1");
+  assert.equal(market.plugins[0]?.version, "0.2.2");
   assert.equal(market.plugins[0]?.source, "./task-meta-capture");
 
   const hooks = JSON.parse(readFileSync(join(PLUGIN, "hooks", "hooks.json"), "utf8"))
@@ -429,7 +429,7 @@ test("manifest, marketplace and hooks.json follow the Claude Code contract", () 
     assert.ok(Number(h.timeout) > 0 && Number(h.timeout) <= 5, ev);
   }
   const c = JSON.parse(readFileSync(join(PLUGIN, "config.json"), "utf8"));
-  assert.equal(c.taskMetaHome, "C:\\xDev\\kAiCreator\\task-meta\\main");
+  assert.equal(c.taskMetaHome, "~/.task-meta/app");
 });
 
 test("claude plugin validate passes for the plugin and the marketplace (when the CLI is installed)", (t) => {

@@ -28,7 +28,7 @@ let seq = 0;
 export function ent(over: Record<string, unknown>): Record<string, unknown> {
   return {
     schema: "task-meta/claude-hook/v1",
-    plugin_version: "0.2.1",
+    plugin_version: "0.2.2",
     agent: "claude",
     session_id: SID,
     agent_id: null,

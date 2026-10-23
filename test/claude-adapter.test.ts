@@ -44,7 +44,7 @@ const line = (e: unknown): string => `{"d":"${canonicalDigest(e)}","e":${canonic
 function hook(over: Record<string, unknown>): Record<string, unknown> {
   return {
     schema: CLAUDE_HOOK_SCHEMA,
-    plugin_version: "0.2.1",
+    plugin_version: "0.2.2",
     agent: "claude",
     session_id: SID,
     agent_id: null,
@@ -357,7 +357,7 @@ test("hook spool: heads, tool duration_ms and Bash class win over transcript tim
   assert.equal(c.run.head_before, H1);
   assert.equal(c.run.head_after, H2);
   assert.equal(metric(c.summary.metrics, "hook_events").value, 6);
-  assert.equal(c.profile.signals.capture_plugin?.notes, "task-meta-capture@0.2.1");
+  assert.equal(c.profile.signals.capture_plugin?.notes, "task-meta-capture@0.2.2");
   assert.equal(c.profile.signals.source_head?.epistemic, "OBSERVED");
   const t1 = c.observations.find((o) => o.source_event_id === "tool:toolu_1");
   assert.equal(t1?.duration_ms, 1500);

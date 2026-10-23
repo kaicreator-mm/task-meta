@@ -121,7 +121,7 @@ test("0.2.0 session lifecycle: git heads, remote, worktree refs, binding refs, a
     Record<string, unknown>,
     Record<string, unknown>,
   ];
-  assert.equal(start.plugin_version, "0.2.1");
+  assert.equal(start.plugin_version, "0.2.2");
   assert.equal(start.git_head, head);
   assert.equal(start.git_dirty, false);
   assert.equal(start.git_remote_repo, "kaicreator-mm/domain-harness");
@@ -212,14 +212,14 @@ test("non-git or missing cwd yields null git fields and still captures", async (
 
 test("shipped config.json points at the default task-meta home", () => {
   const c = JSON.parse(readFileSync(join(PLUGIN, "config.json"), "utf8"));
-  assert.equal(c.taskMetaHome, "C:\\xDev\\kAiCreator\\task-meta\\main");
+  assert.equal(c.taskMetaHome, "~/.task-meta/app");
 });
 
-test("manifest and marketplace are at 0.2.1", () => {
+test("manifest and marketplace are at 0.2.2", () => {
   const manifest = JSON.parse(readFileSync(join(PLUGIN, ".zcode-plugin", "plugin.json"), "utf8"));
   const market = JSON.parse(
     readFileSync(join(ROOT, "plugins", "zcode", "marketplace.json"), "utf8"),
   );
-  assert.equal(manifest.version, "0.2.1");
-  assert.equal(market.plugins[0].version, "0.2.1");
+  assert.equal(manifest.version, "0.2.2");
+  assert.equal(market.plugins[0].version, "0.2.2");
 });

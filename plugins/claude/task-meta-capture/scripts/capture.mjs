@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { extractRefs, parseWorktreeName } from "./lib/binding-extract.mjs";
 import { gitInfo } from "./lib/git-meta.mjs";
 
-export const PLUGIN_VERSION = "0.2.1";
+export const PLUGIN_VERSION = "0.2.2";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAX_BINDING_REFS = 32;
 export const SCHEMA = "task-meta/claude-hook/v1";
@@ -359,7 +359,10 @@ export function taskMetaCli() {
   if (!home) {
     try {
       const c = JSON.parse(readFileSync(join(HERE, "..", "config.json"), "utf8"));
-      if (typeof c.taskMetaHome === "string") home = c.taskMetaHome;
+      // "~" = the user home, so the shipped default is host-independent.
+      if (typeof c.taskMetaHome === "string") {
+        home = c.taskMetaHome.replace(/^~(?=$|[\\/])/, homedir());
+      }
     } catch {
       // no config
     }
