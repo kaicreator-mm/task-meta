@@ -1,0 +1,20 @@
+{
+  "name": "dev-task-meta",
+  "interface": {
+    "displayName": "task-meta (dev)"
+  },
+  "plugins": [
+    {
+      "name": "task-meta-capture",
+      "source": {
+        "source": "local",
+        "path": "./task-meta-capture"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
