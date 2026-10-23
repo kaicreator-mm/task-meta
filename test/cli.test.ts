@@ -287,7 +287,7 @@ test("v5 candidate with --publish is refused (exit 2) and posts nothing", async 
     client,
   );
   assert.equal(r.code, 2);
-  assert.match(r.stderr, /CANDIDATE_NOT_PUBLISHABLE/);
+  assert.match(r.stderr, /CANDIDATE_TEST_PURPOSE_REQUIRED/);
   assert.equal(client.creates, 0);
 });
 
@@ -524,7 +524,7 @@ test("gate log with GATE_SUBJECT_SHA and no @sha binds OBSERVED (no mtime infere
 const OWNER_LIMIT_TEXT =
   "ADS v4.16 adopted from version/v4.16@3041a1b by project-owner authorization; not ADS-main qualified";
 
-test("collect without --profile defaults to v5 OWNER_AUTHORIZED and may publish to any repo", async () => {
+test("collect without --profile uses qualified ADS main v5 adoption, not legacy candidate", async () => {
   const dir = await tmp();
   const client = new FakeClient();
   const args = dropFlag(
@@ -538,9 +538,9 @@ test("collect without --profile defaults to v5 OWNER_AUTHORIZED and may publish 
   const p = parseReportComment(client.comments[0]?.body ?? "");
   assert.ok(p.ok);
   const limits = p.doc.data.limits as string[];
-  assert.ok(limits.includes(OWNER_LIMIT_TEXT));
+  assert.ok(!limits.includes(OWNER_LIMIT_TEXT));
   assert.ok(!limits.some((l) => l.includes("isolated E2E test subject")));
-  assert.equal((p.doc.data.subject as { ads_revision: string }).ads_revision, CANDIDATE);
+  assert.equal((p.doc.data.subject as { ads_revision: string }).ads_revision, "718fb02e33b31f568736447b2b905883cc6fcc3a");
 });
 
 test("collect --profile v4 still works and carries no owner limit", async () => {
