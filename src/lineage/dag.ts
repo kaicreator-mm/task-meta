@@ -64,17 +64,22 @@ export async function buildIssueDag(input: BuildIssueDagInput): Promise<IssueVer
   for (const a of ordered) {
     // Normalize JSON to avoid undefined optional properties being treated as source
     // identity. Preserve ordered transitions: their causal order is material.
-    const digest = canonicalDigest(JSON.parse(JSON.stringify({
-      started_at: a.started_at,
-      lineage: a.lineage,
-    })) as unknown);
+    const digest = canonicalDigest(
+      JSON.parse(
+        JSON.stringify({
+          started_at: a.started_at,
+          lineage: a.lineage,
+        }),
+      ) as unknown,
+    );
     const first = seenByAttempt.get(a.attempt_ref);
     if (first !== undefined) {
       if (first === digest) {
         gaps.push({
           kind: "DUPLICATE_ATTEMPT",
           ref: a.attempt_ref,
-          detail: "same Attempt identity and content digest delivered repeatedly; one occurrence retained",
+          detail:
+            "same Attempt identity and content digest delivered repeatedly; one occurrence retained",
         });
       } else {
         // No reliable currentness/revision witness was supplied: do not choose
@@ -83,7 +88,8 @@ export async function buildIssueDag(input: BuildIssueDagInput): Promise<IssueVer
         gaps.push({
           kind: "ATTEMPT_SOURCE_CONFLICT",
           ref: a.attempt_ref,
-          detail: "same Attempt identity supplied different content; all conflicting occurrences held",
+          detail:
+            "same Attempt identity supplied different content; all conflicting occurrences held",
         });
       }
       continue;

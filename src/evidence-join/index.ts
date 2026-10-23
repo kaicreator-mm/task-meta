@@ -1,12 +1,17 @@
 // v0.3 T01: private, read-only, source-qualified GitHub report references.
 // Not an ADS wire format and NOT a Tally consumer/material-use ledger.
-import { parseReportComment, REPORT_MARKER } from "../report/index.ts";
+
 import type { GitHubClient, IssueComment } from "../publish/client.ts";
+import { parseReportComment, REPORT_MARKER } from "../report/index.ts";
 
 export type JoinState = "VERIFIED_REFERENCE" | "UNKNOWN" | "CONFLICT";
 export type FeedbackPhase =
-  | "PRESENTED" | "ACCEPTED" | "APPLIED" | "SKIPPED"
-  | "INDEPENDENTLY_CHECKED" | "OBSERVED_EFFECT";
+  | "PRESENTED"
+  | "ACCEPTED"
+  | "APPLIED"
+  | "SKIPPED"
+  | "INDEPENDENTLY_CHECKED"
+  | "OBSERVED_EFFECT";
 
 export interface QualifiedReportRef {
   kind: "ADS_REPORT";
@@ -32,7 +37,12 @@ export type GitHubEvidenceResult =
 
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const PHASES = new Set<FeedbackPhase>([
-  "PRESENTED", "ACCEPTED", "APPLIED", "SKIPPED", "INDEPENDENTLY_CHECKED", "OBSERVED_EFFECT",
+  "PRESENTED",
+  "ACCEPTED",
+  "APPLIED",
+  "SKIPPED",
+  "INDEPENDENTLY_CHECKED",
+  "OBSERVED_EFFECT",
 ]);
 const MAX_PAGES = 100;
 const PER_PAGE = 100;
@@ -40,14 +50,21 @@ const MAX_REPORTS = 50_000;
 
 function reportIdentity(r: QualifiedReportRef): string {
   return JSON.stringify([
-    r.repository, r.issueNumber, r.publisherNamespace, r.reportId, r.revision, r.reportKind,
+    r.repository,
+    r.issueNumber,
+    r.publisherNamespace,
+    r.reportId,
+    r.revision,
+    r.reportKind,
   ]);
 }
 function publicIssueUrl(repo: string, issue: number): string {
   return `https://github.com/${repo}/issues/${issue}`;
 }
 function refFromComment(
-  comment: IssueComment, repo: string, issue: number,
+  comment: IssueComment,
+  repo: string,
+  issue: number,
 ): QualifiedReportRef | null {
   if (!Number.isSafeInteger(comment.id) || comment.id <= 0) return null;
   const native = `${publicIssueUrl(repo, issue)}#issuecomment-${comment.id}`;
@@ -64,21 +81,30 @@ function refFromComment(
     typeof data.report_id !== "string" ||
     typeof data.publisher_namespace !== "string" ||
     typeof data.report_kind !== "string" ||
-    (typeof data.revision !== "number" || !Number.isSafeInteger(data.revision))
-  ) return null;
-  const phase = data.report_kind === "EXPERIENCE_USE_FEEDBACK" && parsed.profile === "v5"
-    ? data.phase
-    : null;
+    typeof data.revision !== "number" ||
+    !Number.isSafeInteger(data.revision)
+  )
+    return null;
+  const phase =
+    data.report_kind === "EXPERIENCE_USE_FEEDBACK" && parsed.profile === "v5" ? data.phase : null;
   if (phase !== null && !PHASES.has(phase as FeedbackPhase)) return null;
   const refs = data.source_refs;
   if (!Array.isArray(refs) || !refs.every((v) => typeof v === "string")) return null;
   return {
-    kind: "ADS_REPORT", repository: repo, issueNumber: issue,
-    commentId: comment.id, commentUrl: native, profile: parsed.profile,
-    reportId: data.report_id, revision: Number(data.revision),
-    publisherNamespace: data.publisher_namespace, reportKind: data.report_kind,
-    taskRef: subject.task_ref, attemptRef: subject.attempt_ref,
-    dataDigest: parsed.dataDigest, sourceRefs: refs as string[],
+    kind: "ADS_REPORT",
+    repository: repo,
+    issueNumber: issue,
+    commentId: comment.id,
+    commentUrl: native,
+    profile: parsed.profile,
+    reportId: data.report_id,
+    revision: Number(data.revision),
+    publisherNamespace: data.publisher_namespace,
+    reportKind: data.report_kind,
+    taskRef: subject.task_ref,
+    attemptRef: subject.attempt_ref,
+    dataDigest: parsed.dataDigest,
+    sourceRefs: refs as string[],
     feedbackPhase: phase as FeedbackPhase | null,
   };
 }
@@ -89,7 +115,9 @@ function refFromComment(
  * no arbitrary URL is followed.
  */
 export async function readQualifiedReports(
-  client: Pick<GitHubClient, "listIssueComments">, repo: string, issue: number,
+  client: Pick<GitHubClient, "listIssueComments">,
+  repo: string,
+  issue: number,
 ): Promise<GitHubEvidenceResult> {
   if (!REPO.test(repo) || !Number.isSafeInteger(issue) || issue <= 0) {
     return { state: "UNKNOWN", reports: [], limits: ["invalid canonical owning Issue"] };
@@ -107,7 +135,11 @@ export async function readQualifiedReports(
       return { state: "UNKNOWN", reports: [], limits: ["GitHub native pagination unavailable"] };
     }
     if (!Array.isArray(r.comments) || typeof r.hasNext !== "boolean") {
-      return { state: "UNKNOWN", reports: [], limits: ["invalid GitHub native pagination response"] };
+      return {
+        state: "UNKNOWN",
+        reports: [],
+        limits: ["invalid GitHub native pagination response"],
+      };
     }
     for (const comment of r.comments) {
       if (actualIds.size + ignored >= MAX_REPORTS) {
@@ -115,7 +147,11 @@ export async function readQualifiedReports(
       }
       const old = actualIds.get(comment.id);
       if (old !== undefined && old !== comment.body) {
-        return { state: "CONFLICT", reports: [], limits: ["native comment identity changed content"] };
+        return {
+          state: "CONFLICT",
+          reports: [],
+          limits: ["native comment identity changed content"],
+        };
       }
       if (old !== undefined) continue;
       actualIds.set(comment.id, comment.body);
@@ -125,12 +161,20 @@ export async function readQualifiedReports(
       }
       const ref = refFromComment(comment, repo, issue);
       if (ref === null) {
-        return { state: "UNKNOWN", reports: [], limits: ["damaged or foreign ADS report identity"] };
+        return {
+          state: "UNKNOWN",
+          reports: [],
+          limits: ["damaged or foreign ADS report identity"],
+        };
       }
       const id = reportIdentity(ref);
       const prior = identities.get(id);
       if (prior !== undefined && prior !== ref.dataDigest) {
-        return { state: "CONFLICT", reports: [], limits: ["Report identity and data digest conflict"] };
+        return {
+          state: "CONFLICT",
+          reports: [],
+          limits: ["Report identity and data digest conflict"],
+        };
       }
       identities.set(id, ref.dataDigest);
       reports.push(ref);
@@ -143,7 +187,8 @@ export async function readQualifiedReports(
       return { state: "UNKNOWN", reports: [], limits: ["nonterminal empty GitHub page"] };
     }
   }
-  if (!complete) return { state: "UNKNOWN", reports: [], limits: ["terminal GitHub page not witnessed"] };
+  if (!complete)
+    return { state: "UNKNOWN", reports: [], limits: ["terminal GitHub page not witnessed"] };
   return { state: "COMPLETE", reports, ignored };
 }
 
@@ -168,15 +213,24 @@ export function joinFeedbackToSummary(
   feedbackUrl: string,
 ): FactualFeedbackJoin {
   const unknown = (reason: string): FactualFeedbackJoin => ({
-    state: "UNKNOWN", report: null, feedback: null, phase: null,
-    materialUse: "UNKNOWN", effectiveness: "UNKNOWN", limits: [reason],
+    state: "UNKNOWN",
+    report: null,
+    feedback: null,
+    phase: null,
+    materialUse: "UNKNOWN",
+    effectiveness: "UNKNOWN",
+    limits: [reason],
   });
-  if (view.state !== "COMPLETE") return unknown("GitHub native source readback incomplete or conflicted");
-  const summary = view.reports.find((r) =>
-    r.commentUrl === summaryUrl && r.reportKind === "EXECUTION_SUMMARY",
+  if (view.state !== "COMPLETE")
+    return unknown("GitHub native source readback incomplete or conflicted");
+  const summary = view.reports.find(
+    (r) => r.commentUrl === summaryUrl && r.reportKind === "EXECUTION_SUMMARY",
   );
-  const feedback = view.reports.find((r) =>
-    r.commentUrl === feedbackUrl && r.reportKind === "EXPERIENCE_USE_FEEDBACK" && r.feedbackPhase !== null,
+  const feedback = view.reports.find(
+    (r) =>
+      r.commentUrl === feedbackUrl &&
+      r.reportKind === "EXPERIENCE_USE_FEEDBACK" &&
+      r.feedbackPhase !== null,
   );
   if (!summary || !feedback) return unknown("missing actual summary or feedback native comment");
   if (
@@ -184,13 +238,18 @@ export function joinFeedbackToSummary(
     summary.issueNumber !== feedback.issueNumber ||
     summary.taskRef !== feedback.taskRef ||
     summary.attemptRef !== feedback.attemptRef
-  ) return unknown("cross-source Task/Attempt owner mismatch");
+  )
+    return unknown("cross-source Task/Attempt owner mismatch");
   if (!feedback.sourceRefs.includes(summary.commentUrl)) {
     return unknown("feedback does not explicitly reference the actual summary native comment");
   }
   return {
-    state: "VERIFIED_REFERENCE", report: summary, feedback,
-    phase: feedback.feedbackPhase, materialUse: "UNKNOWN", effectiveness: "UNKNOWN",
+    state: "VERIFIED_REFERENCE",
+    report: summary,
+    feedback,
+    phase: feedback.feedbackPhase,
+    materialUse: "UNKNOWN",
+    effectiveness: "UNKNOWN",
     limits: ["public source association does not prove Tally consumed a material premise"],
   };
 }
