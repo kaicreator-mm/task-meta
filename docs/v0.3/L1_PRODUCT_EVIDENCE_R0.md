@@ -14,7 +14,7 @@
 | task-meta v0.3 Product requirements | #27–#31, #33 | Future requirements, not implemented tasks |
 | downstream requirement intake | Tally #70–#72 | Not a current Tally runtime qualification |
 
-**Currentness boundary:** These pins are exact review subjects, not mutable `latest` imports. On a branch/source change rerun the applicable source-delta comparison. Any project-specific production adoption must use an effective qualified/owner-authorized ADS profile with clearly recorded limitations. V4.17 version-branch protocol text is usable for source-conformance development but is not automatically an authorized production v4.17 release.
+**Currentness boundary:** These pins are exact review subjects, not mutable `latest` imports. On a branch/source change rerun the applicable source-delta comparison. Normal/public production v5 publication requires independently qualified effective ADS v4.16 **main SHA** with a verified exact vendored v5 Schema blob and applicable publication clearance. Project-owner authorization of a *candidate version-branch* is not a substitute for that qualified main source. Without valid adoption the normal writer must fail closed (qualified v4 profile only if separately permitted, otherwise HELD); isolated allowlisted candidate test lanes remain test-only. V4.17 version-branch protocol text is usable for source-conformance development but is not automatically an authorized production v4.17 release.
 
 ## 2. Existing code and real delta (do not duplicate)
 
@@ -39,7 +39,9 @@
 
 **R4 / high:** A `DISPUTE` (same owner or foreign namespace) is NOT an invalidating `REVOKE/REDACT`; substantive independently witnessed contradiction can only make a dependent conclusion UNKNOWN pending disposition.
 
-**R5 / medium:** `package.json` currently reports `0.1.0` despite merged v0.2 feature work. Formal prior version closure must be measured and reported; no claim v0.2 Release PASS from PR merge or test counts.
+**R5 / medium — explicit prior version disposition:** `package.json` currently reports `0.1.0` despite merged v0.2 feature work. No independently qualified v0.2 Version Closure/Release receipt has been verified, so the predecessor status is **v0.2 IMPLEMENTATION_MERGED / RELEASE_NOT_QUALIFIED_OR_UNKNOWN**. Per the user's explicit instruction to progress v0.3, the current exact `main@36ea914...` may be **carried forward only as an unqualified implementation/source baseline** into v0.3 Product/L2 and isolated test planning; this is NOT a retrospective v0.2 release, bypass of v0.3 tests, or permission to merge. The v0.3 owner must either obtain a qualified prior closeout or record the unqualified carry-forward and require fresh exact-v0.3 full regression, qualification, real producer smoke tests, correct manifest/package version, and release evidence before any main merge/tag. Until that disposition is checked, release remains BLOCKED.
+
+**R8 / high — confirmed existing v0.2 publisher/adoption conflict:** exact main `config/ads-adoption.json` blob `0b2525ce5906fd067bbfac170fa276b17f44f339` has `adopted: []` plus `owner_authorized` all-repos candidate pin `3041a1be3f130e5cc5e676c2e56a99882adfd97c`. Exact `src/report/pin.ts` blob `0245ef96bf365b2f1caf0d71212a0d77dcbf59a6` resolves this candidate to ordinary default `v5` including `publish=true`, which contradicts qualified-main normal publication in ADS GAIP §16.7. This source baseline is **NOT ADMISSIBLE FOR V0.3 NORMAL PUBLISHING** until a later authorized implementation task fixes it. Only isolated `task-meta-e2e` candidate lane with explicit nonproduction limits may publish candidate test data. A normal repository configured solely with that old owner authorization must return a typed nonpublishable/HELD decision without writing. ADS qualified v4.16 `main@718fb02e33b31f568736447b2b905883cc6fcc3a` is an eligible source *candidate for explicit adopter registration after actual source/schema pin and clearance verification*, not retroactive evidence that task-meta has adopted it. Do not edit v0.2 source as part of this Product document repair.
 
 **R6 / medium:** Consumer has no private task-meta API/Manifest access. Public metric attribution and experience feedback must be complete enough *when legally publishable*; otherwise unsupported/unknown, not invented API.
 
@@ -63,7 +65,7 @@
 
 ## 5. Evidence required to advance
 
-- Product review must resolve all R1–R6 risks with source-specific acceptance and distinct reviewer PASS/P0=0,P1=0 before Product Freeze.
+- Product review must resolve all R1–R8 risks with source-specific acceptance and distinct reviewer PASS/P0=0,P1=0 before Product Freeze.
 - After Product Freeze, L2 defines module contracts, private record types, public-schema-compatible projection, version/compatibility, source/identity/causal rules, correction readback state machine, explicit failure and test matrix; independent L2 Review/Freeze required.
 - Native Task DAG must map accepted Product/L2 requirements to small nonoverlapping tasks, with read/write sets, dependencies, exact acceptance and local-only work isolated, before an implementation Claim.
 - Golden source-only conformance ≠ actual real ZCode/Claude Code/Codex+GitHub readback+Tally/Host E2E. Unrun or unavailable stages remain NOT_RUN/UNKNOWN; a CI waiver is recorded, not recast as PASS.
@@ -74,8 +76,9 @@
 1. Does a source-qualified GitHub-only feedback ingestion in task-meta deliver user value without taking Tally's material-use owner role? (Proposed: yes, read-only factual reference.)
 2. Should private C08 diagnostic outputs be required for release without provider owner-strategy witnesses? (Proposed: support true UNKNOWN/private inferred paths, no fake OBSERVED requirements.)
 3. Is strict v5 existing Report sufficient for public meaningful metrics? (Proposed: emit only representable authorized metrics, publish gap otherwise; no v6 in v0.3.)
-4. What is v0.2's real Release status beyond merged PRs? (Cannot assert complete until separately checked.)
-5. Should Tally app E2E block this version? (Proposed: source/producer verification required; cross-product Tally live runtime explicitly separate, NOT_RUN when unavailable.)
+4. v0.2 status disposition: implementation merged at exact main, release NOT_QUALIFIED/UNKNOWN, author-requested v0.3 source-baseline carry-forward only; a separate qualified v0.2 closeout or v0.3 explicit full requalification is required before v0.3 Release. Reviewer must never backfill v0.2 PASS.
+5. Verify normal v5 publisher's qualification gate: old all-repo owner-authorized candidate with adopted=[] and publish=true MUST be blocked, whereas authorized isolated E2E retains candidate-specific test-only capability. After an actual effective qualified-main adoption is verified, normal publishing may use that exact main SHA and unchanged schema. Qualified v4 fallback only when independently admissible; otherwise HELD.
+6. Should Tally app E2E block this version? (Proposed: source/producer verification required; cross-product Tally live runtime explicitly separate, NOT_RUN when unavailable.)
 
 Source-only L1 evidence, not a test or implementation claim.
 
