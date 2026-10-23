@@ -1,0 +1,17 @@
+{
+  "sessionId": "sess-synth-0001",
+  "turnId": "turn-1",
+  "traceId": "trace-1",
+  "timestamp": "2026-10-22T13:09:58.000Z",
+  "cwd": "C:UserssomeoneSENTINEL_CWD_4c1d",
+  "mode": "default",
+  "hookEventName": "SessionStart",
+  "agentName": "main",
+  "source": "startup",
+  "model": "glm-5.1",
+  "agent_type": "main",
+  "hook_event_name": "SessionStart",
+  "permission_mode": "default",
+  "session_id": "sess-synth-0001",
+  "transcript_path": "C:UserssomeoneAppDataLocalTempzcode-hook-x\transcript.jsonl"
+}
