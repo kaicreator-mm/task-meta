@@ -10,6 +10,8 @@ export type OutboxState =
   | "FAILED"
   | "DISABLED"
   | "ALREADY_RUNNING"
+  /** A Stop-triggered run saw new session activity while settling; the later Stop reports. */
+  | "SUPERSEDED_BY_ACTIVITY"
   /** Returned by `--dry-run` only; never written to the outbox. */
   | "DRY_RUN";
 

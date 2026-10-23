@@ -10,6 +10,11 @@ export interface AutoReportConfig {
   outbox: string;
   zcode: { spool_dir: string; rollout_dir: string };
   codex: { spool_dir: string; sessions_dir: string };
+  claude: { spool_dir: string; projects_dir: string };
+  /** Stop-triggered runs wait this long without new spool activity before publishing. */
+  settle_seconds: number;
+  /** Revisions per session beyond which new data is HELD (REVISION_CAP) until session-end/retry. */
+  max_revisions_per_session: number;
   gate_log_root: string | null;
   /** "auto" or 40 lowercase hex. */
   publisher_source_sha: string;
@@ -30,6 +35,8 @@ export function expandHome(p: string, home: string = homedir()): string {
   return p;
 }
 
+const num = (v: unknown, d: number, min: number): number =>
+  typeof v === "number" && Number.isFinite(v) && v >= min ? v : d;
 const str = (v: unknown, d: string): string => (typeof v === "string" && v !== "" ? v : d);
 
 /** Read the config; an explicit unreadable path throws, the default path falls back to defaults. */
@@ -42,6 +49,7 @@ export function loadAutoReportConfig(path?: string, home: string = homedir()): A
   }
   const z = (j.zcode ?? {}) as Record<string, unknown>;
   const c = (j.codex ?? {}) as Record<string, unknown>;
+  const cl = (j.claude ?? {}) as Record<string, unknown>;
   const gate =
     typeof j.gate_log_root === "string" && j.gate_log_root !== "" ? j.gate_log_root : null;
   return {
@@ -57,6 +65,12 @@ export function loadAutoReportConfig(path?: string, home: string = homedir()): A
       spool_dir: expandHome(str(c.spool_dir, "~/.task-meta/codex-spool"), home),
       sessions_dir: expandHome(str(c.sessions_dir, "~/.codex/sessions"), home),
     },
+    claude: {
+      spool_dir: expandHome(str(cl.spool_dir, "~/.task-meta/claude-spool"), home),
+      projects_dir: expandHome(str(cl.projects_dir, "~/.claude/projects"), home),
+    },
+    settle_seconds: num(j.settle_seconds, 180, 0),
+    max_revisions_per_session: Math.floor(num(j.max_revisions_per_session, 3, 1)),
     gate_log_root: gate === null ? null : expandHome(gate, home),
     publisher_source_sha: str(j.publisher_source_sha, "auto"),
   };

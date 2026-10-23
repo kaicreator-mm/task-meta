@@ -4,12 +4,22 @@ import { EXIT } from "../collect-core.ts";
 import { loadAutoReportConfig } from "./config.ts";
 import type { AutoReportGitHub } from "./github.ts";
 import { Outbox, type OutboxEntry, RETRYABLE } from "./outbox.ts";
-import { type AutoReportDeps, type AutoReportOptions, autoReportSession } from "./runner.ts";
+import {
+  type AutoReportDeps,
+  type AutoReportOptions,
+  type AutoReportTrigger,
+  autoReportSession,
+} from "./runner.ts";
 
 export { loadAutoReportConfig } from "./config.ts";
 export type { AutoReportGitHub } from "./github.ts";
 export { Outbox, type OutboxEntry, type OutboxState } from "./outbox.ts";
-export { type AutoReportDeps, type AutoReportOptions, autoReportSession } from "./runner.ts";
+export {
+  type AutoReportDeps,
+  type AutoReportOptions,
+  type AutoReportTrigger,
+  autoReportSession,
+} from "./runner.ts";
 
 export interface AutoReportCliDeps {
   client?: unknown;
@@ -36,7 +46,7 @@ export async function runAutoReportCommand(
   const v = values;
   if (v.retry !== true) {
     if (v.agent === undefined || v.session === undefined) {
-      err("error: auto-report needs --agent <zcode|codex> --session <id> (or --retry)\n");
+      err("error: auto-report needs --agent zcode|claude|codex --session <id> (or --retry)\n");
       return EXIT.USAGE;
     }
     if (v.session.startsWith("-")) {
@@ -44,9 +54,15 @@ export async function runAutoReportCommand(
       return EXIT.USAGE;
     }
   }
+  if (v.trigger !== undefined && v.trigger !== "stop" && v.trigger !== "session-end") {
+    err("error: --trigger must be stop or session-end\n");
+    return EXIT.USAGE;
+  }
   const base: Omit<AutoReportOptions, "agent" | "session"> = {
     spoolDir: v["spool-dir"],
     rolloutDir: v["rollout-dir"],
+    projectsDir: v["projects-dir"],
+    trigger: v.retry === true ? "retry" : (v.trigger as AutoReportTrigger | undefined),
     store: v.store,
     outbox: v.outbox,
     configPath: v.config,
@@ -102,6 +118,8 @@ function parse(argv: string[]) {
       session: { type: "string" },
       "spool-dir": { type: "string" },
       "rollout-dir": { type: "string" },
+      "projects-dir": { type: "string" },
+      trigger: { type: "string" },
       store: { type: "string" },
       outbox: { type: "string" },
       config: { type: "string" },

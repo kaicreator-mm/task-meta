@@ -12,7 +12,7 @@ const { basename, join } = require("node:path");
 const { extractRefs, parseWorktreeName } = require("./lib/binding-extract.cjs");
 const { gitInfo } = require("./lib/git-meta.cjs");
 
-const PLUGIN_VERSION = "0.2.0";
+const PLUGIN_VERSION = "0.2.1";
 const MAX_BINDING_REFS = 32;
 const SCHEMA = "task-meta/codex-hook/v1";
 const EVENTS = new Set([
@@ -342,7 +342,7 @@ function taskMetaCli() {
 }
 
 /** Start `task-meta auto-report --agent codex` detached; returns immediately. Never throws. */
-function triggerAutoReport(sessionId, dir) {
+function triggerAutoReport(sessionId, dir, trigger) {
   try {
     if (process.env.TASK_META_AUTO_REPORT === "0") return;
     if (sessionId.startsWith("-")) return;
@@ -353,7 +353,7 @@ function triggerAutoReport(sessionId, dir) {
     }
     const child = spawn(
       process.execPath,
-      [t.cli, "auto-report", "--agent", "codex", "--session", sessionId],
+      [t.cli, "auto-report", "--agent", "codex", "--session", sessionId, "--trigger", trigger],
       { cwd: t.home, detached: true, stdio: "ignore", windowsHide: true },
     );
     child.on("error", () => {});
@@ -370,7 +370,8 @@ function capture(raw) {
     const line = `{"d":"${sha256Hex(jcs(e))}","e":${jcs(e)}}\n`;
     mkdirSync(dir, { recursive: true });
     appendFileSync(join(dir, `${sanitizeSessionId(e.session_id)}.jsonl`), line);
-    if (e.event === "Stop" || e.event === "SessionEnd") triggerAutoReport(e.session_id, dir);
+    if (e.event === "Stop") triggerAutoReport(e.session_id, dir, "stop");
+    else if (e.event === "SessionEnd") triggerAutoReport(e.session_id, dir, "session-end");
   } catch (err) {
     logError(dir, err);
   }

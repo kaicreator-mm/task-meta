@@ -41,9 +41,15 @@ Since 0.2.0 (task binding + auto-report):
 - `worktree_refs` (SessionStart / Stop / SessionEnd): refs parsed from the cwd directory name and
   the current branch name, same helpers as the ZCode plugin (`plugins/shared`, built to
   `scripts/lib/*.cjs` by `npm run sync-plugins`).
-- Stop / SessionEnd start `task-meta auto-report --agent codex --session <id>` detached, using
-  `TASK_META_HOME` or the plugin-local `config.json` (`taskMetaHome`). Kill switch:
-  `TASK_META_AUTO_REPORT=0` or `"enabled": false` in `config/auto-report.json`.
+- Stop / SessionEnd start `task-meta auto-report --agent codex --session <id> --trigger
+  stop|session-end` detached, using `TASK_META_HOME` or the plugin-local `config.json`
+  (`taskMetaHome`). Kill switch: `TASK_META_AUTO_REPORT=0` or `"enabled": false` in
+  `config/auto-report.json`.
+
+Since 0.2.1 (per-turn flood guard): Codex fires Stop at the end of every turn, so the spawned
+auto-report is told what fired it. A `stop` run waits `settle_seconds` (default 180) for the
+session to go quiet and defers to a later Stop if another turn starts; `session-end` publishes
+at once; at most `max_revisions_per_session` (default 3) revisions are posted per session.
 
 ## What is NOT captured
 

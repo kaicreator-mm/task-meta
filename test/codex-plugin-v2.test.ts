@@ -138,7 +138,7 @@ test("0.2.0 lifecycle: worktree/binding refs, git facts, prompt never stored, St
     Record<string, unknown>,
     Record<string, unknown>,
   ];
-  assert.equal(start.plugin_version, "0.2.0");
+  assert.equal(start.plugin_version, "0.2.1");
   assert.equal(start.git_head, head);
   assert.equal(start.git_remote_repo, "kaicreator-mm/domain-harness");
   const wt = [
@@ -160,7 +160,10 @@ test("0.2.0 lifecycle: worktree/binding refs, git facts, prompt never stored, St
   assert.equal(parsed.entries[1]?.binding_refs?.length, 2);
 
   assert.ok(await waitFor(marker), "auto-report was not spawned");
-  assert.equal(readFileSync(marker, "utf8"), `auto-report --agent codex --session ${SID}`);
+  assert.equal(
+    readFileSync(marker, "utf8"),
+    `auto-report --agent codex --session ${SID} --trigger stop`,
+  );
 });
 
 test("TASK_META_AUTO_REPORT=0 disables the Stop and SessionEnd triggers", async () => {
@@ -197,6 +200,10 @@ test("SessionEnd also triggers; other events do not", async () => {
   assert.ok(!existsSync(marker));
   run(hook("SessionEnd", repo, { reason: "exit" }), spool, env);
   assert.ok(await waitFor(marker), "SessionEnd did not spawn auto-report");
+  assert.equal(
+    readFileSync(marker, "utf8"),
+    `auto-report --agent codex --session ${SID} --trigger session-end`,
+  );
 });
 
 test("missing task-meta CLI logs a class name and skips; non-git cwd still captures", async () => {
@@ -213,11 +220,11 @@ test("missing task-meta CLI logs a class name and skips; non-git cwd still captu
   assert.match(log[0] as string, /^\S+ AutoReportCliMissing$/);
 });
 
-test("shipped config.json, manifest and CJS lib build are in place at 0.2.0", () => {
+test("shipped config.json, manifest and CJS lib build are in place at 0.2.1", () => {
   const c = JSON.parse(readFileSync(join(PLUGIN, "config.json"), "utf8"));
   assert.equal(c.taskMetaHome, "C:\\xDev\\kAiCreator\\task-meta\\main");
   const m = JSON.parse(readFileSync(join(PLUGIN, ".codex-plugin", "plugin.json"), "utf8"));
-  assert.equal(m.version, "0.2.0");
+  assert.equal(m.version, "0.2.1");
   for (const f of ["binding-extract.cjs", "git-meta.cjs", "repo-aliases.json"]) {
     assert.ok(existsSync(join(PLUGIN, "scripts", "lib", f)), f);
   }

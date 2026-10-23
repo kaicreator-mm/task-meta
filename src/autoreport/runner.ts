@@ -2,6 +2,9 @@
 // report, read it back. Never throws; every outcome lands in the outbox (docs/v0.2 section 4).
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { findClaudeTranscripts } from "../adapters/claude/find.ts";
+import { parseClaudeHookSpool } from "../adapters/claude/hooks.ts";
+import { collectClaudeRun } from "../adapters/claude/index.ts";
 import { findCodexRollouts } from "../adapters/codex/find.ts";
 import { parseCodexHookSpool } from "../adapters/codex/hooks.ts";
 import { collectCodexRun } from "../adapters/codex/index.ts";
@@ -47,11 +50,23 @@ import { type AutoReportGitHub, GhAutoReportClient } from "./github.ts";
 import { Outbox, type OutboxEntry, type OutboxState, safeName } from "./outbox.ts";
 import { findWritebackComments } from "./writeback.ts";
 
+export type AutoReportTrigger = "stop" | "session-end" | "retry";
+
+export const AUTO_REPORT_AGENTS = ["zcode", "codex", "claude"] as const;
+
 export interface AutoReportOptions {
   agent: string;
   session: string;
   spoolDir?: string | undefined;
   rolloutDir?: string | undefined;
+  /** Claude Code projects dir (transcripts) for `agent: "claude"`. */
+  projectsDir?: string | undefined;
+  /**
+   * What fired the run. `stop` (every turn end) waits `settle_seconds` for the session to go
+   * quiet and never exceeds the revision cap; `session-end`, `retry` and an unset trigger
+   * (manual) publish at once and may publish one final revision beyond the cap.
+   */
+  trigger?: AutoReportTrigger | undefined;
   store?: string | undefined;
   outbox?: string | undefined;
   configPath?: string | undefined;
@@ -125,7 +140,9 @@ async function readSettled(
     } catch {
       text = "";
     }
-    const stop = parse(text).entries.some((e) => e.session_id === session && e.event === "Stop");
+    const stop = parse(text).entries.some(
+      (e) => e.session_id === session && (e.event === "Stop" || e.event === "SessionEnd"),
+    );
     if (stop) return { text, stopSeen: true };
     if (i >= steps) return { text, stopSeen: false };
     await sleep(200);
@@ -195,6 +212,108 @@ function asSupersedes(v: unknown): SupersedesRef | null {
   return null;
 }
 
+function agentDirs(
+  opts: AutoReportOptions,
+  cfg: AutoReportConfig,
+): { spoolDir: string; artifactDir: string } {
+  if (opts.agent === "claude") {
+    return {
+      spoolDir: resolve(opts.spoolDir ?? cfg.claude.spool_dir),
+      artifactDir: resolve(opts.projectsDir ?? opts.rolloutDir ?? cfg.claude.projects_dir),
+    };
+  }
+  if (opts.agent === "codex") {
+    return {
+      spoolDir: resolve(opts.spoolDir ?? cfg.codex.spool_dir),
+      artifactDir: resolve(opts.rolloutDir ?? cfg.codex.sessions_dir),
+    };
+  }
+  return {
+    spoolDir: resolve(opts.spoolDir ?? cfg.zcode.spool_dir),
+    artifactDir: resolve(opts.rolloutDir ?? cfg.zcode.rollout_dir),
+  };
+}
+
+type SpoolParser = (text: string) => { entries: SpoolView[]; all: SpoolEntries };
+
+function spoolParser(agent: string): SpoolParser {
+  if (agent === "claude") {
+    return (text) => {
+      const e = parseClaudeHookSpool(text).entries;
+      return {
+        entries: e.map((x) => ({ session_id: x.session_id, event: x.event, ts: x.received_at })),
+        all: e,
+      };
+    };
+  }
+  if (agent === "codex") {
+    return (text) => {
+      const e = parseCodexHookSpool(text).entries;
+      return {
+        entries: e.map((x) => ({ session_id: x.session_id, event: x.event, ts: x.received_at })),
+        all: e,
+      };
+    };
+  }
+  return (text) => {
+    const e = parseHookSpool(text).entries;
+    return {
+      entries: e.map((x) => ({ session_id: x.session_id, event: x.event, ts: x.hook_ts ?? null })),
+      all: e,
+    };
+  };
+}
+
+/** Late hook lines of an already finished turn; they are not new session activity. */
+const STRAGGLER_EVENTS: ReadonlySet<string> = new Set([
+  "PostToolUse",
+  "PostToolUseFailure",
+  "SubagentStop",
+]);
+const SETTLE_STEP_MS = 2000;
+const SETTLE_SLACK_MS = 30_000;
+const FINAL_LOCK_TRIES = 10;
+
+/**
+ * Per-turn flood guard (Stop trigger): wait until the session spool has had no new activity
+ * for `settle_seconds`. Resolves false as soon as new activity (another turn, the session end)
+ * is seen: that run's own Stop handles the report. The total wait is bounded by
+ * `settle_seconds` + 30 s.
+ */
+async function settledQuiet(
+  opts: AutoReportOptions,
+  cfg: AutoReportConfig,
+  deps: AutoReportDeps,
+): Promise<boolean> {
+  const settleMs = Math.round(cfg.settle_seconds * 1000);
+  if (settleMs <= 0) return true;
+  const sleep = deps.sleep ?? realSleep;
+  const now = deps.now ?? (() => new Date());
+  const file = join(agentDirs(opts, cfg).spoolDir, `${safeName(opts.session)}.jsonl`);
+  const parse = spoolParser(opts.agent);
+  const activity = async (): Promise<number> => {
+    let text = "";
+    try {
+      text = await readFile(file, "utf8");
+    } catch {
+      text = "";
+    }
+    return parse(text).entries.filter(
+      (e) => e.session_id === opts.session && !STRAGGLER_EVENTS.has(e.event),
+    ).length;
+  };
+  const baseline = await activity();
+  const t0 = now().getTime();
+  let waited = 0;
+  while (waited < settleMs && now().getTime() - t0 < settleMs + SETTLE_SLACK_MS) {
+    const step = Math.min(SETTLE_STEP_MS, settleMs - waited);
+    await sleep(step);
+    waited += step;
+    if ((await activity()) > baseline) return false;
+  }
+  return true;
+}
+
 async function drive(
   opts: AutoReportOptions,
   cfg: AutoReportConfig,
@@ -205,24 +324,9 @@ async function drive(
   const dry = opts.dryRun === true;
   const session = opts.session;
   const isCodex = opts.agent === "codex";
-  const spoolDir = resolve(opts.spoolDir ?? (isCodex ? cfg.codex.spool_dir : cfg.zcode.spool_dir));
-  const rolloutDir = resolve(
-    opts.rolloutDir ?? (isCodex ? cfg.codex.sessions_dir : cfg.zcode.rollout_dir),
-  );
-  const parseSpool = (text: string): { entries: SpoolView[]; all: SpoolEntries } => {
-    if (isCodex) {
-      const e = parseCodexHookSpool(text).entries;
-      return {
-        entries: e.map((x) => ({ session_id: x.session_id, event: x.event, ts: x.received_at })),
-        all: e,
-      };
-    }
-    const e = parseHookSpool(text).entries;
-    return {
-      entries: e.map((x) => ({ session_id: x.session_id, event: x.event, ts: x.hook_ts ?? null })),
-      all: e,
-    };
-  };
+  const isClaude = opts.agent === "claude";
+  const { spoolDir, artifactDir: rolloutDir } = agentDirs(opts, cfg);
+  const parseSpool = spoolParser(opts.agent);
 
   // ---- spool (wait for the Stop line that was appended just before the spawn) ----
   const { text: spoolText, stopSeen } = await readSettled(
@@ -311,7 +415,20 @@ async function drive(
   // ---- artifacts: model-io rollout, convention gate logs, write-back citation ----
   let modelIo: string | undefined;
   const codexRollouts: string[] = [];
-  if (isCodex) {
+  const claudeTexts: string[] = [];
+  if (isClaude) {
+    if (!SESSION_FILE_RE.test(session)) throw new Held(["invalid session id"], binding);
+    const files = await findClaudeTranscripts(rolloutDir, session);
+    for (const f of [...files.main, ...files.subagents]) {
+      try {
+        claudeTexts.push(await readFile(f, "utf8"));
+      } catch {
+        // unreadable transcript file: treated like a missing one below
+      }
+    }
+    if (files.main.length === 0 || claudeTexts.length === 0)
+      throw new Held(["no transcript file found for the session"], binding);
+  } else if (isCodex) {
     if (!SESSION_FILE_RE.test(session)) throw new Held(["invalid session id"], binding);
     for (const f of await findCodexRollouts(rolloutDir, session)) {
       try {
@@ -349,7 +466,7 @@ async function drive(
   const actor = {
     role: "builder",
     operator_kind: "agent",
-    operator_id: isCodex ? "codex" : "zcode",
+    operator_id: opts.agent,
     session_ref: session,
     transport_actor: null,
   };
@@ -364,6 +481,19 @@ async function drive(
   });
   const collectAgent = (observed: string): { collection: AgentCollection; runs: RunRecord[] } => {
     try {
+      if (isClaude) {
+        const c = collectClaudeRun({
+          repository: repo,
+          issue_number: issue,
+          actor,
+          observed_at: observed,
+          transcript: claudeTexts,
+          hookSpool: spoolText,
+        });
+        if (c.sessionId !== session)
+          throw new Error("transcript session id differs from the spool's");
+        return { collection: c, runs: [c.run] };
+      }
       if (!isCodex) return { collection: collectZcodeRun(baseInput(observed)), runs: [] };
       const c = collectCodexRun({
         repository: repo,
@@ -385,7 +515,11 @@ async function drive(
       collection,
       attemptRef: session,
       runs,
-      segmentPrefix: isCodex ? "codex:rollout" : "zcode:run-record",
+      segmentPrefix: isClaude
+        ? "claude:transcript"
+        : isCodex
+          ? "codex:rollout"
+          : "zcode:run-record",
       gates,
       extraLimits: limits,
       mode: resolution.mode,
@@ -401,6 +535,7 @@ async function drive(
   let revision: number;
   let clock: string;
   let predecessor: string | null;
+  let newRevision = false;
   if (latest) {
     ev = await build(latest.created_at);
     if (manifestMatches(latest, ev)) {
@@ -412,12 +547,21 @@ async function drive(
       ev = await build(clock);
       revision = latest.revision + 1;
       predecessor = canonicalDigest(latest);
+      newRevision = true;
     }
   } else {
     clock = now().toISOString();
     ev = await build(clock);
     revision = 1;
     predecessor = null;
+  }
+
+  // Per-turn flood guard: beyond the cap new data waits for a session-end / retry / manual run,
+  // which may publish one final revision.
+  const cap = cfg.max_revisions_per_session;
+  const finalRun = opts.trigger !== "stop";
+  if (newRevision && revision > cap && !(finalRun && revision <= cap + 1)) {
+    throw new Held(["REVISION_CAP"], binding);
   }
 
   const reportId = `task-meta:${ev.summary.attempt_ref}`;
@@ -549,9 +693,26 @@ export async function autoReportSession(
   if (!cfg.enabled || env.TASK_META_AUTO_REPORT === "0") {
     return finish(entry("DISABLED", ["auto-report disabled (config or TASK_META_AUTO_REPORT=0)"]));
   }
-  if (opts.agent !== "zcode" && opts.agent !== "codex")
+  if (!(AUTO_REPORT_AGENTS as readonly string[]).includes(opts.agent))
     return finish(entry("FAILED", [`unsupported agent: ${opts.agent.slice(0, 40)}`]));
   if (!SESSION_RE.test(opts.session)) return finish(entry("FAILED", ["invalid session id"]));
+
+  // Settle BEFORE taking the lock: a later Stop's run must not be turned away by this one.
+  if (!dry && opts.trigger === "stop") {
+    let quiet = true;
+    try {
+      quiet = await settledQuiet(opts, cfg, deps);
+    } catch {
+      quiet = true;
+    }
+    if (!quiet) {
+      return finish(
+        entry("SUPERSEDED_BY_ACTIVITY", [
+          "new session activity during the settle window; the later Stop reports",
+        ]),
+      );
+    }
+  }
 
   let release: (() => Promise<void>) | null = null;
   if (!dry) {
@@ -559,6 +720,11 @@ export async function autoReportSession(
       release = await outbox.lock(opts.session);
     } catch (e) {
       return finish(entry("FAILED", [safeReason(e)]));
+    }
+    // A final (session-end/retry/manual) run must not be lost to a concurrent Stop run.
+    for (let i = 1; release === null && opts.trigger !== "stop" && i < FINAL_LOCK_TRIES; i++) {
+      await (deps.sleep ?? realSleep)(1000);
+      release = await outbox.lock(opts.session);
     }
     if (release === null) {
       return finish(entry("ALREADY_RUNNING", ["another auto-report holds the session lock"]));
