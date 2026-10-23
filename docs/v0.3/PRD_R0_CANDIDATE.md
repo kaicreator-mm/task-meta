@@ -1,7 +1,7 @@
 # task-meta v0.3 — PRD R1 Candidate (focused Product Review repair)
 
 **Status:** PRODUCT_PRD_R1_CANDIDATE / INDEPENDENT_R0_REVIEW=BLOCK_P1_1_P2_1 / R1_DELTA_REVIEW=NOT_RUN / PRODUCT_FREEZE=NO / L2_NOT_FROZEN / TASK_DAG_NOT_ADMITTED / NO_V03_IMPLEMENTATION_CLAIM.
-**Parent:** [#27](https://github.com/kaicreator-mm/task-meta/issues/27). **Requirement lanes:** #28/#29/#30/#31/#33. **L1 evidence:** [L1_PRODUCT_EVIDENCE_R0.md](./L1_PRODUCT_EVIDENCE_R0.md).
+**Parent:** [#27](https://github.com/kaicreator-mm/task-meta/issues/27). **Requirement lanes:** #36/#28/#29/#30/#31/#33. **L1 evidence:** [L1_PRODUCT_EVIDENCE_R0.md](./L1_PRODUCT_EVIDENCE_R0.md).
 
 ## 1. Product decision and value
 
@@ -18,7 +18,7 @@ v0.3 makes task-meta a **source-qualified ADS v4.17 evidence/feedback producer a
 
 ## 3. Functional requirements
 
-### FR00 — Fail-closed ADS publication adoption and qualified prior baseline (P0, v0.3 release precondition)
+### FR00 — Fail-closed ADS publication adoption and qualified prior baseline (#36; P0, v0.3 release precondition)
 - Existing source `config/ads-adoption.json` has `adopted: []` with `owner_authorized` `scope:all` for unqualified `version/v4.16@3041a1be3f130e5cc5e676c2e56a99882adfd97c`; existing `src/report/pin.ts` auto-selects `OWNER_AUTHORIZED` v5 default even when `publish=true`. This **must not continue** as v0.3 ordinary production behavior. It is a live baseline discrepancy, not a contract permitting exception.
 - Only a qualified immutable ADS v4.16 **main** adoption (currently source-qualified predecessor `main@718fb02e33b31f568736447b2b905883cc6fcc3a`, subject to actual effective adoption), exact existing v5 schema blob `7478313cc006162432649d734e59c5cd77db5106`, verified repository/profile clearance and permitted subject may yield `ADOPTED` normal-publication mode. A version-branch candidate/owner assertion/default/all scope must not silently grant it.
 - With no qualified matching entry, ordinary v5 publication is nonpublishable/HELD; an independently qualified authorized **v4** profile may be selected only when caller policy allows, never silently recast candidate v5 as v4 success. An isolated explicitly allowlisted `task-meta-e2e` test subject may retain candidate-profile `E2E_TEST_SUBJECT` behavior, but report carries test-only provenance and never establishes normal production qualification. Unknown/mismatched SHA/blob/clearance must fail closed and not send a comment.
@@ -83,9 +83,9 @@ v0.3 makes task-meta a **source-qualified ADS v4.17 evidence/feedback producer a
 
 ## 6. Delivery scope and dependency policy
 
-**Feature set:** FR00 publisher admission remediation (small independent work item in Task DAG, must precede normal #31 real publication); FR01 #28; FR02 #29; FR03 #30; FR04 #31; FR05 #33. Reuse v0.1/v0.2 installed modules, no fork/new DB. Candidate architecture modules `src/feedback`, `src/currentness`, `src/trajectory`, `src/metrics`, `test/v0.3` are suggestions only, NOT approved L2 API names.
+**Feature set:** FR00 #36 publisher admission remediation (small independent work item in Task DAG, must precede normal #31 real publication); FR01 #28; FR02 #29; FR03 #30; FR04 #31; FR05 #33. Reuse v0.1/v0.2 installed modules, no fork/new DB. Candidate architecture modules `src/feedback`, `src/currentness`, `src/trajectory`, `src/metrics`, `test/v0.3` are suggestions only, NOT approved L2 API names.
 
-**Ordered gates:** L1 R0 independently BLOCK-reviewed (P1-01/P2-01) → focused R1 author repair and distinct delta Review P0/P1=0 → independent Product Review P0/P1=0 → explicit Product Freeze → L2 source/ABI/permission design → independent L2 Review and Freeze → small Native Task DAG + authorized Task Claims → implementation & focused PR Reviews → shared ADS Golden and real producer-specific E2E → release qualification → version-branch/main integration. A source-only independent Review is permitted before physical verification, but NOT substituted for runtime proof.
+**Ordered gates:** L1 R0 independently BLOCK-reviewed (P1-01/P2-01) → focused R1 author repair → distinct independent Product R1 delta Review P0/P1=0 → explicit Product Owner Freeze → L2 source/ABI/permission design → independent L2 Review and Freeze → small Native Task DAG + authorized Task Claims → implementation & focused PR Reviews → shared ADS Golden and real producer-specific E2E → release qualification → version-branch/main integration. A source-only independent Review is permitted before physical verification, but NOT substituted for runtime proof.
 
 **Parallel work after gate:** C08 trajectory semantics, #28 feedback join and #29 correction ledger are mutually separable if immutable identity/source contracts are frozen; #30 comparability and #31 fixtures can follow in parallel. Only #31 full integration depends on implementations. Full Tally app replatforming is external independent qualification and must not be falsely required for ADS source release or falsely marked PASS for task-meta.
 
