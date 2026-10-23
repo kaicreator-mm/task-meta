@@ -118,9 +118,20 @@ export function humanSummary(summary: AttemptSummary): string {
     `**task-meta execution summary** for \`${summary.task_ref}\` (attempt \`${summary.attempt_ref}\`)`,
     "",
     `Capture coverage: **${summary.capture_coverage}**. Verifier: **${summary.verifier.status}**. Cost: unknown.`,
-    "",
-    table(summary),
   ];
+  // Execution metadata and the agent's own task write-back stay separate comments; link them
+  // for readers (the machine link is `github:comment:<id>` in data.source_refs).
+  const writeBacks = summary.observation_refs
+    .map((r) => /^github:comment:(\d+)$/.exec(r)?.[1])
+    .filter((id): id is string => id !== undefined);
+  if (writeBacks.length > 0) {
+    const base = `https://github.com/${summary.repository}/issues/${summary.issue_number}`;
+    lines.push(
+      "",
+      `Agent write-back: ${writeBacks.map((id) => `[comment ${id}](${base}#issuecomment-${id})`).join(", ")}`,
+    );
+  }
+  lines.push("", table(summary));
   if (summary.limits.length > 0) {
     lines.push("", "Limits:", ...summary.limits.map((l) => `- ${l}`));
   }
