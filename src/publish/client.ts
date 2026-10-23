@@ -8,6 +8,8 @@ export interface IssueComment {
   html_url: string;
   body: string;
   user_login: string | null;
+  /** ISO timestamp of creation (absent in minimal fakes). */
+  created_at?: string;
 }
 
 export interface GitHubClient {
@@ -76,6 +78,7 @@ function toComment(raw: unknown): IssueComment {
     html_url?: unknown;
     body?: unknown;
     user?: { login?: unknown } | null;
+    created_at?: unknown;
   };
   if (typeof r?.id !== "number") throw new Error("gh: comment without numeric id");
   return {
@@ -83,13 +86,14 @@ function toComment(raw: unknown): IssueComment {
     html_url: typeof r.html_url === "string" ? r.html_url : "",
     body: typeof r.body === "string" ? r.body : "",
     user_login: typeof r.user?.login === "string" ? r.user.login : null,
+    ...(typeof r.created_at === "string" ? { created_at: r.created_at } : {}),
   };
 }
 
 /** GitHub client over the `gh` CLI (`gh api`). Never invoked by tests against a real repo. */
 export class GhCliClient implements GitHubClient {
-  private readonly exec: ExecFn;
-  private readonly gh: string;
+  protected readonly exec: ExecFn;
+  protected readonly gh: string;
   constructor(opts: { exec?: ExecFn; ghPath?: string } = {}) {
     this.exec = opts.exec ?? defaultExec;
     this.gh = opts.ghPath ?? "gh";

@@ -5,12 +5,15 @@
 // and ALWAYS exits 0. On failure only an error class name is logged to <spool>/_errors.log.
 "use strict";
 const { createHash } = require("node:crypto");
-const { execFileSync } = require("node:child_process");
-const { appendFileSync, mkdirSync, readFileSync, statSync } = require("node:fs");
+const { spawn } = require("node:child_process");
+const { appendFileSync, existsSync, mkdirSync, readFileSync } = require("node:fs");
 const { homedir } = require("node:os");
-const { join } = require("node:path");
+const { basename, join } = require("node:path");
+const { extractRefs, parseWorktreeName } = require("./lib/binding-extract.cjs");
+const { gitInfo } = require("./lib/git-meta.cjs");
 
-const PLUGIN_VERSION = "0.1.0";
+const PLUGIN_VERSION = "0.2.0";
+const MAX_BINDING_REFS = 32;
 const SCHEMA = "task-meta/codex-hook/v1";
 const EVENTS = new Set([
   "SessionStart",
@@ -198,41 +201,39 @@ function commandOf(toolInput) {
   return null;
 }
 
-function git(cwd, args) {
-  return execFileSync("git", ["-C", cwd, ...args], {
-    encoding: "utf8",
-    timeout: 2000,
-    windowsHide: true,
-    stdio: ["ignore", "pipe", "ignore"],
-  });
+// ---- task binding inputs (refs only; the prompt text is examined in memory and dropped) ----
+let inventoryCache;
+function inventory() {
+  if (inventoryCache === undefined) {
+    try {
+      const j = JSON.parse(readFileSync(join(__dirname, "lib", "repo-aliases.json"), "utf8"));
+      inventoryCache = { aliases: j.aliases ?? {}, knownRepos: j.repos ?? [] };
+    } catch {
+      inventoryCache = { aliases: {}, knownRepos: [] };
+    }
+  }
+  return inventoryCache;
 }
 
-/** git HEAD / dirty / `owner/name` of the session cwd; any failure yields nulls. */
+/** git HEAD / dirty / `owner/name` and name-derived refs of the session cwd; any failure yields nulls. */
 function gitFacts(cwd) {
-  const out = { git_head: null, git_dirty: null, git_remote_repo: null };
+  const out = { git_head: null, git_dirty: null, git_remote_repo: null, worktree_refs: null };
   if (typeof cwd !== "string" || cwd === "") return out;
   try {
-    if (!statSync(cwd).isDirectory()) return out;
+    const g = gitInfo(cwd);
+    out.git_head = g.git_head;
+    out.git_dirty = g.git_dirty;
+    out.git_remote_repo = g.git_remote_repo;
+    const inv = inventory();
+    const refs = [];
+    for (const r of parseWorktreeName(basename(cwd), inv).refs)
+      refs.push({ source: "WORKTREE", ...r });
+    if (g.branch !== null) {
+      for (const r of parseWorktreeName(g.branch, inv).refs) refs.push({ source: "BRANCH", ...r });
+    }
+    out.worktree_refs = refs.slice(0, MAX_BINDING_REFS);
   } catch {
-    return out;
-  }
-  try {
-    const head = git(cwd, ["rev-parse", "HEAD"]).trim();
-    if (/^[0-9a-f]{40}$/.test(head)) out.git_head = head;
-  } catch {
-    return out;
-  }
-  try {
-    out.git_dirty = git(cwd, ["status", "--porcelain"]).trim() !== "";
-  } catch {
-    // dirty state unknown
-  }
-  try {
-    const url = git(cwd, ["config", "--get", "remote.origin.url"]).trim();
-    const m = /[:/]([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/.exec(url);
-    if (m) out.git_remote_repo = `${m[1]}/${m[2]}`;
-  } catch {
-    // no remote
+    // keep nulls
   }
   return out;
 }
@@ -269,6 +270,8 @@ function buildEntry(input, now = new Date(), gitProbe = gitFacts) {
     git_head: null,
     git_dirty: null,
     git_remote_repo: null,
+    binding_refs: null,
+    worktree_refs: null,
     cwd_digest: typeof input.cwd === "string" && input.cwd !== "" ? sha256Hex(input.cwd) : null,
     has_transcript: typeof input.transcript_path === "string" && input.transcript_path !== "",
   };
@@ -291,6 +294,9 @@ function buildEntry(input, now = new Date(), gitProbe = gitFacts) {
     e.session_source = typeof src === "string" ? (SESSION_SOURCES.has(src) ? src : "OTHER") : null;
   } else if (event === "UserPromptSubmit") {
     e.prompt_bytes = byteLength(input.prompt);
+    if (typeof input.prompt === "string") {
+      e.binding_refs = extractRefs(input.prompt, inventory()).refs.slice(0, MAX_BINDING_REFS);
+    }
   } else if (event === "Stop") {
     e.message_bytes = byteLength(input.last_assistant_message);
   } else if (event === "SessionEnd") {
@@ -315,6 +321,48 @@ function logError(dir, err) {
   }
 }
 
+function namedError(name) {
+  const e = new Error(name);
+  e.name = name;
+  return e;
+}
+
+/** Path of the task-meta CLI from env TASK_META_HOME or plugin-local config.json, else null. */
+function taskMetaCli() {
+  let home = process.env.TASK_META_HOME;
+  if (!home) {
+    try {
+      const c = JSON.parse(readFileSync(join(__dirname, "..", "config.json"), "utf8"));
+      if (typeof c.taskMetaHome === "string") home = c.taskMetaHome;
+    } catch {
+      // no config
+    }
+  }
+  return home ? { home, cli: join(home, "src", "cli.ts") } : null;
+}
+
+/** Start `task-meta auto-report --agent codex` detached; returns immediately. Never throws. */
+function triggerAutoReport(sessionId, dir) {
+  try {
+    if (process.env.TASK_META_AUTO_REPORT === "0") return;
+    if (sessionId.startsWith("-")) return;
+    const t = taskMetaCli();
+    if (t === null || !existsSync(t.cli)) {
+      logError(dir, namedError("AutoReportCliMissing"));
+      return;
+    }
+    const child = spawn(
+      process.execPath,
+      [t.cli, "auto-report", "--agent", "codex", "--session", sessionId],
+      { cwd: t.home, detached: true, stdio: "ignore", windowsHide: true },
+    );
+    child.on("error", () => {});
+    child.unref();
+  } catch (err) {
+    logError(dir, err);
+  }
+}
+
 function capture(raw) {
   const dir = spoolDir();
   try {
@@ -322,6 +370,7 @@ function capture(raw) {
     const line = `{"d":"${sha256Hex(jcs(e))}","e":${jcs(e)}}\n`;
     mkdirSync(dir, { recursive: true });
     appendFileSync(join(dir, `${sanitizeSessionId(e.session_id)}.jsonl`), line);
+    if (e.event === "Stop" || e.event === "SessionEnd") triggerAutoReport(e.session_id, dir);
   } catch (err) {
     logError(dir, err);
   }
@@ -346,6 +395,8 @@ module.exports = {
   buildEntry,
   sanitizeSessionId,
   spoolDir,
+  taskMetaCli,
+  gitFacts,
   capture,
   main,
 };

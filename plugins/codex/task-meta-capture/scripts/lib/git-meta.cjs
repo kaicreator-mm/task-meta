@@ -1,15 +1,17 @@
+// GENERATED from plugins/shared/git-meta.mjs by scripts/sync-plugin-shared.mjs; do not edit.
+"use strict";
 // Git metadata for capture plugins. Dependency-free (Node built-ins only).
 // Shared source: copied into each plugin's scripts/lib/ by `npm run sync-plugins`.
 // Records only: HEAD commit, dirty flag, `owner/name` of the GitHub origin, current branch name.
 // Any failure yields nulls. The working directory path is used to run git, never returned.
-import { execFileSync } from "node:child_process";
+const { execFileSync } = require("node:child_process");
 
 const HEAD_RE = /^[0-9a-f]{40}$/;
 const BUDGET_MS = 3500;
 const CALL_MS = 2000;
 
 /** `owner/name` from a github.com remote URL (https, ssh, scp-like), else null. */
-export function parseGithubRemote(url) {
+function parseGithubRemote(url) {
   if (typeof url !== "string") return null;
   const u = url.trim();
   const m =
@@ -33,7 +35,7 @@ function git(cwd, args, deadline) {
 }
 
 /** @returns {{ git_head: string|null, git_dirty: boolean|null, git_remote_repo: string|null, branch: string|null }} */
-export function gitInfo(cwd) {
+function gitInfo(cwd) {
   const out = { git_head: null, git_dirty: null, git_remote_repo: null, branch: null };
   if (typeof cwd !== "string" || cwd === "") return out;
   const deadline = Date.now() + BUDGET_MS;
@@ -71,3 +73,5 @@ export function gitInfo(cwd) {
   }
   return out;
 }
+
+module.exports = { parseGithubRemote, gitInfo };

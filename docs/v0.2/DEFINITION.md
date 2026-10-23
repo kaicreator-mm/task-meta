@@ -108,7 +108,38 @@ Delivered on `task/tm-t13-sonnet`:
 T14 must implement the `auto-report` command and PR-to-Issue resolution; the spawned CLI path is
 `src/cli.ts` run with the hook's `node` (needs Node >= 24 for native TypeScript).
 
-## 8. T17 status (multi-attempt branch DAG)
+## 8. T14 status (auto-report, owner-authorized v5 default)
+
+Delivered on `task/tm-t14-sonnet`:
+- `config/ads-adoption.json` `owner_authorized`: `resolveProfile` with no profile returns v5 pinned to
+  the candidate, mode `OWNER_AUTHORIZED` (publish allowed for any repository, schema blob checked);
+  an `adopted` main entry still wins; `--profile v4` still works. Reports carry the public owner limit
+  (`collect` too; the E2E test-subject limit is kept for that mode only).
+- `src/collect-core.ts`: evidence assembly / store persistence shared by `collect` and `auto-report`.
+- `task-meta auto-report --agent zcode --session <id> [--spool-dir --rollout-dir --store --outbox
+  --config --dry-run]` and `auto-report --retry` (`src/autoreport/*`). Exit 0 for every outcome
+  (usage errors exit 2); `--dry-run` posts nothing and writes no outbox line.
+  - Reads `<spool_dir>/<id>.jsonl` (waits up to 5 s for the Stop line), binds with `resolveBinding`.
+    PR-only: `gh api graphql` `closingIssuesReferences`, else same-repo `#n` refs of the PR title/body;
+    exactly one Issue => RESOLVED (evidence `PROMPT_REF`, reason `pr-linked-issue`), else HELD.
+    AMBIGUOUS/UNRESOLVED => HELD (outbox entry with reasons, nothing posted).
+  - Collects spool + optional `model-io-<id>.jsonl`; no run.txt (git-head derived segments) and no
+    headless result are fine (`collectZcodeRun` needs at least one of headless / model-io / spool).
+  - Gate logs by convention: `<gate_log_root>/<worktree>/gate*.log` (default root
+    `C:/xDev/kAiCreator/_tmp`) where the directory name parses to an Issue ref also carried by the
+    session's worktree refs and the newest log contains `GATE_SUBJECT_SHA` or `EXIT=`; otherwise
+    verifier `NOT_RUN`.
+  - Write-back citation: Issue comments created between SessionStart and last Stop + 10 min that
+    are not ADS reports are cited as `github:comment:<id>` (latest five) plus the limit
+    `agent write-back comments cited: N`; no comment content is read into the report.
+  - Revisions: unchanged data => same report (`ALREADY_PUBLISHED`); changed data => revision N+1 with
+    `supersedes` {revision, data_digest, comment_ref} of the predecessor found by readback, else HELD
+    (store not advanced). Report revision == store manifest revision.
+  - Outbox `<outbox>/<YYYY-MM-DD>.jsonl` (`Spool` format) with states PUBLISHED, ALREADY_PUBLISHED,
+    HELD, FAILED, DISABLED, ALREADY_RUNNING; per-session lock `<outbox>/locks/<id>.lock`
+    (stale after 15 min). `--retry` re-drives the latest HELD/FAILED entry per session.
+
+## 9. T17 status (multi-attempt branch DAG)
 
 Delivered on `task/tm-t17-sonnet`:
 - `src/lineage/dag.ts`: pure `buildIssueDag({repository, issue_number, attempts, git?, maxAncestryDepth?, defaultBranchRef?})`;
