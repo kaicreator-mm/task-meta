@@ -224,3 +224,18 @@ rejects a bad hook entry. Assumed (not exercised against a live session in this 
 desktop app (2.1.308 locally) fires plugin hooks identically, that async hooks of a `claude -p` run
 are not killed before they write (Stop/SessionEnd are therefore synchronous), and that `/clear` or a
 resume ends a session with SessionEnd.
+
+## 13. T19 golden set status (#16)
+
+- Sample: 224 real tool-call events (zcode 120, claude 72, codex 32) from the capture-plugin hook
+  spools of this v0.2 development, stratified by agent and tool_name/input_class (cap 15 per stratum,
+  fixed seed); metadata only (`docs/v0.2/golden/sample.json`, no session ids, timestamps or paths).
+- Labeler A = rule labeler v1; labeler B = independent blind labeling (`labeler-b.json`), committed
+  before agreement was computed. Both cover ACTION_CATEGORY only.
+- Cohen's kappa 0.960 (raw agreement 96.9%); per agent: claude 0.899, codex 1.000, zcode 0.979.
+- 7 disagreements (all A=UNKNOWN because the rule table has no entry for Agent, TaskStop,
+  update_plan, wrap_up); listed in `disagreements.md`. UNKNOWN share: A 29.9%, B 26.8%.
+- Caveat: most agreement is structural (both map the same shell input_class); the informative
+  signal is the UNKNOWN-heavy Bash:OTHER / PowerShell residue, which metadata cannot resolve.
+- Owner adjudication of the 7 rows: pending (empty `owner:` column). Labeler A was not tuned.
+- Regenerate: `node scripts/golden-sample.ts`, `node scripts/golden-agreement.ts`.

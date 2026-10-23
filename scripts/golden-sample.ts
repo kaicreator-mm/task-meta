@@ -38,7 +38,9 @@ const label = (c: Pick<Call, "tool_name" | "input_class">): string =>
 export function readCalls(agent: GoldenAgent, dir: string): Call[] {
   if (!existsSync(dir)) return [];
   const out: Call[] = [];
-  for (const f of readdirSync(dir).filter((n) => n.endsWith(".jsonl")).sort()) {
+  for (const f of readdirSync(dir)
+    .filter((n) => n.endsWith(".jsonl"))
+    .sort()) {
     const bySession = new Map<string, Map<string, Call>>();
     for (const line of readFileSync(join(dir, f), "utf8").split("\n")) {
       if (!line.trim()) continue;
@@ -75,7 +77,9 @@ export function readCalls(agent: GoldenAgent, dir: string): Call[] {
         }
       } else if (e.event === "PostToolUse" || e.event === "PostToolUseFailure") {
         const c = calls.get(callId);
-        if (c) c.outcome = e.event === "PostToolUseFailure" || e.outcome === "failure" ? "failure" : "success";
+        if (c)
+          c.outcome =
+            e.event === "PostToolUseFailure" || e.outcome === "failure" ? "failure" : "success";
       }
     }
   }
