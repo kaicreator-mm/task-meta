@@ -34,6 +34,7 @@ import { assertNoForbiddenContent } from "../privacy.ts";
 import { findReports, publishReport } from "../publish/index.ts";
 import {
   type Adoption,
+  CANDIDATE_PIN,
   buildReportDocument,
   loadAdoption,
   parseReportComment,
@@ -400,7 +401,9 @@ async function drive(
 
   // ---- profile ----
   const resolution = resolveProfile({
+    ...(cfg.e2e_test_only === true ? { profile: "v5" as const, adsPin: CANDIDATE_PIN } : {}),
     publish: !dry,
+    e2eTestOnly: cfg.e2e_test_only === true,
     repository: repo,
     adoption: deps.adoption ?? loadAdoption(),
   });
@@ -618,7 +621,7 @@ async function drive(
     throw new Held(["privacy guard refused the report body"], binding);
   }
   const digest = reportDataDigest(doc.data);
-  const outcome = await publishReport(client, { repo, issue, body, publish: !dry });
+  const outcome = await publishReport(client, { repo, issue, body, publish: !dry, e2eTestOnly: cfg.e2e_test_only === true });
   const common = { binding, data_digest: digest, revision };
   switch (outcome.state) {
     case "PUBLISHED":
