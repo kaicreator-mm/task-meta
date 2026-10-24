@@ -61,7 +61,7 @@ For reproducible Codex, Claude Code and ZCode plugin setup/debugging, read the
 [task-meta-agent-cli-validation Skill](.agents/skills/task-meta-agent-cli-validation/SKILL.md).
 Claude Code discovers the forwarding entry at
 [.claude/skills/task-meta-agent-cli-validation](.claude/skills/task-meta-agent-cli-validation/SKILL.md);
-ZCode can import the Codex Skill using Settings > Skills > Import > Symlink.
+ZCode discovers the workspace `.agents/skills` directly; Settings > Skills > Import > Symlink is optional for user-scope sharing outside this checkout.
 Always distinguish direct Hook fixture checks from real Agent CLI auto-trigger,
 real authenticated GitHub readback and desktop-only trust. In a new Host,
 unsupported CLI commands and unrun platform lanes remain NOT_RUN; do not
