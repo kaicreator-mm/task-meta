@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import type { AttemptSummary, ManifestPointer } from "../src/model.ts";
+import { dispositionOfCorrection, readCorrectionTarget } from "../src/correction/index.ts";
 import {
   GhCliClient,
   type GitHubClient,
@@ -9,7 +10,7 @@ import {
   type IssueComment,
   publishReport,
 } from "../src/publish/index.ts";
-import { buildReportDocument, renderReportComment } from "../src/report/index.ts";
+import { buildReportDocument, renderReportComment, reportDataDigest, type ReportDocument } from "../src/report/index.ts";
 
 const REPO = "example-org/example-repo";
 const ISSUE = 42;
@@ -389,5 +390,100 @@ describe("v0.3 T02 native readback/currentness", () => {
     const result = await run(c, bodyFor());
     assert.equal(result.state, "NOT_PUBLISHED");
     assert.equal(c.creates, 1, "do not repeat a POST with lost readback");
+  });
+});
+
+function v4CorrectionFixture(notice: "REVOKE" | "REDACT" | "DISPUTE" = "DISPUTE") {
+  const original = buildReportDocument(summary(), manifest, {
+    profile: "v4", revision: 1, supersedes: null,
+  });
+  const d = original.data;
+  const sub = d.subject as Record<string, unknown>;
+  const ref = `https://github.com/${REPO}/issues/${ISSUE}#issuecomment-1000`;
+  const correction: ReportDocument = {
+    schema: "ads/github/v4",
+    kind: "report",
+    data: {
+      report_id: "correction:1",
+      revision: 1,
+      publisher_namespace: d.publisher_namespace,
+      report_kind: "EXECUTION_CORRECTION",
+      subject: d.subject,
+      actor: d.actor,
+      observed_at: d.observed_at,
+      source_refs: [ref],
+      limits: [],
+      supersedes: null,
+      target: {
+        comment_ref: ref,
+        report_id: d.report_id,
+        revision: d.revision,
+        report_kind: d.report_kind,
+        publisher_namespace: d.publisher_namespace,
+        issue_ref: sub.issue_ref,
+        task_ref: sub.task_ref,
+        data_digest: reportDataDigest(d),
+      },
+      reason: "source-owning actor disputes or revokes this exact prior publication",
+      notice,
+    },
+  };
+  return { original: renderReportComment(original), correction: renderReportComment(correction), ref, data: d };
+}
+
+describe("v0.3 T02 immutable exact-target correction", () => {
+  it("qualified original native comment with v4 8-key target is read back to terminal page", async () => {
+    const fixture = v4CorrectionFixture();
+    const c = new FakeClient();
+    const original = c.add(fixture.original);
+    original.html_url = fixture.ref;
+    const target = await readCorrectionTarget(c, REPO, ISSUE, fixture.correction);
+    assert.equal(target.state, "VERIFIED_CURRENT");
+    if (target.state !== "VERIFIED_CURRENT") return;
+    const result = dispositionOfCorrection(fixture.correction, target, {
+      qualification: "VERIFIED",
+      publisherNamespace: String(fixture.data.publisher_namespace),
+      taskRef: String((fixture.data.subject as Record<string, unknown>).task_ref),
+      attemptRef: null,
+      evidenceRefs: ["native:owner:verified"],
+    });
+    assert.equal(result.state, "DISPUTED_NONREVOKING");
+  });
+
+  it("same-owner DISPUTE is nonrevoking; REVOKE without source owner witness stays UNKNOWN", async () => {
+    const fixture = v4CorrectionFixture("REVOKE");
+    const c = new FakeClient();
+    c.add(fixture.original).html_url = fixture.ref;
+    const target = await readCorrectionTarget(c, REPO, ISSUE, fixture.correction);
+    assert.equal(target.state, "VERIFIED_CURRENT");
+    const denied = dispositionOfCorrection(fixture.correction, target, {
+      qualification: "UNKNOWN",
+      publisherNamespace: String(fixture.data.publisher_namespace),
+      taskRef: String((fixture.data.subject as Record<string, unknown>).task_ref),
+      attemptRef: null, evidenceRefs: [],
+    });
+    assert.equal(denied.state, "UNKNOWN");
+    const accepted = dispositionOfCorrection(fixture.correction, target, {
+      qualification: "VERIFIED",
+      publisherNamespace: String(fixture.data.publisher_namespace),
+      taskRef: String((fixture.data.subject as Record<string, unknown>).task_ref),
+      attemptRef: null, evidenceRefs: ["native:source-owner:verified"],
+    });
+    assert.equal(accepted.state, "VERIFIED_REVOKED_OR_REDACTED");
+  });
+
+  it("edited native body, wrong URL, or incomplete comment pages cannot qualify a target", async () => {
+    const fixture = v4CorrectionFixture();
+    const c = new FakeClient();
+    c.add(fixture.original).html_url = "https://github.com/another/repo/issues/1#issuecomment-1000";
+    const wrongUrl = await readCorrectionTarget(c, REPO, ISSUE, fixture.correction);
+    assert.equal(wrongUrl.state, "CONFLICT");
+    c.comments[0]!.html_url = fixture.ref;
+    c.comments[0]!.body = fixture.original.replace("synthetic fixture", "edited source");
+    const drift = await readCorrectionTarget(c, REPO, ISSUE, fixture.correction);
+    assert.equal(drift.state, "UNKNOWN" === drift.state ? "UNKNOWN" : "CONFLICT");
+    c.listIssueComments = async () => ({ comments: [], hasNext: true });
+    const incomplete = await readCorrectionTarget(c, REPO, ISSUE, fixture.correction);
+    assert.equal(incomplete.state, "UNKNOWN");
   });
 });
