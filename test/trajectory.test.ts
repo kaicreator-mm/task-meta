@@ -51,7 +51,11 @@ test("C08 owner A->B->A' witnessed yields Pivot 2/2, Revisit 1/1", () => {
   assert.equal(result.pivot.denominator, 2);
   assert.equal(result.revisit.numerator, 1);
   assert.equal(result.revisit.denominator, 1);
-  assert.equal(result.revisit.excluded, 1, "first A->B never produces negative Revisit denominator");
+  assert.equal(
+    result.revisit.excluded,
+    1,
+    "first A->B never produces negative Revisit denominator",
+  );
   assert.equal(result.pivot.publicationField, null);
 });
 
