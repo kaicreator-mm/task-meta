@@ -56,3 +56,14 @@ Add `plugins/claude` as a local marketplace (`claude plugin marketplace add <pat
 package with `claude plugin validate plugins/claude/task-meta-capture`. The hooks use the exec form
 (`command: node`, `args: [...]`), so no shell quoting is involved on Windows.
 To remove: `claude plugin uninstall task-meta-capture` and delete the spool directory.
+
+## v0.3+ reusable CLI acceptance
+
+Use the canonical
+[task-meta-agent-cli-validation Skill](../../../../.agents/skills/task-meta-agent-cli-validation/SKILL.md)
+for verified commands, version/currentness, real headless Claude Code vs synthetic
+Hook fixtures, `SessionEnd` deadlines, Stop settle, Outbox privacy and GitHub permissions.
+The real Windows 0.3.0 Hook capture was independently witnessed at
+[PR #54](https://github.com/kaicreator-mm/task-meta/pull/54#issuecomment-6382732452),
+but the corresponding model request hit an expired OAuth login; it is a **Hook PASS**,
+not a successful Claude model-run claim. First check `claude plugin --help` on a new Host.
