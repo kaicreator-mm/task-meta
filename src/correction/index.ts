@@ -1,11 +1,17 @@
 // v0.3 T02: immutable correction target qualification; private read-only helper.
 // This layer NEVER edits native GitHub Report history or private CAS manifests.
-import { parseReportComment } from "../report/index.ts";
 import type { GitHubClient, IssueComment } from "../publish/client.ts";
+import { parseReportComment } from "../report/index.ts";
 
 export type CorrectionNotice = "REVOKE" | "REDACT" | "DISPUTE";
 export type TargetLookup =
-  | { state: "VERIFIED_CURRENT"; comment: IssueComment; digest: string; profile: "v4" | "v5"; correctionDigest: string }
+  | {
+      state: "VERIFIED_CURRENT";
+      comment: IssueComment;
+      digest: string;
+      profile: "v4" | "v5";
+      correctionDigest: string;
+    }
   | { state: "UNKNOWN" | "CONFLICT"; reason: string };
 
 export interface CorrectionDisposition {
@@ -42,30 +48,50 @@ export async function readCorrectionTarget(
   }
   const data = parsed.doc.data;
   const target = data.target;
-  if (!isObject(target) || !Number.isSafeInteger(target.comment_id) ||
-    typeof target.comment_ref !== "string" || typeof target.report_id !== "string" ||
-    typeof target.data_digest !== "string" || typeof target.publisher_namespace !== "string" ||
-    typeof target.task_ref !== "string" || typeof target.report_kind !== "string" ||
-    typeof target.revision !== "number" || !Number.isSafeInteger(target.revision)
-  ) return { state: "UNKNOWN", reason: "invalid exact target identity" };
+  const isV5 = parsed.profile === "v5";
+  if (
+    !isObject(target) ||
+    typeof target.comment_ref !== "string" ||
+    typeof target.report_id !== "string" ||
+    typeof target.data_digest !== "string" ||
+    typeof target.publisher_namespace !== "string" ||
+    typeof target.task_ref !== "string" ||
+    typeof target.report_kind !== "string" ||
+    typeof target.revision !== "number" ||
+    !Number.isSafeInteger(target.revision) ||
+    // v4.15 correction targets are exactly 8 keys (additionalProperties:false)
+    // and carry no comment_id; only the v5 14-key target spells it out.
+    (isV5 && !Number.isSafeInteger(target.comment_id))
+  )
+    return { state: "UNKNOWN", reason: "invalid exact target identity" };
+  const marker = "#issuecomment-";
+  const digits = target.comment_ref.slice(target.comment_ref.lastIndexOf(marker) + marker.length);
+  const derived = /^\d+$/.test(digits) ? Number(digits) : null;
+  const targetId: unknown = isV5 ? target.comment_id : derived;
+  if (typeof targetId !== "number" || !Number.isSafeInteger(targetId) || targetId < 1) {
+    return { state: "UNKNOWN", reason: "invalid exact target identity" };
+  }
   if (
     target.issue_ref !== issueUrl(repo, issue) ||
-    target.comment_ref !== `${issueUrl(repo, issue)}#issuecomment-${target.comment_id}` ||
-    (parsed.profile === "v5" && (
-      target.repository !== repo || target.ads_profile !== "ads/github/v5:report" ||
-      typeof target.attempt_ref !== "string"
-    ))
-  ) return { state: "UNKNOWN", reason: "target repo/profile/native URL mismatch" };
+    target.comment_ref !== `${issueUrl(repo, issue)}#issuecomment-${targetId}` ||
+    (isV5 &&
+      (target.repository !== repo ||
+        target.ads_profile !== "ads/github/v5:report" ||
+        typeof target.attempt_ref !== "string"))
+  )
+    return { state: "UNKNOWN", reason: "target repo/profile/native URL mismatch" };
 
-  const targetId = target.comment_id;
   let found: IssueComment | null = null;
   let terminal = false;
   const seen = new Map<number, string>();
   try {
     for (let page = 1; page <= MAX_PAGES; page++) {
       const res = await client.listIssueComments(repo, issue, page, PER_PAGE);
-      if (!Array.isArray(res.comments) || typeof res.hasNext !== "boolean" ||
-        (res.hasNext && res.comments.length === 0)) {
+      if (
+        !Array.isArray(res.comments) ||
+        typeof res.hasNext !== "boolean" ||
+        (res.hasNext && res.comments.length === 0)
+      ) {
         return { state: "UNKNOWN", reason: "malformed/partial native pagination" };
       }
       for (const comment of res.comments) {
@@ -79,12 +105,18 @@ export async function readCorrectionTarget(
         seen.set(comment.id, comment.body);
         if (comment.id === targetId) {
           if (comment.html_url !== target.comment_ref) {
-            return { state: "CONFLICT", reason: "actual native URL does not match requested target" };
+            return {
+              state: "CONFLICT",
+              reason: "actual native URL does not match requested target",
+            };
           }
           found = comment;
         }
       }
-      if (!res.hasNext) { terminal = true; break; }
+      if (!res.hasNext) {
+        terminal = true;
+        break;
+      }
     }
   } catch {
     return { state: "UNKNOWN", reason: "GitHub readback failed before terminal page" };
@@ -100,7 +132,8 @@ export async function readCorrectionTarget(
   const subject = original.subject;
   if (
     !isObject(subject) ||
-    subject.repository !== repo || subject.issue_ref !== issueUrl(repo, issue) ||
+    subject.repository !== repo ||
+    subject.issue_ref !== issueUrl(repo, issue) ||
     original.report_id !== target.report_id ||
     original.revision !== target.revision ||
     original.report_kind !== target.report_kind ||
@@ -109,16 +142,25 @@ export async function readCorrectionTarget(
     source.dataDigest !== target.data_digest ||
     (parsed.profile === "v5" &&
       (subject.attempt_ref !== target.attempt_ref ||
-       subject.source_status !== target.target_source_status ||
-       subject.source_sha !== target.target_source_sha))
-  ) return { state: "CONFLICT", reason: "original report source identity/current digest differs" };
-  return { state: "VERIFIED_CURRENT", comment: found, digest: source.dataDigest, profile: source.profile, correctionDigest: parsed.dataDigest };
+        subject.source_status !== target.target_source_status ||
+        subject.source_sha !== target.target_source_sha))
+  )
+    return { state: "CONFLICT", reason: "original report source identity/current digest differs" };
+  return {
+    state: "VERIFIED_CURRENT",
+    comment: found,
+    digest: source.dataDigest,
+    profile: source.profile,
+    correctionDigest: parsed.dataDigest,
+  };
 }
 
 /** Authority must be source-qualified by a separate owner mechanism.
  * DISPUTE by any actor (including the owner) never acts as a REVOKE. */
 export function dispositionOfCorrection(
-  correctionBody: string, target: TargetLookup, authority: VerifiedAuthority,
+  correctionBody: string,
+  target: TargetLookup,
+  authority: VerifiedAuthority,
 ): CorrectionDisposition {
   if (target.state !== "VERIFIED_CURRENT") {
     return { state: "UNKNOWN", materialUseSafe: false, reason: "target not independently current" };
@@ -128,8 +170,11 @@ export function dispositionOfCorrection(
     return { state: "UNKNOWN", materialUseSafe: false, reason: "correction schema invalid" };
   }
   if (target.correctionDigest !== parsed.dataDigest || target.profile !== parsed.profile) {
-    return { state: "UNKNOWN", materialUseSafe: false,
-      reason: "correction source identity differs from the target evidence witness" };
+    return {
+      state: "UNKNOWN",
+      materialUseSafe: false,
+      reason: "correction source identity differs from the target evidence witness",
+    };
   }
   const d = parsed.doc.data;
   const subject = d.subject;
@@ -137,21 +182,34 @@ export function dispositionOfCorrection(
     return { state: "UNKNOWN", materialUseSafe: false, reason: "source owner/target missing" };
   }
   if (d.notice === "DISPUTE") {
-    return { state: "DISPUTED_NONREVOKING", materialUseSafe: false,
-      reason: "DISPUTE alone never revokes, even from an owner; affected downstream claims need independent qualification" };
+    return {
+      state: "DISPUTED_NONREVOKING",
+      materialUseSafe: false,
+      reason:
+        "DISPUTE alone never revokes, even from an owner; affected downstream claims need independent qualification",
+    };
   }
   if (d.notice !== "REVOKE" && d.notice !== "REDACT") {
     return { state: "UNKNOWN", materialUseSafe: false, reason: "unknown correction notice" };
   }
-  if (authority.qualification !== "VERIFIED" || authority.evidenceRefs.length === 0 ||
+  if (
+    authority.qualification !== "VERIFIED" ||
+    authority.evidenceRefs.length === 0 ||
     authority.publisherNamespace !== d.target.publisher_namespace ||
     authority.taskRef !== d.target.task_ref ||
     authority.attemptRef !== (parsed.profile === "v5" ? d.target.attempt_ref : null) ||
     d.publisher_namespace !== authority.publisherNamespace ||
     subject.task_ref !== authority.taskRef ||
     (parsed.profile === "v5" && subject.attempt_ref !== authority.attemptRef)
-  ) return { state: "UNKNOWN", materialUseSafe: false,
-    reason: "source-owned revocation authority is not independently verified" };
-  return { state: "VERIFIED_REVOKED_OR_REDACTED", materialUseSafe: false,
-    reason: "owner-qualified notice applies to exact native target only, no historical mutation" };
+  )
+    return {
+      state: "UNKNOWN",
+      materialUseSafe: false,
+      reason: "source-owned revocation authority is not independently verified",
+    };
+  return {
+    state: "VERIFIED_REVOKED_OR_REDACTED",
+    materialUseSafe: false,
+    reason: "owner-qualified notice applies to exact native target only, no historical mutation",
+  };
 }

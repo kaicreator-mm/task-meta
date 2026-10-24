@@ -382,8 +382,12 @@ describe("v0.3 T02 exact 14-field v5 correction target", () => {
       adsRevision: QUALIFIED_V416_MAIN_SHA,
     });
     const data = original.data;
-    const sub = { ...(data.subject as Record<string, unknown>),
-      source_status: "PINNED", source_sha: "a".repeat(40), source_reason: null };
+    const sub: Record<string, unknown> = {
+      ...(data.subject as Record<string, unknown>),
+      source_status: "PINNED",
+      source_sha: "a".repeat(40),
+      source_reason: null,
+    };
     original.data.subject = sub;
     const repo = String(sub.repository);
     const issue = 7;
@@ -423,22 +427,29 @@ describe("v0.3 T02 exact 14-field v5 correction target", () => {
         reason: "original source needs verified correction",
         notice: "DISPUTE",
         notice_publisher_source_sha: "b".repeat(40),
-        publication: { classification: "PUBLISHABLE", clearance_ref: "clearance:synthetic",
-          projection_digest: "b".repeat(64) },
+        publication: {
+          classification: "PUBLISHABLE",
+          clearance_ref: "clearance:synthetic",
+          projection_digest: "b".repeat(64),
+        },
       },
     };
     const originalBody = renderReportComment(original);
     const correctionBody = renderReportComment(correction);
     const client = {
       async listIssueComments() {
-        return { comments: [{ id: 103, html_url: ref, body: originalBody, user_login: "transport" }],
-          hasNext: false };
+        return {
+          comments: [{ id: 103, html_url: ref, body: originalBody, user_login: "transport" }],
+          hasNext: false,
+        };
       },
     };
     const resolved = await readCorrectionTarget(client, repo, issue, correctionBody);
     assert.equal(resolved.state, "VERIFIED_CURRENT");
-    const broken = { ...correction,
-      data: { ...correction.data, target: { ...target, target_source_sha: "c".repeat(40) } } };
+    const broken = {
+      ...correction,
+      data: { ...correction.data, target: { ...target, target_source_sha: "c".repeat(40) } },
+    };
     const invalid = await readCorrectionTarget(client, repo, issue, renderReportComment(broken));
     assert.equal(invalid.state, "CONFLICT");
   });

@@ -67,12 +67,16 @@ export async function findReports(
   for (let page = 1; ; page++) {
     if (page > MAX_PAGES) throw new Error("pagination did not terminate");
     const res = await client.listIssueComments(repo, issue, page, perPage);
-    if (!Array.isArray(res.comments) || typeof res.hasNext !== "boolean" ||
-        (res.hasNext && res.comments.length === 0)) {
+    if (
+      !Array.isArray(res.comments) ||
+      typeof res.hasNext !== "boolean" ||
+      (res.hasNext && res.comments.length === 0)
+    ) {
       throw new Error("partial or invalid native GitHub pagination");
     }
     for (const c of res.comments) {
-      if (!Number.isSafeInteger(c.id) || c.id <= 0) throw new Error("invalid native comment identity");
+      if (!Number.isSafeInteger(c.id) || c.id <= 0)
+        throw new Error("invalid native comment identity");
       const previous = nativeIds.get(c.id);
       if (previous !== undefined) {
         if (previous.body !== c.body || previous.url !== c.html_url) {
@@ -182,8 +186,11 @@ async function findById(
   let found: IssueComment | null = null;
   for (let page = 1; page <= MAX_PAGES; page++) {
     const res = await client.listIssueComments(repo, issue, page, perPage);
-    if (!Array.isArray(res.comments) || typeof res.hasNext !== "boolean" ||
-        (res.hasNext && res.comments.length === 0)) {
+    if (
+      !Array.isArray(res.comments) ||
+      typeof res.hasNext !== "boolean" ||
+      (res.hasNext && res.comments.length === 0)
+    ) {
       throw new Error("partial or invalid native GitHub pagination");
     }
     for (const c of res.comments) {

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import type { AttemptSummary, ManifestPointer } from "../src/model.ts";
 import { dispositionOfCorrection, readCorrectionTarget } from "../src/correction/index.ts";
+import type { AttemptSummary, ManifestPointer } from "../src/model.ts";
 import {
   GhCliClient,
   type GitHubClient,
@@ -10,7 +10,12 @@ import {
   type IssueComment,
   publishReport,
 } from "../src/publish/index.ts";
-import { buildReportDocument, renderReportComment, reportDataDigest, type ReportDocument } from "../src/report/index.ts";
+import {
+  buildReportDocument,
+  type ReportDocument,
+  renderReportComment,
+  reportDataDigest,
+} from "../src/report/index.ts";
 
 const REPO = "example-org/example-repo";
 const ISSUE = 42;
@@ -385,7 +390,12 @@ describe("v0.3 T02 native readback/currentness", () => {
     c.listIssueComments = async () => {
       calls++;
       if (calls === 1) return { comments: [original], hasNext: true };
-      return { comments: [{ ...original, html_url: "https://github.com/another/repo/issues/1#issuecomment-1000" }], hasNext: false };
+      return {
+        comments: [
+          { ...original, html_url: "https://github.com/another/repo/issues/1#issuecomment-1000" },
+        ],
+        hasNext: false,
+      };
     };
     const outcome = await run(c, bodyFor());
     assert.equal(outcome.state, "NOT_PUBLISHED");
@@ -409,7 +419,9 @@ describe("v0.3 T02 native readback/currentness", () => {
 
 function v4CorrectionFixture(notice: "REVOKE" | "REDACT" | "DISPUTE" = "DISPUTE") {
   const original = buildReportDocument(summary(), manifest, {
-    profile: "v4", revision: 1, supersedes: null,
+    profile: "v4",
+    revision: 1,
+    supersedes: null,
   });
   const d = original.data;
   const sub = d.subject as Record<string, unknown>;
@@ -442,7 +454,12 @@ function v4CorrectionFixture(notice: "REVOKE" | "REDACT" | "DISPUTE" = "DISPUTE"
       notice,
     },
   };
-  return { original: renderReportComment(original), correction: renderReportComment(correction), ref, data: d };
+  return {
+    original: renderReportComment(original),
+    correction: renderReportComment(correction),
+    ref,
+    data: d,
+  };
 }
 
 describe("v0.3 T02 immutable exact-target correction", () => {
@@ -474,14 +491,16 @@ describe("v0.3 T02 immutable exact-target correction", () => {
       qualification: "UNKNOWN",
       publisherNamespace: String(fixture.data.publisher_namespace),
       taskRef: String((fixture.data.subject as Record<string, unknown>).task_ref),
-      attemptRef: null, evidenceRefs: [],
+      attemptRef: null,
+      evidenceRefs: [],
     });
     assert.equal(denied.state, "UNKNOWN");
     const accepted = dispositionOfCorrection(fixture.correction, target, {
       qualification: "VERIFIED",
       publisherNamespace: String(fixture.data.publisher_namespace),
       taskRef: String((fixture.data.subject as Record<string, unknown>).task_ref),
-      attemptRef: null, evidenceRefs: ["native:source-owner:verified"],
+      attemptRef: null,
+      evidenceRefs: ["native:source-owner:verified"],
     });
     assert.equal(accepted.state, "VERIFIED_REVOKED_OR_REDACTED");
     const unrelatedCorrection = v4CorrectionFixture("DISPUTE").correction;
@@ -489,9 +508,14 @@ describe("v0.3 T02 immutable exact-target correction", () => {
       qualification: "VERIFIED",
       publisherNamespace: String(fixture.data.publisher_namespace),
       taskRef: String((fixture.data.subject as Record<string, unknown>).task_ref),
-      attemptRef: null, evidenceRefs: ["native:source-owner:verified"],
+      attemptRef: null,
+      evidenceRefs: ["native:source-owner:verified"],
     });
-    assert.equal(crossed.state, "UNKNOWN", "a native witness cannot be reused for a different correction");
+    assert.equal(
+      crossed.state,
+      "UNKNOWN",
+      "a native witness cannot be reused for a different correction",
+    );
   });
 
   it("edited native body, wrong URL, or incomplete comment pages cannot qualify a target", async () => {
