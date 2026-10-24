@@ -60,7 +60,7 @@ To remove: `claude plugin uninstall task-meta-capture` and delete the spool dire
 ## v0.3+ reusable CLI acceptance
 
 Use the canonical
-[task-meta-agent-cli-validation Skill](../../../../.agents/skills/task-meta-agent-cli-validation/SKILL.md)
+[task-meta-agent-cli-validation Skill](../../../.agents/skills/task-meta-agent-cli-validation/SKILL.md)
 for verified commands, version/currentness, real headless Claude Code vs synthetic
 Hook fixtures, `SessionEnd` deadlines, Stop settle, Outbox privacy and GitHub permissions.
 The real Windows 0.3.0 Hook capture was independently witnessed at
