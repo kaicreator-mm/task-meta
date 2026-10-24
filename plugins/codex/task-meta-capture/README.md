@@ -1,8 +1,13 @@
 # task-meta-capture (Codex plugin)
 
-Metadata-only lifecycle capture for task-meta, for the Codex in the ChatGPT desktop app
-("Codex & OWL", app 26.1016.x, `codex-cli 0.163.0-alpha`). It records _when_ tools ran, _how_
-they ended and _where git HEAD was_, never _what_ the agent did or said.
+Metadata-only lifecycle capture for task-meta, initially researched against Codex in the
+ChatGPT desktop app ("Codex & OWL", **initial 2026-10-23 observation**:
+app 26.1016.x, `codex-cli 0.163.0-alpha`). The **later confirmed 0.3.0 activation**
+used Windows desktop `OpenAI.Codex_26.1021.3705.0`, Node 24.21.0
+([source receipt](https://github.com/kaicreator-mm/task-meta/issues/46#issuecomment-6383354474)).
+These are historical Host versions, not a minimum required or current CLI guarantee.
+The plugin records _when_ tools ran, _how_ they ended and _where git HEAD was_,
+never _what_ the agent did or said.
 
 ## Mechanism (evidence from the installed app, 2026-10-23)
 
@@ -71,13 +76,22 @@ line is `{"d":"<sha256 of JCS(e)>","e":{...}}`, append-only. The hook always exi
 nothing and logs only an error class name to `_errors.log`. Use it with
 `task-meta collect-codex --codex-hook-spool <spool dir>`.
 
-## Install / remove
+## Install / remove — verify the actual Host command first
 
-```
-codex plugin marketplace add <repo>/plugins/codex
+**VERIFY_AT_RUNTIME:** the following command is an *earlier installation example*,
+not a confirmed command on every `codex` CLI build. Check the exact executable's
+`codex --help` and `codex plugin --help` before using any subcommand:
+
+```sh
+codex plugin marketplace add <approved-local-repo>/plugins/codex
 ```
 
-then enable `task-meta-capture@dev-task-meta` in the app's plugin list and approve its hooks.
+Run it only if the installed CLI actually exposes those flags, and only after
+approval for user-level plugin changes. When testing the desktop-only lane,
+use the app's plugin list to enable `task-meta-capture@dev-task-meta` and
+approve Hooks with user consent; **do not equate desktop trust with CLI plugin
+activation**. If the CLI does not support these commands, report
+`REAL_AGENT_CLI=NOT_RUN/UNSUPPORTED` rather than force-editing configuration.
 Requires `node` on the PATH of the hook process (the command is
 `node -e "require(<plugin root>/scripts/run.cjs)"`, so it needs no shell variable expansion and
 behaves the same under cmd, PowerShell and sh).
@@ -88,8 +102,10 @@ The previous 2026-10-23 warning that **no live desktop activation was tested** i
 historical. Windows Codex desktop v0.3.0 **was** installed and all 7 hooks approved in
 app, then emitted 5 verified events and a Stop→HELD Outbox with zero unauthorized POST
 ([actual Host receipt in Issue #46](https://github.com/kaicreator-mm/task-meta/issues/46#issuecomment-6383354474)).
-SessionEnd also appeared but under a different Host session ID: **same-session SessionEnd
-correlation remains NOT_QUALIFIED**, not PASS. This does not prove that the **Codex CLI**
+An earlier SessionEnd observation had a different Host session ID; a [later five-path
+desktop close/quit probe](https://github.com/kaicreator-mm/task-meta/issues/46#issuecomment-6384041266)
+saw **no SessionEnd event at all**. Same-session SessionEnd correlation remains
+**NOT_QUALIFIED**, with Host-vs-plugin cause UNKNOWN. This does not prove that the **Codex CLI**
 loads these desktop plugin Hooks or supports the same trust command. Query the installed
 `codex --help` / `codex plugin --help` first; if unsupported, record NOT_RUN instead
 of replaying a fake Hook or editing trust hashes.
