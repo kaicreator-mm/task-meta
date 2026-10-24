@@ -10,6 +10,11 @@ import { main } from "../src/cli.ts";
 import type { IssueComment } from "../src/publish/index.ts";
 import { parseReportComment } from "../src/report/index.ts";
 import { EvidenceStore, Spool } from "../src/store/index.ts";
+import {
+  fixtureGrantPolicy,
+  ownerClearanceRef,
+  ownerGrantComment,
+} from "./fixtures/publication-grant.ts";
 
 const fxDir = join(import.meta.dirname, "fixtures", "zcode");
 const SID = "sess-synth-0001";
@@ -105,12 +110,16 @@ class FakeGh implements AutoReportGitHub {
   creates = 0;
   linked = new Map<number, number[]>();
   delayMs = 0;
-  async listIssueComments(_r: string, _i: number, page: number, perPage: number) {
+  async listIssueComments(r: string, i: number, page: number, perPage: number) {
+    const all = [ownerGrantComment(r, i), ...this.comments];
     const s = (page - 1) * perPage;
     return {
-      comments: this.comments.slice(s, s + perPage),
-      hasNext: s + perPage < this.comments.length,
+      comments: all.slice(s, s + perPage),
+      hasNext: s + perPage < all.length,
     };
+  }
+  async verifyIssuePublicationPermission() {
+    return true;
   }
   async createIssueComment(repo: string, issue: number, body: string) {
     if (this.delayMs > 0) await new Promise((r) => setTimeout(r, this.delayMs));
@@ -162,7 +171,7 @@ async function setup(
     env.config,
     JSON.stringify({
       enabled: true,
-      clearance_ref: "owner-authorization:2026-10-23:kaicreator-mm/*",
+      clearance_ref: ownerClearanceRef(REPO, 1296),
       store: env.store,
       outbox: env.outbox,
       zcode: { spool_dir: env.spool, rollout_dir: env.rollout },
@@ -198,7 +207,15 @@ const run = (
       configPath: env.config,
       ...over,
     },
-    { client: gh, now: () => now, sleep: async () => {}, settleMs: 0, env: {}, ...extra },
+    {
+      client: gh,
+      now: () => now,
+      sleep: async () => {},
+      settleMs: 0,
+      env: {},
+      publicationPolicy: fixtureGrantPolicy(),
+      ...extra,
+    },
   );
 
 const bodyOf = (c: IssueComment | undefined) => {
@@ -258,7 +275,7 @@ describe("auto-report publish", () => {
     assert.equal((d.verifier as { status: string }).status, "NOT_RUN");
     assert.equal(
       (d.publication as { clearance_ref: string }).clearance_ref,
-      "owner-authorization:2026-10-23:kaicreator-mm/*",
+      ownerClearanceRef(REPO, 1296),
     );
     assert.equal(r.data_digest, p.dataDigest);
 
@@ -630,7 +647,12 @@ describe("retry", () => {
       stderr: (s) => {
         stderr += s;
       },
-      autoReport: { sleep: async () => {}, settleMs: 0, env: {} },
+      autoReport: {
+        sleep: async () => {},
+        settleMs: 0,
+        env: {},
+        publicationPolicy: fixtureGrantPolicy(),
+      },
     });
     return { code, stdout, stderr };
   };

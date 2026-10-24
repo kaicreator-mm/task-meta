@@ -8,6 +8,7 @@ import { after } from "node:test";
 import type { AutoReportGitHub } from "../../../src/autoreport/index.ts";
 import { canonicalDigest, canonicalize } from "../../../src/canonical.ts";
 import type { IssueComment } from "../../../src/publish/index.ts";
+import { fixtureGrantPolicy, ownerClearanceRef, ownerGrantComment } from "../publication-grant.ts";
 import { basicSession, SID } from "./build.ts";
 
 export const H1 = "a".repeat(40);
@@ -121,15 +122,22 @@ export const preToolLine = (): string =>
 
 export const GOOD_SPOOL = (): string => startLine() + promptLine() + stopLine();
 
+/** Source-qualified grant fixture registrar shared by the claude/flood publish tests. */
+export const publicationPolicy = fixtureGrantPolicy();
+
 export class FakeGh implements AutoReportGitHub {
   comments: IssueComment[] = [];
   creates = 0;
-  async listIssueComments(_r: string, _i: number, page: number, perPage: number) {
+  async listIssueComments(r: string, i: number, page: number, perPage: number) {
+    const all = [ownerGrantComment(r, i), ...this.comments];
     const s = (page - 1) * perPage;
     return {
-      comments: this.comments.slice(s, s + perPage),
-      hasNext: s + perPage < this.comments.length,
+      comments: all.slice(s, s + perPage),
+      hasNext: s + perPage < all.length,
     };
+  }
+  async verifyIssuePublicationPermission() {
+    return true;
   }
   async createIssueComment(repo: string, issue: number, body: string) {
     this.creates++;
@@ -188,7 +196,7 @@ export async function setup(
     env.config,
     JSON.stringify({
       enabled: true,
-      clearance_ref: "owner-authorization:2026-10-23:kaicreator-mm/*",
+      clearance_ref: ownerClearanceRef(REPO, 1296),
       store: env.store,
       outbox: env.outbox,
       zcode: { spool_dir: join(root, "zcode-spool"), rollout_dir: join(root, "zcode-rollout") },

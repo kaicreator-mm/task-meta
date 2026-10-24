@@ -5,11 +5,17 @@ import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
+import type { CliDeps } from "../src/cli.ts";
 import { main } from "../src/cli.ts";
 import { assertNoForbiddenContent } from "../src/privacy.ts";
 import type { GitHubClient, IssueComment } from "../src/publish/index.ts";
 import { parseReportComment } from "../src/report/index.ts";
 import { EvidenceStore } from "../src/store/index.ts";
+import {
+  fixtureGrantPolicy,
+  ownerClearanceRef,
+  ownerGrantComment,
+} from "./fixtures/publication-grant.ts";
 
 const fxDir = join(import.meta.dirname, "fixtures", "zcode");
 const fx = (n: string) => join(fxDir, n);
@@ -20,12 +26,16 @@ const NOW = new Date("2026-10-23T00:00:00.000Z");
 class FakeClient implements GitHubClient {
   comments: IssueComment[] = [];
   creates = 0;
-  async listIssueComments(_r: string, _i: number, page: number, perPage: number) {
+  async listIssueComments(r: string, i: number, page: number, perPage: number) {
+    const all = [ownerGrantComment(r, i), ...this.comments];
     const start = (page - 1) * perPage;
     return {
-      comments: this.comments.slice(start, start + perPage),
-      hasNext: start + perPage < this.comments.length,
+      comments: all.slice(start, start + perPage),
+      hasNext: start + perPage < all.length,
     };
+  }
+  async verifyIssuePublicationPermission() {
+    return true;
   }
   async createIssueComment(_r: string, _i: number, body: string) {
     this.creates++;
@@ -50,12 +60,18 @@ async function tmp(): Promise<string> {
   return d;
 }
 
-async function exec(args: string[], client: GitHubClient = new FakeClient(), now = NOW) {
+async function exec(
+  args: string[],
+  client: GitHubClient = new FakeClient(),
+  now = NOW,
+  extra: Partial<CliDeps> = {},
+) {
   let stdout = "";
   let stderr = "";
   const code = await main(args, {
     client,
     now: () => now,
+    ...extra,
     stdout: (s) => {
       stdout += s;
     },
@@ -529,10 +545,10 @@ test("collect without --profile uses qualified ADS main v5 adoption, not legacy 
   const dir = await tmp();
   const client = new FakeClient();
   const args = dropFlag(
-    v5Args(dir, ["--clearance-ref", "clearance:synthetic", "--publish"]),
+    v5Args(dir, ["--clearance-ref", ownerClearanceRef(REPO, 7), "--publish"]),
     "--profile",
   );
-  const r = await exec(args, client);
+  const r = await exec(args, client, NOW, { publicationPolicy: fixtureGrantPolicy() });
   assert.equal(r.code, 0, r.stderr);
   assert.equal(r.json.outcome, "PUBLISHED");
   assert.equal(r.json.profile, "v5");

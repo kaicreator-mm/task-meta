@@ -4,7 +4,12 @@ import {
   REPORT_MARKER,
   resolveProfile,
 } from "../report/index.ts";
-import { checkPublicationGrant, loadPublicationPolicy } from "./authority.ts";
+import {
+  type ClearanceTarget,
+  checkPublicationGrant,
+  loadPublicationPolicy,
+  type PublicationPolicyProvider,
+} from "./authority.ts";
 import type { GitHubClient, IssueComment } from "./client.ts";
 
 export type PublishOutcome =
@@ -99,6 +104,8 @@ export interface PublishOptions {
   perPage?: number;
   /** Explicit isolated candidate test purpose; does not override repository allowlisting. */
   e2eTestOnly?: boolean;
+  /** DI seam for source-qualified grant fixtures; default loads the shipped fail-closed policy. */
+  publicationPolicy?: PublicationPolicyProvider;
 }
 
 const realSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -226,7 +233,7 @@ export async function publishReport(
     // E2E_TEST_SUBJECT is separately isolated by exact repo + test-purpose flag.
     if (gate.mode === "ADOPTED") {
       try {
-        const clearance = await checkPublicationGrant(client, {
+        const target: ClearanceTarget = {
           repository: repo,
           issueNumber: issue,
           publisherNamespace: String(data.publisher_namespace),
@@ -234,14 +241,21 @@ export async function publishReport(
           publisherSourceSha: subject.publisher_source_sha,
           publicationRef: publication.clearance_ref,
           data,
-        }, loadPublicationPolicy());
+        };
+        const clearance = await checkPublicationGrant(
+          client,
+          target,
+          opts.publicationPolicy ? opts.publicationPolicy(target) : loadPublicationPolicy(),
+        );
         if (!clearance.ok) {
           return { state: "NOT_PUBLISHED", reason: clearance.code };
         }
         // Re-read owning native Issue and effective authenticated repo write
         // permission. The report's asserted PUBLISHABLE is not authority.
-        if (!client.verifyIssuePublicationPermission ||
-            !(await client.verifyIssuePublicationPermission(repo, issue))) {
+        if (
+          !client.verifyIssuePublicationPermission ||
+          !(await client.verifyIssuePublicationPermission(repo, issue))
+        ) {
           return { state: "NOT_PUBLISHED", reason: "NATIVE_PUBLICATION_PERMISSION_UNVERIFIED" };
         }
       } catch {

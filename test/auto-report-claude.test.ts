@@ -15,6 +15,7 @@ import {
   line,
   NOW,
   PUB_SHA,
+  publicationPolicy,
   REPO,
   setup,
   startLine,
@@ -31,7 +32,7 @@ const run = (
 ) =>
   autoReportSession(
     { agent: "claude", session: SID, configPath: env.config, ...over },
-    { client: gh, now: () => NOW, sleep: async () => {}, settleMs: 0, env: {} },
+    { client: gh, now: () => NOW, sleep: async () => {}, settleMs: 0, env: {}, publicationPolicy },
   );
 
 test("auto-report --agent claude: PUBLISHED v5 to the bound Issue (transcript + subagent file), then ALREADY_PUBLISHED", async () => {

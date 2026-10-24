@@ -140,7 +140,10 @@ export class GhCliClient implements GitHubClient {
     checkTarget(repo, issue);
     try {
       const a = await this.exec(this.gh, [
-        "api", "-H", "Accept: application/vnd.github+json", `repos/${repo}`,
+        "api",
+        "-H",
+        "Accept: application/vnd.github+json",
+        `repos/${repo}`,
       ]);
       const info = JSON.parse(a.stdout) as Record<string, unknown>;
       const permissions = info.permissions as Record<string, unknown> | undefined;
@@ -148,12 +151,18 @@ export class GhCliClient implements GitHubClient {
         return false;
       }
       const b = await this.exec(this.gh, [
-        "api", "-H", "Accept: application/vnd.github+json", `repos/${repo}/issues/${issue}`,
+        "api",
+        "-H",
+        "Accept: application/vnd.github+json",
+        `repos/${repo}/issues/${issue}`,
       ]);
       const issueInfo = JSON.parse(b.stdout) as Record<string, unknown>;
-      return issueInfo.number === issue && issueInfo.locked !== true &&
+      return (
+        issueInfo.number === issue &&
+        issueInfo.locked !== true &&
         typeof issueInfo.html_url === "string" &&
-        issueInfo.html_url === `https://github.com/${repo}/issues/${issue}`;
+        issueInfo.html_url === `https://github.com/${repo}/issues/${issue}`
+      );
     } catch {
       return false;
     }

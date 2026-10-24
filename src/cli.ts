@@ -29,6 +29,7 @@ import {
 } from "./collect-core.ts";
 import type { ManifestPointer } from "./model.ts";
 import { assertNoForbiddenContent } from "./privacy.ts";
+import type { PublicationPolicyProvider } from "./publish/authority.ts";
 import { GhCliClient, type GitHubClient, publishReport } from "./publish/index.ts";
 import {
   buildReportDocument,
@@ -50,6 +51,8 @@ export interface CliDeps {
   now?: () => Date;
   stdout?: (s: string) => void;
   stderr?: (s: string) => void;
+  /** DI seam for source-qualified grant fixtures; default is the shipped fail-closed policy. */
+  publicationPolicy?: PublicationPolicyProvider;
 }
 
 const USAGE = `usage: collect --repo <owner/name> --issue <n> --headless <file>
@@ -527,6 +530,7 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     body,
     publish: v.publish === true,
     e2eTestOnly: v["e2e-test-only"] === true,
+    ...(deps.publicationPolicy ? { publicationPolicy: deps.publicationPolicy } : {}),
   });
   const line: Record<string, unknown> = {
     outcome: outcome.state,

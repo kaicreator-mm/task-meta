@@ -14,6 +14,7 @@ import {
   NOW,
   postToolLine,
   preToolLine,
+  publicationPolicy,
   setup,
   stopLine,
 } from "./fixtures/claude/autoenv.ts";
@@ -43,7 +44,7 @@ function clock(onSleep?: (n: number) => void): Clock {
 const go = (env: Env, gh: FakeGh, trigger: AutoReportTrigger | undefined, c: Clock) =>
   autoReportSession(
     { agent: "claude", session: SID, configPath: env.config, trigger },
-    { client: gh, now: c.now, sleep: c.sleep, settleMs: 0, env: {} },
+    { client: gh, now: c.now, sleep: c.sleep, settleMs: 0, env: {}, publicationPolicy },
   );
 
 const total = (c: Clock): number => c.sleeps.reduce((a, b) => a + b, 0);
@@ -130,6 +131,7 @@ test("the settle wait is bounded even if the clock jumps; poll steps are at most
       },
       settleMs: 0,
       env: {},
+      publicationPolicy,
     },
   );
   assert.equal(r.state, "PUBLISHED", r.reasons.join(";"));
@@ -219,7 +221,7 @@ test("auto-report --retry publishes the capped session's final revision", async 
     stdout: (s) => {
       out += s;
     },
-    autoReport: { sleep: c.sleep, settleMs: 0, env: {} },
+    autoReport: { sleep: c.sleep, settleMs: 0, env: {}, publicationPolicy },
   });
   assert.equal(code, 0);
   const j = JSON.parse(out) as { retried: number; results: Array<{ state: string }> };

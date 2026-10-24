@@ -9,6 +9,11 @@ import { main } from "../src/cli.ts";
 import type { IssueComment } from "../src/publish/index.ts";
 import { parseReportComment } from "../src/report/index.ts";
 import { basicSession, SENTINELS, SID } from "./fixtures/codex/build.ts";
+import {
+  fixtureGrantPolicy,
+  ownerClearanceRef,
+  ownerGrantComment,
+} from "./fixtures/publication-grant.ts";
 
 const H1 = "a".repeat(40);
 const H2 = "b".repeat(40);
@@ -90,12 +95,16 @@ const GOOD_SPOOL = (): string =>
 class FakeGh implements AutoReportGitHub {
   comments: IssueComment[] = [];
   creates = 0;
-  async listIssueComments(_r: string, _i: number, page: number, perPage: number) {
+  async listIssueComments(r: string, i: number, page: number, perPage: number) {
+    const all = [ownerGrantComment(r, i), ...this.comments];
     const s = (page - 1) * perPage;
     return {
-      comments: this.comments.slice(s, s + perPage),
-      hasNext: s + perPage < this.comments.length,
+      comments: all.slice(s, s + perPage),
+      hasNext: s + perPage < all.length,
     };
+  }
+  async verifyIssuePublicationPermission() {
+    return true;
   }
   async createIssueComment(repo: string, issue: number, body: string) {
     this.creates++;
@@ -141,7 +150,7 @@ async function setup(opts: { spool?: string; rollout?: boolean } = {}): Promise<
     env.config,
     JSON.stringify({
       enabled: true,
-      clearance_ref: "owner-authorization:2026-10-23:kaicreator-mm/*",
+      clearance_ref: ownerClearanceRef(REPO, 1296),
       store: env.store,
       outbox: env.outbox,
       zcode: { spool_dir: join(root, "zcode-spool"), rollout_dir: join(root, "zcode-rollout") },
@@ -160,7 +169,14 @@ async function setup(opts: { spool?: string; rollout?: boolean } = {}): Promise<
 const run = (env: Env, gh: FakeGh, over: Record<string, unknown> = {}) =>
   autoReportSession(
     { agent: "codex", session: SID, configPath: env.config, ...over },
-    { client: gh, now: () => NOW, sleep: async () => {}, settleMs: 0, env: {} },
+    {
+      client: gh,
+      now: () => NOW,
+      sleep: async () => {},
+      settleMs: 0,
+      env: {},
+      publicationPolicy: fixtureGrantPolicy(),
+    },
   );
 
 async function allText(dir: string): Promise<string> {
