@@ -470,6 +470,14 @@ describe("v0.3 T02 immutable exact-target correction", () => {
       attemptRef: null, evidenceRefs: ["native:source-owner:verified"],
     });
     assert.equal(accepted.state, "VERIFIED_REVOKED_OR_REDACTED");
+    const unrelatedCorrection = v4CorrectionFixture("DISPUTE").correction;
+    const crossed = dispositionOfCorrection(unrelatedCorrection, target, {
+      qualification: "VERIFIED",
+      publisherNamespace: String(fixture.data.publisher_namespace),
+      taskRef: String((fixture.data.subject as Record<string, unknown>).task_ref),
+      attemptRef: null, evidenceRefs: ["native:source-owner:verified"],
+    });
+    assert.equal(crossed.state, "UNKNOWN", "a native witness cannot be reused for a different correction");
   });
 
   it("edited native body, wrong URL, or incomplete comment pages cannot qualify a target", async () => {
