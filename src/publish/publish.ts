@@ -63,10 +63,22 @@ export async function findReports(
   const damaged: FindResult["damaged"] = [];
   let ignored = 0;
   let total = 0;
+  const nativeIds = new Map<number, string>();
   for (let page = 1; ; page++) {
     if (page > MAX_PAGES) throw new Error("pagination did not terminate");
     const res = await client.listIssueComments(repo, issue, page, perPage);
+    if (!Array.isArray(res.comments) || typeof res.hasNext !== "boolean" ||
+        (res.hasNext && res.comments.length === 0)) {
+      throw new Error("partial or invalid native GitHub pagination");
+    }
     for (const c of res.comments) {
+      if (!Number.isSafeInteger(c.id) || c.id <= 0) throw new Error("invalid native comment identity");
+      const previous = nativeIds.get(c.id);
+      if (previous !== undefined) {
+        if (previous !== c.body) throw new Error("same native comment ID changed during readback");
+        continue;
+      }
+      nativeIds.set(c.id, c.body);
       total++;
       const parsed = parseReportComment(c.body);
       if (!parsed.ok) {
@@ -165,11 +177,23 @@ async function findById(
   id: number,
   perPage: number,
 ): Promise<IssueComment | null> {
+  let found: IssueComment | null = null;
   for (let page = 1; page <= MAX_PAGES; page++) {
     const res = await client.listIssueComments(repo, issue, page, perPage);
-    const hit = res.comments.find((c) => c.id === id);
-    if (hit) return hit;
-    if (!res.hasNext) return null;
+    if (!Array.isArray(res.comments) || typeof res.hasNext !== "boolean" ||
+        (res.hasNext && res.comments.length === 0)) {
+      throw new Error("partial or invalid native GitHub pagination");
+    }
+    for (const c of res.comments) {
+      if (c.id !== id) continue;
+      if (found !== null && (found.body !== c.body || found.html_url !== c.html_url)) {
+        throw new Error("target native comment changed during readback");
+      }
+      found = c;
+    }
+    // Even after finding the ID, read all remaining pages to verify complete native
+    // source currentness; never equate an early hit with a completed readback.
+    if (!res.hasNext) return found;
   }
   throw new Error("pagination did not terminate");
 }
