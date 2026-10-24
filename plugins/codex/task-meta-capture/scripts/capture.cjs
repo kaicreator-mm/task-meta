@@ -12,7 +12,7 @@ const { basename, join } = require("node:path");
 const { extractRefs, parseWorktreeName } = require("./lib/binding-extract.cjs");
 const { gitInfo } = require("./lib/git-meta.cjs");
 
-const PLUGIN_VERSION = "0.2.4";
+const PLUGIN_VERSION = "0.3.0";
 const MAX_BINDING_REFS = 32;
 const SCHEMA = "task-meta/codex-hook/v1";
 const EVENTS = new Set([
