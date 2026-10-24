@@ -82,10 +82,23 @@ Requires `node` on the PATH of the hook process (the command is
 `node -e "require(<plugin root>/scripts/run.cjs)"`, so it needs no shell variable expansion and
 behaves the same under cmd, PowerShell and sh).
 
-Not verified on the live app (the implementer must not modify `~/.codex`): that the desktop
-build substitutes/exports the plugin root for plugin hook commands exactly as above, that it
-fires SessionEnd, and that `node` is on the hook PATH. After installing, run one short task and
-check that a `<sessionId>.jsonl` appears in the spool; an empty spool plus `_errors.log` means a
-host-side problem, not a task-meta one.
+## Verified v0.3 desktop evidence vs still-unknown CLI behavior
+
+The previous 2026-10-23 warning that **no live desktop activation was tested** is now
+historical. Windows Codex desktop v0.3.0 **was** installed and all 7 hooks approved in
+app, then emitted 5 verified events and a Stop→HELD Outbox with zero unauthorized POST
+([actual Host receipt in Issue #46](https://github.com/kaicreator-mm/task-meta/issues/46#issuecomment-6383354474)).
+SessionEnd also appeared but under a different Host session ID: **same-session SessionEnd
+correlation remains NOT_QUALIFIED**, not PASS. This does not prove that the **Codex CLI**
+loads these desktop plugin Hooks or supports the same trust command. Query the installed
+`codex --help` / `codex plugin --help` first; if unsupported, record NOT_RUN instead
+of replaying a fake Hook or editing trust hashes.
+
+For future validation, read the canonical
+[CLI-first Skill](../../../../.agents/skills/task-meta-agent-cli-validation/SKILL.md).
+The desktop trust action is only a bounded fallback for app-only behavior; don't default
+to GUI verification or overwrite user `~/.codex` preferences. Hook failures may write an
+error class to `_errors.log`; the watcher on Windows is not proven by a single
+`node scripts/run.cjs` fixture run.
 
 To remove: disable/uninstall the plugin and delete the spool directory.
