@@ -4,6 +4,7 @@ import {
   REPORT_MARKER,
   resolveProfile,
 } from "../report/index.ts";
+import { checkPublicationGrant, loadPublicationPolicy } from "./authority.ts";
 import type { GitHubClient, IssueComment } from "./client.ts";
 
 export type PublishOutcome =
@@ -218,6 +219,28 @@ export async function publishReport(
         state: "NOT_PUBLISHED",
         reason: "PUBLICATION_CLEARANCE_REQUIRED: no qualified v5 source/clearance",
       };
+    }
+    // The source profile gate above is necessary but NOT a clearance grant.
+    // Only an independently version-governed exact projection permit with
+    // corresponding real GitHub native Issue comment qualifies ordinary v5.
+    // E2E_TEST_SUBJECT is separately isolated by exact repo + test-purpose flag.
+    if (gate.mode === "ADOPTED") {
+      try {
+        const clearance = await checkPublicationGrant(client, {
+          repository: repo,
+          issueNumber: issue,
+          publisherNamespace: String(data.publisher_namespace),
+          adsRevision: subject.ads_revision,
+          publisherSourceSha: subject.publisher_source_sha,
+          publicationRef: publication.clearance_ref,
+          data,
+        }, loadPublicationPolicy());
+        if (!clearance.ok) {
+          return { state: "NOT_PUBLISHED", reason: clearance.code };
+        }
+      } catch {
+        return { state: "NOT_PUBLISHED", reason: "CLEARANCE_SOURCE_UNAVAILABLE" };
+      }
     }
   }
   if (subject.repository !== repo) {
