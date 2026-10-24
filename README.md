@@ -53,3 +53,16 @@ Exit codes: 0 DRY_RUN/PUBLISHED/ALREADY_PUBLISHED, 1 failure, 2 usage, 3 privacy
 sorted by start time; `run_wall_ms` is the union of finished segments, `source_sha` the last
 finished segment's `head_after`, and an unfinished segment, a broken head chain or model
 requests outside all segment windows make the capture PARTIAL with a specific limit.
+
+## Agent plugin validation (CLI-first)
+
+For reproducible Codex, Claude Code and ZCode plugin setup/debugging, read the
+[repository validation rules](AGENTS.md) and use the single canonical
+[task-meta-agent-cli-validation Skill](.agents/skills/task-meta-agent-cli-validation/SKILL.md).
+Claude Code discovers the forwarding entry at
+[.claude/skills/task-meta-agent-cli-validation](.claude/skills/task-meta-agent-cli-validation/SKILL.md);
+ZCode can import the Codex Skill using Settings > Skills > Import > Symlink.
+Always distinguish direct Hook fixture checks from real Agent CLI auto-trigger,
+real authenticated GitHub readback and desktop-only trust. In a new Host,
+unsupported CLI commands and unrun platform lanes remain NOT_RUN; do not
+recreate v0.3 release evidence or infer CLI support from desktop observations.
