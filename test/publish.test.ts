@@ -481,7 +481,7 @@ describe("v0.3 T02 immutable exact-target correction", () => {
     c.comments[0]!.html_url = fixture.ref;
     c.comments[0]!.body = fixture.original.replace("synthetic fixture", "edited source");
     const drift = await readCorrectionTarget(c, REPO, ISSUE, fixture.correction);
-    assert.equal(drift.state, "UNKNOWN" === drift.state ? "UNKNOWN" : "CONFLICT");
+    assert.equal(drift.state, "CONFLICT");
     c.listIssueComments = async () => ({ comments: [], hasNext: true });
     const incomplete = await readCorrectionTarget(c, REPO, ISSUE, fixture.correction);
     assert.equal(incomplete.state, "UNKNOWN");
