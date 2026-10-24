@@ -350,3 +350,44 @@ describe("GhCliClient", () => {
     await assert.rejects(client.listIssueComments("bad repo; x", ISSUE, 1, 10), /invalid repo/);
   });
 });
+
+describe("v0.3 T02 native readback/currentness", () => {
+  it("never posts when a native pagination page claims continuation without data", async () => {
+    const c = new FakeClient();
+    c.listIssueComments = async () => ({ comments: [], hasNext: true });
+    const result = await run(c, bodyFor());
+    assert.equal(result.state, "NOT_PUBLISHED");
+    assert.equal(c.creates, 0);
+  });
+
+  it("same native comment ID with different body across pages is a source CONFLICT", async () => {
+    const c = new FakeClient();
+    const original = c.add(bodyFor());
+    let calls = 0;
+    c.listIssueComments = async () => {
+      calls++;
+      if (calls === 1) return { comments: [original], hasNext: true };
+      return {
+        comments: [{ ...original, body: bodyFor({ limits: ["changed body"] }) }],
+        hasNext: false,
+      };
+    };
+    const result = await run(c, bodyFor());
+    assert.equal(result.state, "NOT_PUBLISHED");
+    assert.equal(c.creates, 0);
+  });
+
+  it("POST success with incomplete trailing native readback remains NOT_PUBLISHED", async () => {
+    const c = new FakeClient();
+    let after = 0;
+    c.listIssueComments = async () => {
+      if (c.creates === 0) return { comments: [], hasNext: false };
+      after++;
+      if (after === 1) return { comments: [...c.comments], hasNext: true };
+      throw new Error("HTTP 403 during terminal readback");
+    };
+    const result = await run(c, bodyFor());
+    assert.equal(result.state, "NOT_PUBLISHED");
+    assert.equal(c.creates, 1, "do not repeat a POST with lost readback");
+  });
+});
