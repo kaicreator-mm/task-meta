@@ -20,6 +20,10 @@ import { evaluateGovernedTrajectory, type GovernedSelection } from "../../src/tr
 
 const golden = JSON.parse(readFileSync(new URL("./golden-r0.json", import.meta.url), "utf8")) as {
   suite: string;
+  ads_golden_standard_blob: string;
+  ads_golden_index_blob: string;
+  ads_golden_forbidden_blob: string;
+  golden_authority: string;
   implementation_version_base: string;
   ads_v416_qualified_main: string;
   ads_v5_schema_blob: string;
@@ -32,6 +36,10 @@ const golden = JSON.parse(readFileSync(new URL("./golden-r0.json", import.meta.u
 
 test("T05 all source-only Golden oracles have exact source pins; no physical proof fabricated", () => {
   assert.equal(golden.suite, "task-meta/v0.3/golden-source-only/r0");
+  assert.match(golden.ads_golden_standard_blob, /^[0-9a-f]{40}$/);
+  assert.match(golden.ads_golden_index_blob, /^[0-9a-f]{40}$/);
+  assert.match(golden.ads_golden_forbidden_blob, /^[0-9a-f]{40}$/);
+  assert.equal(golden.golden_authority, "EXAMPLES_ONLY_OWNER_REMAINS_GITHUB_NATIVE_ISSUE_AND_EXACT_SOURCE");
   assert.equal(golden.ads_v416_qualified_main, QUALIFIED_V416_MAIN_SHA);
   assert.equal(golden.ads_v5_schema_blob, VENDORED_V416_SCHEMA_BLOB);
   assert.equal(vendoredV416SchemaBlob(), golden.ads_v5_schema_blob);
@@ -179,7 +187,6 @@ test("G05/G06: strict v4 8-field correction and DISPUTE even by owner never revo
   const v4 = JSON.parse(readFileSync(
     new URL("../../vendor/ads/v4.15/report.schema.json", import.meta.url), "utf8",
   )) as { $defs: { correction: { properties: { target: { required: string[] } } } } };
-  assert.equal(Object.keys((JSON.parse(JSON.stringify(v4.$defs.correction.properties.target)) as object)).length > 0, true);
   assert.equal(v4.$defs.correction.properties.target.required.length, 8);
   assert.equal(v5.$defs.correction.properties.target.required.length, 14);
   assert.deepEqual(validateReportDocument(buildReportDocument(source(), manifest, {
