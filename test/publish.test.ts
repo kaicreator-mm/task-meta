@@ -378,6 +378,20 @@ describe("v0.3 T02 native readback/currentness", () => {
     assert.equal(c.creates, 0);
   });
 
+  it("same native comment ID with changed URL across pages also holds", async () => {
+    const c = new FakeClient();
+    const original = c.add(bodyFor());
+    let calls = 0;
+    c.listIssueComments = async () => {
+      calls++;
+      if (calls === 1) return { comments: [original], hasNext: true };
+      return { comments: [{ ...original, html_url: "https://github.com/another/repo/issues/1#issuecomment-1000" }], hasNext: false };
+    };
+    const outcome = await run(c, bodyFor());
+    assert.equal(outcome.state, "NOT_PUBLISHED");
+    assert.equal(c.creates, 0);
+  });
+
   it("POST success with incomplete trailing native readback remains NOT_PUBLISHED", async () => {
     const c = new FakeClient();
     let after = 0;
