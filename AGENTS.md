@@ -1,6 +1,6 @@
 # task-meta — agent rules
 
-- Read `docs/v0.1/DEFINITION.md` first; it is the frozen v0.1 Product/L2. Do not widen scope.
+- Read the frozen Product/L2 for the **requested version** before work: `docs/v0.1/DEFINITION.md` is only the v0.1 baseline, while `docs/v0.3/PRD_R0_CANDIDATE.md` and `docs/v0.3/L2_ARCHITECTURE_EVIDENCE_R0.md` describe the completed v0.3 scope. Never confuse prior definitions with current project-wide authority or widen scope without a new Task.
 - Node 24 (`.node-version`), TypeScript run directly by Node type stripping: only erasable
   syntax (no enums, namespaces, parameter properties); relative imports end in `.ts`.
 - Gate: `npm run lint && npm run typecheck && npm test` (the workspace `tools/task-check.sh`
