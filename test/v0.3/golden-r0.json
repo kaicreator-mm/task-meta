@@ -1,0 +1,104 @@
+{
+  "suite": "task-meta/v0.3/golden-source-only/r0",
+  "source_kind": "DETERMINISTIC_SOURCE_ONLY",
+  "product_sha": "2b39d4913c09c7543fb3234d81c2914b83e0a262",
+  "l2_sha": "366ef30ee96399f6baeb802208ab00e092b84686",
+  "ads_v417_source_sha": "1355bc0694b3b0225effa82b670725f83a2b873b",
+  "ads_gaip_blob": "49ecd802c5bf14237e23d5e321c56c220eb8974e",
+  "ads_v416_qualified_main": "718fb02e33b31f568736447b2b905883cc6fcc3a",
+  "ads_v5_schema_blob": "7478313cc006162432649d734e59c5cd77db5106",
+  "implementation_version_base": "347ff0f01816b0bdc0a60b657561168fe8e2ab9e",
+  "input_kind": "PRIVATE_SYNTHETIC_NO_ACTUAL_AGENT_SOURCE",
+  "fixtures": [
+    {
+      "id": "G00",
+      "task": "T00",
+      "scenario": "legacy owner-authorized candidate with no main adoption",
+      "expected": "UNQUALIFIED_CANDIDATE_DEFAULT",
+      "source_sha": "e358f6cfc16fe092cac5d2f47ddbf5bd5ba1d41a"
+    },
+    {
+      "id": "G01",
+      "task": "T00",
+      "scenario": "qualified ADS main and vendored v5 source",
+      "expected": "ADOPTED",
+      "source_sha": "e358f6cfc16fe092cac5d2f47ddbf5bd5ba1d41a"
+    },
+    {
+      "id": "G02",
+      "task": "T00",
+      "scenario": "ordinary repo explicit candidate and forged E2E flag",
+      "expected": "CANDIDATE_NOT_PUBLISHABLE",
+      "source_sha": "e358f6cfc16fe092cac5d2f47ddbf5bd5ba1d41a"
+    },
+    {
+      "id": "G03",
+      "task": "T01",
+      "scenario": "two distinct Attempt identities with same transition",
+      "expected": "2_ATTEMPTS",
+      "source_sha": "3095eeba771fcf2776890d69aa0f0b5800f88304"
+    },
+    {
+      "id": "G04",
+      "task": "T01",
+      "scenario": "identical source event repeat vs conflicting digest",
+      "expected": "DUPLICATE_OR_CONFLICT",
+      "source_sha": "3095eeba771fcf2776890d69aa0f0b5800f88304"
+    },
+    {
+      "id": "G05",
+      "task": "T02",
+      "scenario": "v4 8-target and v5 14-target native correction readback",
+      "expected": "STRICT_CORRECTION_TARGETS",
+      "source_sha": "7e9fe9d3dc135c2891e0390b066c1c23b21fc9a3"
+    },
+    {
+      "id": "G06",
+      "task": "T02",
+      "scenario": "same-owner DISPUTE never revokes",
+      "expected": "DISPUTED_NONREVOKING",
+      "source_sha": "7e9fe9d3dc135c2891e0390b066c1c23b21fc9a3"
+    },
+    {
+      "id": "G07",
+      "task": "T02",
+      "scenario": "partial GitHub pages/lost ACK and no repeated post",
+      "expected": "NOT_PUBLISHED",
+      "source_sha": "7e9fe9d3dc135c2891e0390b066c1c23b21fc9a3"
+    },
+    {
+      "id": "G08",
+      "task": "T03",
+      "scenario": "same physical metric delivered twice not summed",
+      "expected": "12_1_ATTEMPT",
+      "source_sha": "4688942d2da803774dc41d559563c5e3b9256723"
+    },
+    {
+      "id": "G09",
+      "task": "T03",
+      "scenario": "missing cost/source and v4 mixed cohort",
+      "expected": "NOT_COMPARABLE",
+      "source_sha": "4688942d2da803774dc41d559563c5e3b9256723"
+    },
+    {
+      "id": "G10",
+      "task": "T04",
+      "scenario": "owner witnessed A B A-prime",
+      "expected": "PIVOT_2_2_REVISIT_1_1",
+      "source_sha": "addc6c75fa4b2e69da01482ea53541be466ebb19"
+    },
+    {
+      "id": "G11",
+      "task": "T04",
+      "scenario": "unwitnessed strategy, parallel lineage or zero denominators",
+      "expected": "NOT_COMPARABLE",
+      "source_sha": "addc6c75fa4b2e69da01482ea53541be466ebb19"
+    }
+  ],
+  "source_only_test_result": "NOT_RUN",
+  "node24_result": "NOT_RUN",
+  "real_agent_provider_result": "NOT_RUN",
+  "real_github_post_and_readback": "NOT_RUN",
+  "tally_consumer_material_use": "NOT_RUN",
+  "release_qualification": "NOT_RUN"
+}
