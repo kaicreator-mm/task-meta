@@ -5,7 +5,7 @@ import type { GitHubClient, IssueComment } from "../publish/client.ts";
 
 export type CorrectionNotice = "REVOKE" | "REDACT" | "DISPUTE";
 export type TargetLookup =
-  | { state: "VERIFIED_CURRENT"; comment: IssueComment; digest: string; profile: "v4" | "v5" }
+  | { state: "VERIFIED_CURRENT"; comment: IssueComment; digest: string; profile: "v4" | "v5"; correctionDigest: string }
   | { state: "UNKNOWN" | "CONFLICT"; reason: string };
 
 export interface CorrectionDisposition {
@@ -112,7 +112,7 @@ export async function readCorrectionTarget(
        subject.source_status !== target.target_source_status ||
        subject.source_sha !== target.target_source_sha))
   ) return { state: "CONFLICT", reason: "original report source identity/current digest differs" };
-  return { state: "VERIFIED_CURRENT", comment: found, digest: source.dataDigest, profile: source.profile };
+  return { state: "VERIFIED_CURRENT", comment: found, digest: source.dataDigest, profile: source.profile, correctionDigest: parsed.dataDigest };
 }
 
 /** Authority must be source-qualified by a separate owner mechanism.
@@ -126,6 +126,10 @@ export function dispositionOfCorrection(
   const parsed = parseReportComment(correctionBody);
   if (!parsed.ok || parsed.doc.data.report_kind !== "EXECUTION_CORRECTION") {
     return { state: "UNKNOWN", materialUseSafe: false, reason: "correction schema invalid" };
+  }
+  if (target.correctionDigest !== parsed.dataDigest || target.profile !== parsed.profile) {
+    return { state: "UNKNOWN", materialUseSafe: false,
+      reason: "correction source identity differs from the target evidence witness" };
   }
   const d = parsed.doc.data;
   const subject = d.subject;
