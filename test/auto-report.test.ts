@@ -712,7 +712,7 @@ describe("cli surface and config", () => {
     assert.equal(expandHome("~/x", "/home/u").replace(/\\/g, "/").endsWith("/home/u/x"), true);
     const cfg = loadAutoReportConfig();
     assert.equal(cfg.enabled, true);
-    assert.equal(cfg.clearance_ref, "owner-authorization:2026-10-23:kaicreator-mm/*");
+    assert.equal(cfg.clearance_ref, "", "no implicit unverified production clearance");
     assert.equal(cfg.publisher_source_sha, "auto");
     assert.ok(!cfg.store.startsWith("~"));
     assert.ok(!cfg.zcode.rollout_dir.startsWith("~"));
