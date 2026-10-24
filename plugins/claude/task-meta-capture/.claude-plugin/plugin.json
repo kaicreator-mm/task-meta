@@ -1,10 +1,13 @@
 {
   "name": "task-meta-capture",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Metadata-only lifecycle capture for task-meta: tool timing and outcome, git heads, session boundaries; no content.",
   "author": {
     "name": "kaicreator-mm"
   },
   "license": "MIT",
-  "keywords": ["task-meta", "telemetry"]
+  "keywords": [
+    "task-meta",
+    "telemetry"
+  ]
 }
