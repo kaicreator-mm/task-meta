@@ -238,6 +238,12 @@ export async function publishReport(
         if (!clearance.ok) {
           return { state: "NOT_PUBLISHED", reason: clearance.code };
         }
+        // Re-read owning native Issue and effective authenticated repo write
+        // permission. The report's asserted PUBLISHABLE is not authority.
+        if (!client.verifyIssuePublicationPermission ||
+            !(await client.verifyIssuePublicationPermission(repo, issue))) {
+          return { state: "NOT_PUBLISHED", reason: "NATIVE_PUBLICATION_PERMISSION_UNVERIFIED" };
+        }
       } catch {
         return { state: "NOT_PUBLISHED", reason: "CLEARANCE_SOURCE_UNAVAILABLE" };
       }
