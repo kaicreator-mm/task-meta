@@ -6,8 +6,5 @@
     "name": "kaicreator-mm"
   },
   "license": "MIT",
-  "keywords": [
-    "task-meta",
-    "telemetry"
-  ]
+  "keywords": ["task-meta", "telemetry"]
 }
