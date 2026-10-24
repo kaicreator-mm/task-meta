@@ -8,7 +8,7 @@
     {
       "name": "task-meta-capture",
       "source": "./task-meta-capture",
-      "version": "0.2.2",
+      "version": "0.3.0",
       "description": "Metadata-only lifecycle capture for task-meta: tool timing and outcome, git heads, session boundaries; no content.",
       "category": "developer-tools"
     }
