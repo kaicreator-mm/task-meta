@@ -1,8 +1,10 @@
 {
   "name": "task-meta-capture",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Metadata-only lifecycle capture for task-meta: tool timing and outcome, no content.",
-  "author": { "name": "kaicreator-mm" },
+  "author": {
+    "name": "kaicreator-mm"
+  },
   "license": "MIT",
   "hooks": "./hooks/hooks.json"
 }
