@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { extractRefs, parseWorktreeName } from "./lib/binding-extract.mjs";
 import { gitInfo } from "./lib/git-meta.mjs";
 
-export const PLUGIN_VERSION = "0.2.2";
+export const PLUGIN_VERSION = "0.3.0";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAX_BINDING_REFS = 32;
 export const SCHEMA = "task-meta/claude-hook/v1";
