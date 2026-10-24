@@ -6,6 +6,8 @@ import { join, resolve } from "node:path";
 export interface AutoReportConfig {
   enabled: boolean;
   clearance_ref: string;
+  /** Explicit isolated v5 candidate test purpose. Requires exact repository allowlisting and never grants normal publication. */
+  e2e_test_only?: boolean;
   store: string;
   outbox: string;
   zcode: { spool_dir: string; rollout_dir: string };
@@ -65,6 +67,7 @@ export function loadAutoReportConfig(path?: string, home: string = homedir()): A
   return {
     enabled: j.enabled !== false,
     clearance_ref: str(j.clearance_ref, ""),
+    ...(j.e2e_test_only === true ? { e2e_test_only: true } : {}),
     store: expandHome(str(j.store, "~/.task-meta/store"), home),
     outbox: expandHome(str(j.outbox, "~/.task-meta/outbox"), home),
     zcode: {

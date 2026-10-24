@@ -1,4 +1,15 @@
-import { parseReportComment, REPORT_MARKER } from "../report/index.ts";
+import {
+  loadAdoption,
+  parseReportComment,
+  REPORT_MARKER,
+  resolveProfile,
+} from "../report/index.ts";
+import {
+  type ClearanceTarget,
+  checkPublicationGrant,
+  loadPublicationPolicy,
+  type PublicationPolicyProvider,
+} from "./authority.ts";
 import type { GitHubClient, IssueComment } from "./client.ts";
 
 export type PublishOutcome =
@@ -91,6 +102,10 @@ export interface PublishOptions {
   maxRetries?: number;
   now?: () => number;
   perPage?: number;
+  /** Explicit isolated candidate test purpose; does not override repository allowlisting. */
+  e2eTestOnly?: boolean;
+  /** DI seam for source-qualified grant fixtures; default loads the shipped fail-closed policy. */
+  publicationPolicy?: PublicationPolicyProvider;
 }
 
 const realSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -171,7 +186,83 @@ export async function publishReport(
   const parsed = parseReportComment(body);
   if (!parsed.ok) return { state: "NOT_PUBLISHED", reason: `invalid report body: ${parsed.error}` };
   const data = parsed.doc.data;
-  const subject = (data.subject ?? {}) as { repository?: unknown; issue_ref?: unknown };
+  const subject = (data.subject ?? {}) as {
+    repository?: unknown;
+    issue_ref?: unknown;
+    ads_revision?: unknown;
+    publisher_source_sha?: unknown;
+  };
+  // This is the LAST in-process GitHub write boundary. A caller cannot bypass
+  // v5 adoption admission merely by rendering a valid document and invoking
+  // publishReport directly.
+  if (opts.publish && parsed.doc.schema === "ads/github/v5") {
+    if (typeof subject.ads_revision !== "string") {
+      return {
+        state: "NOT_PUBLISHED",
+        reason: "ADS_PIN_REQUIRED: missing v5 subject.ads_revision",
+      };
+    }
+    const gate = resolveProfile({
+      profile: "v5",
+      adsPin: subject.ads_revision,
+      repository: repo,
+      publish: true,
+      e2eTestOnly: opts.e2eTestOnly === true,
+      adoption: loadAdoption(),
+    });
+    if (!gate.ok) return { state: "NOT_PUBLISHED", reason: `${gate.code}: ${gate.message}` };
+    const publication = (data.publication ?? {}) as {
+      classification?: unknown;
+      clearance_ref?: unknown;
+    };
+    if (
+      publication.classification !== "PUBLISHABLE" ||
+      typeof publication.clearance_ref !== "string" ||
+      publication.clearance_ref.length === 0 ||
+      typeof subject.publisher_source_sha !== "string" ||
+      !/^[0-9a-f]{40}$/.test(subject.publisher_source_sha)
+    ) {
+      return {
+        state: "NOT_PUBLISHED",
+        reason: "PUBLICATION_CLEARANCE_REQUIRED: no qualified v5 source/clearance",
+      };
+    }
+    // The source profile gate above is necessary but NOT a clearance grant.
+    // Only an independently version-governed exact projection permit with
+    // corresponding real GitHub native Issue comment qualifies ordinary v5.
+    // E2E_TEST_SUBJECT is separately isolated by exact repo + test-purpose flag.
+    if (gate.mode === "ADOPTED") {
+      try {
+        const target: ClearanceTarget = {
+          repository: repo,
+          issueNumber: issue,
+          publisherNamespace: String(data.publisher_namespace),
+          adsRevision: subject.ads_revision,
+          publisherSourceSha: subject.publisher_source_sha,
+          publicationRef: publication.clearance_ref,
+          data,
+        };
+        const clearance = await checkPublicationGrant(
+          client,
+          target,
+          opts.publicationPolicy ? opts.publicationPolicy(target) : loadPublicationPolicy(),
+        );
+        if (!clearance.ok) {
+          return { state: "NOT_PUBLISHED", reason: clearance.code };
+        }
+        // Re-read owning native Issue and effective authenticated repo write
+        // permission. The report's asserted PUBLISHABLE is not authority.
+        if (
+          !client.verifyIssuePublicationPermission ||
+          !(await client.verifyIssuePublicationPermission(repo, issue))
+        ) {
+          return { state: "NOT_PUBLISHED", reason: "NATIVE_PUBLICATION_PERMISSION_UNVERIFIED" };
+        }
+      } catch {
+        return { state: "NOT_PUBLISHED", reason: "CLEARANCE_SOURCE_UNAVAILABLE" };
+      }
+    }
+  }
   if (subject.repository !== repo) {
     return {
       state: "NOT_PUBLISHED",

@@ -29,6 +29,7 @@ import {
 } from "./collect-core.ts";
 import type { ManifestPointer } from "./model.ts";
 import { assertNoForbiddenContent } from "./privacy.ts";
+import type { PublicationPolicyProvider } from "./publish/authority.ts";
 import { GhCliClient, type GitHubClient, publishReport } from "./publish/index.ts";
 import {
   buildReportDocument,
@@ -50,6 +51,8 @@ export interface CliDeps {
   now?: () => Date;
   stdout?: (s: string) => void;
   stderr?: (s: string) => void;
+  /** DI seam for source-qualified grant fixtures; default is the shipped fail-closed policy. */
+  publicationPolicy?: PublicationPolicyProvider;
 }
 
 const USAGE = `usage: collect --repo <owner/name> --issue <n> --headless <file>
@@ -57,7 +60,7 @@ const USAGE = `usage: collect --repo <owner/name> --issue <n> --headless <file>
                [--gate-log <file>[@<40hex>]]... [--gate-sha <40hex>] [--git-dir <dir>]
                --store <dir> --out <report.md>
                [--operator-id zcode] [--role builder] [--profile v4|v5] [--publish]
-               [--ads-pin <sha>] [--clearance-ref <ref>] [--publisher-source-sha <40hex>]
+               [--ads-pin <sha>] [--e2e-test-only] [--clearance-ref <ref>] [--publisher-source-sha <40hex>]
        collect-codex --repo <owner/name> --issue <n>
                (--codex-session <rollout.jsonl>... | --codex-sessions-dir <dir> --session-id <id>)
                [--codex-hook-spool <dir>] [--gate-log <file>[@<40hex>]]... [--gate-sha <40hex>]
@@ -111,6 +114,7 @@ function optionsFrom(argv: string[]) {
       profile: { type: "string" },
       publish: { type: "boolean" },
       "ads-pin": { type: "string" },
+      "e2e-test-only": { type: "boolean" },
       "clearance-ref": { type: "string" },
       "publisher-source-sha": { type: "string" },
     },
@@ -209,10 +213,16 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
   if (v.profile !== undefined && v.profile !== "v4" && v.profile !== "v5") {
     throw new UsageError("--profile must be v4 or v5");
   }
+  if (v["e2e-test-only"] === true && (v.profile !== "v5" || v["ads-pin"] === undefined)) {
+    throw new UsageError(
+      "--e2e-test-only requires explicit --profile v5 and --ads-pin; test repositories only",
+    );
+  }
   const resolution = resolveProfile({
     ...(v.profile !== undefined ? { profile: v.profile as ReportProfile } : {}),
     ...(v["ads-pin"] !== undefined ? { adsPin: v["ads-pin"] } : {}),
     publish: v.publish === true,
+    e2eTestOnly: v["e2e-test-only"] === true,
     repository: repo,
     adoption: loadAdoption(),
   });
@@ -519,6 +529,8 @@ async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Pro
     issue,
     body,
     publish: v.publish === true,
+    e2eTestOnly: v["e2e-test-only"] === true,
+    ...(deps.publicationPolicy ? { publicationPolicy: deps.publicationPolicy } : {}),
   });
   const line: Record<string, unknown> = {
     outcome: outcome.state,

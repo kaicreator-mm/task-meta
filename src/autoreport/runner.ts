@@ -31,10 +31,12 @@ import {
 } from "../collect-core.ts";
 import type { ManifestPointer, TaskBinding } from "../model.ts";
 import { assertNoForbiddenContent } from "../privacy.ts";
+import type { PublicationPolicyProvider } from "../publish/authority.ts";
 import { findReports, publishReport } from "../publish/index.ts";
 import {
   type Adoption,
   buildReportDocument,
+  CANDIDATE_PIN,
   loadAdoption,
   parseReportComment,
   renderReportComment,
@@ -84,6 +86,8 @@ export interface AutoReportDeps {
   adoption?: Adoption;
   /** Settle wait for the Stop entry (default 5000 ms in 200 ms steps). */
   settleMs?: number;
+  /** DI seam for source-qualified grant fixtures; default is the shipped fail-closed policy. */
+  publicationPolicy?: PublicationPolicyProvider;
 }
 
 const SESSION_RE = /^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,199}$/;
@@ -400,7 +404,9 @@ async function drive(
 
   // ---- profile ----
   const resolution = resolveProfile({
+    ...(cfg.e2e_test_only === true ? { profile: "v5" as const, adsPin: CANDIDATE_PIN } : {}),
     publish: !dry,
+    e2eTestOnly: cfg.e2e_test_only === true,
     repository: repo,
     adoption: deps.adoption ?? loadAdoption(),
   });
@@ -618,7 +624,14 @@ async function drive(
     throw new Held(["privacy guard refused the report body"], binding);
   }
   const digest = reportDataDigest(doc.data);
-  const outcome = await publishReport(client, { repo, issue, body, publish: !dry });
+  const outcome = await publishReport(client, {
+    repo,
+    issue,
+    body,
+    publish: !dry,
+    e2eTestOnly: cfg.e2e_test_only === true,
+    ...(deps.publicationPolicy ? { publicationPolicy: deps.publicationPolicy } : {}),
+  });
   const common = { binding, data_digest: digest, revision };
   switch (outcome.state) {
     case "PUBLISHED":

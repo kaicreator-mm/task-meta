@@ -15,6 +15,7 @@ export {
   loadAdoption,
   type OwnerAuthorizedEntry,
   type ProfileResolution,
+  QUALIFIED_V416_MAIN_SHA,
   resolveProfile,
   VENDORED_V416_SCHEMA_BLOB,
   vendoredV416SchemaBlob,

@@ -9,6 +9,11 @@ import { canonicalDigest, canonicalize } from "../src/canonical.ts";
 import { main } from "../src/cli.ts";
 import type { IssueComment } from "../src/publish/index.ts";
 import { basicSession, SID } from "./fixtures/codex/build.ts";
+import {
+  fixtureGrantPolicy,
+  ownerClearanceRef,
+  ownerGrantComment,
+} from "./fixtures/publication-grant.ts";
 
 const H1 = "a".repeat(40);
 const H2 = "b".repeat(40);
@@ -85,12 +90,16 @@ const TOOL = (ts: string) =>
 class FakeGh implements AutoReportGitHub {
   comments: IssueComment[] = [];
   creates = 0;
-  async listIssueComments(_r: string, _i: number, page: number, perPage: number) {
+  async listIssueComments(r: string, i: number, page: number, perPage: number) {
+    const all = [ownerGrantComment(r, i), ...this.comments];
     const s = (page - 1) * perPage;
     return {
-      comments: this.comments.slice(s, s + perPage),
-      hasNext: s + perPage < this.comments.length,
+      comments: all.slice(s, s + perPage),
+      hasNext: s + perPage < all.length,
     };
+  }
+  async verifyIssuePublicationPermission() {
+    return true;
   }
   async createIssueComment(repo: string, issue: number, body: string) {
     this.creates++;
@@ -133,7 +142,7 @@ async function setup(spool: string, cfg: Record<string, unknown> = {}): Promise<
     env.config,
     JSON.stringify({
       enabled: true,
-      clearance_ref: "owner-authorization:2026-10-23:kaicreator-mm/*",
+      clearance_ref: ownerClearanceRef(REPO, 1296),
       store: join(root, "store"),
       outbox: env.outbox,
       zcode: { spool_dir: join(root, "zcode-spool"), rollout_dir: join(root, "zcode-rollout") },
@@ -168,7 +177,14 @@ function clock(onTick: (tick: number, now: number) => Promise<void> | void = () 
 const watch = (env: Env, gh: FakeGh, k: ReturnType<typeof clock>) =>
   watchSession(
     { agent: "codex", session: SID, configPath: env.config },
-    { client: gh, now: k.now, sleep: k.sleep, settleMs: 0, env: {} },
+    {
+      client: gh,
+      now: k.now,
+      sleep: k.sleep,
+      settleMs: 0,
+      env: {},
+      publicationPolicy: fixtureGrantPolicy(),
+    },
   );
 
 const states = async (env: Env): Promise<string[]> =>

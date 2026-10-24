@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import { collectZcodeRun, type ZcodeRunInput } from "../src/adapters/zcode/index.ts";
 import { canonicalDigest } from "../src/canonical.ts";
 import type { AttemptSummary, CostObservation, ManifestPointer } from "../src/model.ts";
+import { type GitHubClient, type IssueComment, publishReport } from "../src/publish/index.ts";
 import {
   ADS_V5_REVISION,
   buildReportDocument,
@@ -13,6 +14,12 @@ import {
   UnrepresentableError,
   validateReportDocument,
 } from "../src/report/index.ts";
+import { QUALIFIED_V416_MAIN_SHA } from "../src/report/pin.ts";
+import {
+  fixtureGrantPolicy,
+  ownerClearanceRef,
+  ownerGrantComment,
+} from "./fixtures/publication-grant.ts";
 
 const dir = join(import.meta.dirname, "fixtures", "zcode");
 const fx = (n: string) => readFileSync(join(dir, n), "utf8");
@@ -255,5 +262,114 @@ describe("v5 builder: verifier PARTIAL projection", () => {
     assert.deepEqual(validateReportDocument(doc, "v5"), { valid: true });
     assert.equal((doc.data.verifier as { status: string }).status, "PASS");
     assert.ok(!(doc.data.limits as string[]).some((l) => l.includes("not representable")));
+  });
+});
+
+describe("v0.3 FR00 direct publisher last-boundary admission", () => {
+  it("a schema-valid v5 candidate report cannot POST on an ordinary repo", async () => {
+    const doc = buildReportDocument(realistic(), manifest, v5opts);
+    assert.deepEqual(validateReportDocument(doc, "v5"), { valid: true });
+    const body = renderReportComment(doc);
+    let posts = 0;
+    let pages = 0;
+    const client: GitHubClient = {
+      async listIssueComments() {
+        pages++;
+        return { comments: [] as IssueComment[], hasNext: false };
+      },
+      async createIssueComment(): Promise<IssueComment> {
+        posts++;
+        throw Error("candidate publication must have been held before POST");
+      },
+    };
+    const out = await publishReport(client, {
+      repo: "kaicreator-mm/task-meta",
+      issue: 7,
+      body,
+      publish: true,
+    });
+    assert.equal(out.state, "NOT_PUBLISHED");
+    assert.equal(posts, 0);
+    assert.equal(pages, 0);
+  });
+  it("a manually forged E2E flag is not a normal-repository candidate capability", async () => {
+    const body = renderReportComment(buildReportDocument(realistic(), manifest, v5opts));
+    let posts = 0;
+    const client: GitHubClient = {
+      async listIssueComments() {
+        return { comments: [] as IssueComment[], hasNext: false };
+      },
+      async createIssueComment(): Promise<IssueComment> {
+        posts++;
+        throw Error("not allowlisted");
+      },
+    };
+    const out = await publishReport(client, {
+      repo: "kaicreator-mm/task-meta",
+      issue: 7,
+      body,
+      publish: true,
+      e2eTestOnly: true,
+    });
+    assert.equal(out.state, "NOT_PUBLISHED");
+    assert.equal(posts, 0);
+  });
+  it("an adopted-main v5 report never POSTs without grant, native readback or permission", async () => {
+    const REPO = "kaicreator-mm/task-meta";
+    const ref = ownerClearanceRef(REPO, 7);
+    const opts = {
+      ...v5opts,
+      adsRevision: QUALIFIED_V416_MAIN_SHA,
+      publication: { clearance_ref: ref },
+    };
+    const body = renderReportComment(buildReportDocument(realistic(), manifest, opts));
+    const mk = (comments: IssueComment[], permission?: () => Promise<boolean>) => {
+      let posts = 0;
+      let pages = 0;
+      const client: GitHubClient = {
+        async listIssueComments() {
+          pages++;
+          return { comments, hasNext: false };
+        },
+        async createIssueComment(): Promise<IssueComment> {
+          posts++;
+          throw Error("ordinary adopted publication must be held before POST");
+        },
+        ...(permission ? { verifyIssuePublicationPermission: permission } : {}),
+      };
+      return { client, counts: () => ({ posts, pages }) };
+    };
+    const reason = (o: { state: string; reason?: string }) =>
+      (o as { reason?: string }).reason ?? "";
+    // shipped empty policy: no grant => NOT_PUBLISHED before any GitHub traffic
+    const none = mk([]);
+    const a = await publishReport(none.client, { repo: REPO, issue: 7, body, publish: true });
+    assert.equal(a.state, "NOT_PUBLISHED");
+    assert.match(reason(a), /MISSING_SOURCE_CLEARANCE/);
+    assert.deepEqual(none.counts(), { posts: 0, pages: 0 });
+    // registered grant whose native owner comment does not read back => zero POST
+    const unread = mk([]);
+    const b = await publishReport(unread.client, {
+      repo: REPO,
+      issue: 7,
+      body,
+      publish: true,
+      publicationPolicy: fixtureGrantPolicy(),
+    });
+    assert.equal(b.state, "NOT_PUBLISHED");
+    assert.match(reason(b), /CLEARANCE_NATIVE_UNVERIFIED/);
+    assert.deepEqual(unread.counts(), { posts: 0, pages: 1 });
+    // native comment reads back but the permission witness refuses => zero POST
+    const refused = mk([ownerGrantComment(REPO, 7)], async () => false);
+    const c = await publishReport(refused.client, {
+      repo: REPO,
+      issue: 7,
+      body,
+      publish: true,
+      publicationPolicy: fixtureGrantPolicy(),
+    });
+    assert.equal(c.state, "NOT_PUBLISHED");
+    assert.match(reason(c), /NATIVE_PUBLICATION_PERMISSION_UNVERIFIED/);
+    assert.deepEqual(refused.counts(), { posts: 0, pages: 1 });
   });
 });
