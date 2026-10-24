@@ -53,15 +53,28 @@ export interface TrajectoryResult {
 
 const valid = (v: string): boolean => v.trim().length > 0;
 function ratio(
-  lane: EvidenceLane, scope: "PIVOT" | "REVISIT", cohortRef: string,
-  strategyScope: string, labelerRevision: string | null,
-  numerator: number, denominator: number, excluded: number, limits: string[],
+  lane: EvidenceLane,
+  scope: "PIVOT" | "REVISIT",
+  cohortRef: string,
+  strategyScope: string,
+  labelerRevision: string | null,
+  numerator: number,
+  denominator: number,
+  excluded: number,
+  limits: string[],
 ): TrajectoryRatio {
   return {
-    lane, scope, cohortRef, strategyScope, labelerRevision,
-    numerator: denominator === 0 ? null : numerator, denominator, excluded,
+    lane,
+    scope,
+    cohortRef,
+    strategyScope,
+    labelerRevision,
+    numerator: denominator === 0 ? null : numerator,
+    denominator,
+    excluded,
     comparability: denominator === 0 ? "NOT_COMPARABLE" : "COMPARABLE",
-    limits: [...new Set(limits)], publicationField: null,
+    limits: [...new Set(limits)],
+    publicationField: null,
   };
 }
 
@@ -92,7 +105,8 @@ export function evaluateGovernedTrajectory(
   let historyValid = true;
 
   for (const current of selections) {
-    const qualified = historyValid &&
+    const qualified =
+      historyValid &&
       valid(current.selectionId) &&
       !visited.has(current.selectionId) &&
       current.lane === lane &&
@@ -105,7 +119,10 @@ export function evaluateGovernedTrajectory(
       (lane !== "INFERRED" ||
         (valid(labelerRevision ?? "") && current.labelerRevision === labelerRevision));
     if (!qualified) {
-      if (previous !== null) { pe++; re++; }
+      if (previous !== null) {
+        pe++;
+        re++;
+      }
       limits.push("unqualified strategy owner, source, cohort, lane or classifier features");
       historyValid = false;
       continue;
