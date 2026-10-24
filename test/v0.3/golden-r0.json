@@ -100,5 +100,14 @@
   "real_agent_provider_result": "NOT_RUN",
   "real_github_post_and_readback": "NOT_RUN",
   "tally_consumer_material_use": "NOT_RUN",
-  "release_qualification": "NOT_RUN"
+  "release_qualification": "NOT_RUN",
+  "ads_golden_standard_blob": "d7f73f107c9cbd72a89113419b2c3252670aadda",
+  "ads_golden_index_blob": "b36d4947cfe7db101e9eb4955ea889b55d988ed1",
+  "ads_golden_forbidden_blob": "9b6b5fdedf8dd8d68f9a242540280a0ffea958ae",
+  "ads_shared_golden_refs": [
+    "standards/GOLDEN_TEMPLATE_STANDARD.md",
+    "templates/GOLDEN_INDEX.md",
+    "templates/golden/ANTI_PATTERNS.md"
+  ],
+  "golden_authority": "EXAMPLES_ONLY_OWNER_REMAINS_GITHUB_NATIVE_ISSUE_AND_EXACT_SOURCE"
 }
