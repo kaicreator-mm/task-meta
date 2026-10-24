@@ -63,7 +63,7 @@ export async function findReports(
   const damaged: FindResult["damaged"] = [];
   let ignored = 0;
   let total = 0;
-  const nativeIds = new Map<number, string>();
+  const nativeIds = new Map<number, { body: string; url: string }>();
   for (let page = 1; ; page++) {
     if (page > MAX_PAGES) throw new Error("pagination did not terminate");
     const res = await client.listIssueComments(repo, issue, page, perPage);
@@ -75,10 +75,12 @@ export async function findReports(
       if (!Number.isSafeInteger(c.id) || c.id <= 0) throw new Error("invalid native comment identity");
       const previous = nativeIds.get(c.id);
       if (previous !== undefined) {
-        if (previous !== c.body) throw new Error("same native comment ID changed during readback");
+        if (previous.body !== c.body || previous.url !== c.html_url) {
+          throw new Error("same native comment ID changed during readback");
+        }
         continue;
       }
-      nativeIds.set(c.id, c.body);
+      nativeIds.set(c.id, { body: c.body, url: c.html_url });
       total++;
       const parsed = parseReportComment(c.body);
       if (!parsed.ok) {
