@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { collectZcodeRun, type ZcodeRunInput } from "../src/adapters/zcode/index.ts";
 import { canonicalDigest } from "../src/canonical.ts";
+import { readCorrectionTarget } from "../src/correction/index.ts";
 import type { AttemptSummary, CostObservation, ManifestPointer } from "../src/model.ts";
 import { type GitHubClient, type IssueComment, publishReport } from "../src/publish/index.ts";
 import {
@@ -371,5 +372,85 @@ describe("v0.3 FR00 direct publisher last-boundary admission", () => {
     assert.equal(c.state, "NOT_PUBLISHED");
     assert.match(reason(c), /NATIVE_PUBLICATION_PERMISSION_UNVERIFIED/);
     assert.deepEqual(refused.counts(), { posts: 0, pages: 1 });
+  });
+});
+
+describe("v0.3 T02 exact 14-field v5 correction target", () => {
+  it("schema-valid v5 target binds actual native comment, SHA and source status", async () => {
+    const original = buildReportDocument(realistic(), manifest, {
+      ...v5opts,
+      adsRevision: QUALIFIED_V416_MAIN_SHA,
+    });
+    const data = original.data;
+    const sub: Record<string, unknown> = {
+      ...(data.subject as Record<string, unknown>),
+      source_status: "PINNED",
+      source_sha: "a".repeat(40),
+      source_reason: null,
+    };
+    original.data.subject = sub;
+    const repo = String(sub.repository);
+    const issue = 7;
+    const ref = `https://github.com/${repo}/issues/${issue}#issuecomment-103`;
+    const target = {
+      comment_ref: ref,
+      report_id: data.report_id,
+      revision: data.revision,
+      report_kind: data.report_kind,
+      publisher_namespace: data.publisher_namespace,
+      issue_ref: sub.issue_ref,
+      task_ref: sub.task_ref,
+      data_digest: canonicalDigest(original.data),
+      repository: repo,
+      comment_id: 103,
+      ads_profile: "ads/github/v5:report",
+      attempt_ref: sub.attempt_ref,
+      target_source_status: sub.source_status,
+      target_source_sha: sub.source_sha,
+    };
+    assert.equal(Object.keys(target).length, 14);
+    const correction = {
+      schema: "ads/github/v5",
+      kind: "report" as const,
+      data: {
+        report_id: "corr:102",
+        revision: 1,
+        publisher_namespace: data.publisher_namespace,
+        report_kind: "EXECUTION_CORRECTION",
+        subject: sub,
+        actor: data.actor,
+        observed_at: data.observed_at,
+        source_refs: [ref],
+        limits: [],
+        supersedes: null,
+        target,
+        reason: "original source needs verified correction",
+        notice: "DISPUTE",
+        notice_publisher_source_sha: "b".repeat(40),
+        publication: {
+          classification: "PUBLISHABLE",
+          clearance_ref: "clearance:synthetic",
+          projection_digest: "b".repeat(64),
+        },
+      },
+    };
+    const originalBody = renderReportComment(original);
+    const correctionBody = renderReportComment(correction);
+    const client = {
+      async listIssueComments() {
+        return {
+          comments: [{ id: 103, html_url: ref, body: originalBody, user_login: "transport" }],
+          hasNext: false,
+        };
+      },
+    };
+    const resolved = await readCorrectionTarget(client, repo, issue, correctionBody);
+    assert.equal(resolved.state, "VERIFIED_CURRENT");
+    const broken = {
+      ...correction,
+      data: { ...correction.data, target: { ...target, target_source_sha: "c".repeat(40) } },
+    };
+    const invalid = await readCorrectionTarget(client, repo, issue, renderReportComment(broken));
+    assert.equal(invalid.state, "CONFLICT");
   });
 });
