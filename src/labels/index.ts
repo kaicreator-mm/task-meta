@@ -194,6 +194,10 @@ export function labelAttempt(input: LabelInput): Label[] {
   }
   flush();
 
+  // C08 boundary: an OBSERVED *Git version revisit* remains technical
+  // provenance only. It is NOT an OBSERVED owner-governed strategy revisit.
+  // The private src/trajectory evaluator requires separate verified owner
+  // selection, causal-history and equivalence/nonmatch witnesses.
   for (const r of input.lineage.revisits) {
     out.push(mkLabel("REVISIT_CANDIDATE", r.version_id, "revisit", "OBSERVED", r.transition_ids));
   }
