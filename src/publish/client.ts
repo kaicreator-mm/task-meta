@@ -20,6 +20,8 @@ export interface GitHubClient {
     perPage: number,
   ): Promise<{ comments: IssueComment[]; hasNext: boolean }>;
   createIssueComment(repo: string, issue: number, body: string): Promise<IssueComment>;
+  /** Optional host operation: fail-closed publication permission witness. */
+  verifyIssuePublicationPermission?(repo: string, issue: number): Promise<boolean>;
 }
 
 /** Thrown by clients for an HTTP-level failure. Network errors carry no status. */
@@ -130,6 +132,31 @@ export class GhCliClient implements GitHubClient {
       "-F",
       `body=@${bodyFile}`,
     ];
+  }
+
+  /** Read actual authenticated repository permission and owning native Issue before POST.
+   * A successful POST/readback still remains the final permission/effect witness. */
+  async verifyIssuePublicationPermission(repo: string, issue: number): Promise<boolean> {
+    checkTarget(repo, issue);
+    try {
+      const a = await this.exec(this.gh, [
+        "api", "-H", "Accept: application/vnd.github+json", `repos/${repo}`,
+      ]);
+      const info = JSON.parse(a.stdout) as Record<string, unknown>;
+      const permissions = info.permissions as Record<string, unknown> | undefined;
+      if (info.full_name !== repo || (permissions?.push !== true && permissions?.admin !== true)) {
+        return false;
+      }
+      const b = await this.exec(this.gh, [
+        "api", "-H", "Accept: application/vnd.github+json", `repos/${repo}/issues/${issue}`,
+      ]);
+      const issueInfo = JSON.parse(b.stdout) as Record<string, unknown>;
+      return issueInfo.number === issue && issueInfo.locked !== true &&
+        typeof issueInfo.html_url === "string" &&
+        issueInfo.html_url === `https://github.com/${repo}/issues/${issue}`;
+    } catch {
+      return false;
+    }
   }
 
   async listIssueComments(repo: string, issue: number, page: number, perPage: number) {
