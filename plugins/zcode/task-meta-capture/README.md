@@ -47,7 +47,7 @@ To remove: disable/uninstall the plugin in the UI and delete the spool directory
 ## v0.3+ reusable CLI acceptance
 
 Use the canonical
-[task-meta-agent-cli-validation Skill](../../../../.agents/skills/task-meta-agent-cli-validation/SKILL.md)
+[task-meta-agent-cli-validation Skill](../../../.agents/skills/task-meta-agent-cli-validation/SKILL.md)
 for source-verified commands, Node24 regression, actual ZCode headless sessions and
 Spool/Outbox/GitHub readback. Real Windows ZCode v0.3.0 headless capture and
 `zcode plugins validate` were witnessed at
