@@ -95,7 +95,7 @@ loads these desktop plugin Hooks or supports the same trust command. Query the i
 of replaying a fake Hook or editing trust hashes.
 
 For future validation, read the canonical
-[CLI-first Skill](../../../../.agents/skills/task-meta-agent-cli-validation/SKILL.md).
+[CLI-first Skill](../../../.agents/skills/task-meta-agent-cli-validation/SKILL.md).
 The desktop trust action is only a bounded fallback for app-only behavior; don't default
 to GUI verification or overwrite user `~/.codex` preferences. Hook failures may write an
 error class to `_errors.log`; the watcher on Windows is not proven by a single
