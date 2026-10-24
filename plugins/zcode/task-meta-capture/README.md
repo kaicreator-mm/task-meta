@@ -43,3 +43,16 @@ Use it with `collect --zcode-hook-spool <spool dir>`.
 Add `plugins/zcode/marketplace.json` (market `dev-task-meta`) as a local marketplace in the
 ZCode UI, then install and enable `task-meta-capture`. If no spool appears, check that hooks are enabled in ZCode (its built-in default config has `hooks.enabled=false`).
 To remove: disable/uninstall the plugin in the UI and delete the spool directory.
+
+## v0.3+ reusable CLI acceptance
+
+Use the canonical
+[task-meta-agent-cli-validation Skill](../../../../.agents/skills/task-meta-agent-cli-validation/SKILL.md)
+for source-verified commands, Node24 regression, actual ZCode headless sessions and
+Spool/Outbox/GitHub readback. Real Windows ZCode v0.3.0 headless capture and
+`zcode plugins validate` were witnessed at
+[PR #54](https://github.com/kaicreator-mm/task-meta/pull/54#issuecomment-6382732452).
+However, ZCode version-specific CLI installer/enable support is **not assumed**:
+probe the installed `zcode --help` / `zcode plugins --help` before issuing commands.
+UI-only enabling (when the CLI cannot) remains a separate DESKTOP_ONLY lane; never
+claim a direct Hook script test proves the ZCode Agent loaded the plugin.
