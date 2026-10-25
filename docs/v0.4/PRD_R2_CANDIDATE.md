@@ -112,11 +112,11 @@
 
 ### FR04 [P0, Lane B] Outbox 恢复的 **v0.4 真增量**（复用 T18）
 
-**已有真实证据，禁止重做为新功能**：v0.3 `src/publish/publish.ts` 已实现完整分页核对、同身份幂等/冲突；`src/publish/client.ts` 已解析 Retry-After；`src/autoreport/outbox.ts` 具备私有 append-only 与 Session 锁；`scripts/e2e-fault-injection.ts` **T18 已在 v0.3 固定精确源码**测试丢 ACK/POST 后崩溃、并发 Publisher/Session Lock、已编辑评论及分页等路径，参见 [v0.3 #46 RQ](https://github.com/kaicreator-mm/task-meta/issues/46) / [PR #54 独立 RQ](https://github.com/kaicreator-mm/task-meta/pull/54#issuecomment-6382732452)。A08 仅需当前 v0.4 SHA 上对现有 T18 Oracle 回归；发布逻辑无变更时可以复用原真实 GitHub 回执，不强迫刷新网络负面试验。
+**已有真实证据，禁止重做为新功能**：v0.3 `src/publish/publish.ts` 已实现完整分页核对、同身份幂等/冲突，且 **`publishReport` 内单次调用已有 `maxRetries ?? 3` 有界重试/指数退避/Retry-After/重发前 readback**（源 blob `f3c29259da7640dbd9fb593ec5cd82a2d499ed1e`）；`src/publish/client.ts` 已解析 Retry-After；`src/autoreport/outbox.ts` 具备私有 append-only 与 Session 锁；`scripts/e2e-fault-injection.ts` **T18 已在 v0.3 固定精确源码**测试丢 ACK/POST 后崩溃、并发 Publisher/Session Lock、已编辑评论及分页等路径，参见 [v0.3 #46 RQ](https://github.com/kaicreator-mm/task-meta/issues/46) / [PR #54 独立 RQ](https://github.com/kaicreator-mm/task-meta/pull/54#issuecomment-6382732452)。A08 仅需当前 v0.4 SHA 上对现有 T18 Oracle 回归；发布逻辑无变更时可以复用原真实 GitHub 回执，不强迫刷新网络负面试验。
 
 **v0.4 独有增量：**
-1. 在现有 `auto-report --retry` **人工重试** 之上，支持独立、可停止的 **受控自动重试**（可设最大次数、单次退避/Retry-After、总时限与资源预算；默认不开无限恢复）。错误 429/503/TLS/断网选择原因敏感、权限与 Source 再核验；每次外部效果前进行真实原生分页 readback，结果不完全保持 UNKNOWN/HELD。
-2. 私有 Outbox 新增 `UNKNOWN` 用于**已尝试效果但远端结果不可证明**；`FAILED` 专指有可靠证据确认**未执行或未成功应用**的确定失败。已存在 `HELD`/其他 Outbox 状态保持语义，不能把 UNKNOWN 混到 FAILED 重驱；新类型由 T0 统一只定义一次，其迁移/旧 Outbox replay 必须不篡改历史数据。
+1. **只在 `auto-report` 跨进程/重启的私有 Outbox Recovery 层**，由原先人工 `--retry` 扩展为可停止、持久且获授权的**受控重驱动调度**；不是重写 `publishReport` 内已有的每次调用三次有界重试。应明确跨层总 POST/GET/退避预算（各层预算累计有上限），不能叠加成无界乘积重试、失败后盲目再次 POST，默认不创建常驻服务或扩大网络权限；同一 Source/Session 的尝试序号、累计次数/最后远端读取必须可恢复。429/503/TLS/断网按原因和 Retry-After 处理；每次外部效果前重新检查权限与 Source、全量受限原生 readback，不完整/无法证实时 UNKNOWN/HELD 而非乐观继续。
+2. 私有 Outbox 新增 `UNKNOWN` 用于**已尝试效果但远端结果不可证明**；`FAILED` 专指有可靠证据确认**未执行或未成功应用**的确定失败。**当前 `publishReport` 的 `NOT_PUBLISHED` 可由网络超时、后状态不完整或权限拒绝等不同情况返回，不能直接一对一映射为新 `FAILED`**；必须先按读回证据分类。已有 `HELD`/其他 Outbox 状态保持语义。自动重驱默认只触及符合白名单且权限充分的 `FAILED`/`HELD`，`UNKNOWN` 必须先可靠再核对远端结果，无法证明“未应用”不得发第二 POST；新类型由 T0 统一只定义一次，旧 Outbox replay 不篡改历史记录。
 3. 每次重试重新验证 ADS effective adoption+schema blob/Target/Source/clearance/当前 GitHub grant；不可复核的权限/网络不许乐观 POST。删除的评论或同键异 digest 必须走 **原有 publish reconciliation** 或明确 UNKNOWN/CONFLICT，不盲目创建第二条。延迟 403/429/timeout 的源头采用可控本地代理+隔离 E2E sink，不使用恶意真实配额刺激。
 4. 收集 GET/readback 数量、恢复延迟、重试预算消耗、最后状态、信息安全的错误原因；Spool/Outbox/private 记录保持 append-only/JCS-digest，日志不得包含 token、原始模型/工具正文或私有路径。
 5. 和 A/C 的接口仅使用冻结 T0 private types；**B 独占** `src/autoreport/**`, `src/publish/**`, `scripts/e2e-fault-injection.ts` 等写集，且不修改共享 `src/model.ts`。
@@ -198,7 +198,7 @@
 | A06 | 缺 PostToolUse、Provider token usage、Verifier 或真实 Source | 按 FR03 六指标的具体分母和 `missing_reason` 返回 null/UNKNOWN；未观测值不等于 0 |
 | A07 | Hook 出错、权限不足无法写 Spool、错误分类 | Agent 仍可完成，Doctor 不读取/输出敏感文件，分类与 source-level 问题目录一致 |
 | A08 | v0.3 T18 lost-ACK/post-crash/同键冲突/分页回归 | 复用 `scripts/e2e-fault-injection.ts` + v0.3 原回执；新 v0.4 SHA 上的 source regression；**仅 publish/retry 路径变更后才需追加真实 GH 回读** |
-| A09 | 受控本地代理注入 429/503/TLS timeout，断网、失败分页、重启 | 预算有界、Retry-After 受控、权限再核对、`UNKNOWN/HELD` 不盲 POST、实测回执 |
+| A09 | 受控本地代理注入 429/503/TLS timeout，断网、失败分页、重启 | 区分 `publishReport` **已存在单调用 maxRetries** 和新增 Outbox 跨进程自动重驱；联合 POST/GET/时间总预算有界、重启后计数持久、Retry-After 受控、权限再核对，`UNKNOWN/HELD` 不盲 POST；实测回执 |
 | A10 | 无合格 ADS adopted-main pin/source clearance 的普通 GitHub repo | `doctor/retry/collect` 都未授权 POST，`HELD` 且具体原因；负例可本地 fixture |
 | A11 | **Windows Node24** 最少 5 组相同 synthetic workload Hook OFF/ON | wall clock、Spool bytes、Stop→Outbox 实际测量；标 sample n/median/range/version/exit；未运行 `FR05a=NOT_RUN`，不得算 MUST PASS |
 | A12 | 嵌套/重叠 parent-tool Span 与物理 retry | leaf 统计/时间区间 union 不双计；`wall-active` 不解释为 thinking |
@@ -328,4 +328,4 @@ L2 根据首轮实际基线与使用场景提出轻量合理预算/验收阈值�
 
 
 
-**R1 → R2 差异说明：** Claude R1 `P0=0/P1=9/P2=8/BLOCK`。R2 的修复覆盖 9 个 P1（恢复历史既证范围、统一模型、Doctor 决策、可证伪实测/coverage、实际平台/Gate/Issue、v4.18 Workfront/来源/公开 Schema）及 8 个 P2（资源耗尽、敏感只读、Codex Desktop-only、T18、cohort 规则、ADS SHA currentness、D fixture、Reviewer 不独立判定）。最终以新的 Git blob/HEAD 和独立 Reviewer 的正式差异结论为准。
+**R1 → R2 差异说明（包括当前 HEAD 的源证据预检）：** Claude R1 `P0=0/P1=9/P2=8/BLOCK`。R2 的修复覆盖 9 个 P1（恢复历史既证范围、统一模型、Doctor 决策、可证伪实测/coverage、实际平台/Gate/Issue、v4.18 Workfront/来源/公开 Schema）及 8 个 P2（资源耗尽、敏感只读、Codex Desktop-only、T18、cohort 规则、ADS SHA currentness、D fixture、Reviewer 不独立判定）。最终以新的 Git blob/HEAD 和独立 Reviewer 的正式差异结论为准。
