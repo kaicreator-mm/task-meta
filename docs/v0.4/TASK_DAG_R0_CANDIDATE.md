@@ -1,6 +1,6 @@
-# task-meta v0.4.0 — Capability-first Task DAG R0
+# task-meta v0.4.0 — Capability-first Task DAG R1
 
-**State:** `DAG_R0_CANDIDATE / INDEPENDENT_DAG_REVIEW=NOT_RUN / DAG_FREEZE=NO / 10_PLANNED_TASK_ISSUES / NATIVE_BLOCKED_BY_0_OF_12 / BUILDER_CLAIM=NONE`. Native GitHub Issue Dependencies are the **only** effective materialized live execution DAG after admission; no prose below makes a Task writable.
+**State:** `DAG_R1_CANDIDATE / R0_REVIEW=BLOCK(P0_0_P1_3_P2_7) / INDEPENDENT_R1_REVIEW=NOT_RUN / DAG_FREEZE=NO / 10_PLANNED_TASK_ISSUES / NATIVE_BLOCKED_BY_0_OF_12 / BUILDER_CLAIM=NONE`. Native GitHub Issue Dependencies are the **only** effective materialized live execution DAG after admission; no prose below makes a Task writable.
 
 ## 0. Source authority and identity
 
@@ -18,16 +18,16 @@
 
 | Capability / Product FR | Actual frozen design responsibility | Task ID / Native Issue | Scope and evidence |
 | --- | --- | --- | --- |
-| Versioned private measurement/lifecycle semantics, FR02–04 | One shared contract and only one cross-module Writer | **T0 [#65](https://github.com/kaicreator-mm/task-meta/issues/65)** | `src/model.ts`; source-only type/identity fixtures; public ADS schema immutable |
+| Versioned private measurement/lifecycle semantics, FR02–04 | **T0 owns a single shared `PostEffect` plus terminal/status vocabulary**, `MissingReason`, `EvidenceLevel`, `CaptureQuality`; B2 only persists projection | **T0 [#65](https://github.com/kaicreator-mm/task-meta/issues/65)** | `src/model.ts` + `test/{binding,canonical}.test.ts`; A1/B1/C1 consume T0 shapes/fixtures, not unmerged sibling modules |
 | Repository health visibility, FR01 | Catalog/Doctor exists independently of lifecycle observer | **A1 [#66](https://github.com/kaicreator-mm/task-meta/issues/66)** | `src/doctor/**`; read allowlist, privacy, no global CLI/auto-repair |
-| Agent event lifecycle, FR02 | Source event witness/capability independent of Doctor UI | **A2 [#67](https://github.com/kaicreator-mm/task-meta/issues/67)** | `src/lifecycle/**` plus narrowly relevant adapter modules; unknown SessionEnd truth |
-| In-call governed effect finality, FR04 | One publisher owns all unsafe in-call retry/permission semantics | **B1 [#68](https://github.com/kaicreator-mm/task-meta/issues/68)** | `src/publish/**`; MAY_HAVE_SENT→UNKNOWN, fresh permission each POST, exactly 1 POST in delayed-commit negative |
-| Durable recovery, FR04 | Persisted Outbox state/budget/sequence requires integrated B1 outcome | **B2 [#69](https://github.com/kaicreator-mm/task-meta/issues/69)** | `src/autoreport/**` and owned fault harness; journal gaps/skipped fail closed, shared POST/GET/wall budget |
-| Measurable capture quality, FR03/06-minimal | Six source-qualified private numerator/denominator calculations | **C1 [#70](https://github.com/kaicreator-mm/task-meta/issues/70)** | `src/aggregates/**` and `src/metrics/**`; Binding 2/3, pair 1/2, resolution 3/4 and success 1/4 |
-| Real overhead baseline, FR05a MUST | One isolated physical Host measurement protocol | **C2 [#71](https://github.com/kaicreator-mm/task-meta/issues/71)** | Windows Node24 real ≥5 paired same-workload Hook measurements; no model/provider payment needed |
-| GitHub-only producer boundary, FR08 | Producer-only strict ADS Golden and Tally seam | **E [#72](https://github.com/kaicreator-mm/task-meta/issues/72)** | Public report schema/clearance and negative fixture; real Tally App external NOT_RUN |
-| Shared wiring + source integration, `7 MUST | Single mutable CLI/manifest/Skill writer and whole-version tests | **I [#73](https://github.com/kaicreator-mm/task-meta/issues/73)** | `src/cli.ts` / package / Skill/Agent rules and integration tests, qualified upstream code only |
-| Version qualification, FR05a/`9 | One RQ/qualification/controller, no unrelated source implementation | **R [#74](https://github.com/kaicreator-mm/task-meta/issues/74)** | Exact integrated SHA/Tree, Node24 real Host, independent RQ, guarded main merge only after READY |
+| Agent event lifecycle, FR02 | Source-qualified Hook/SessionEnd observation, no false client support | **A2 [#67](https://github.com/kaicreator-mm/task-meta/issues/67)** | `src/lifecycle/**`, exact `src/adapters/{claude,codex,zcode}/{capability,hooks,index}.ts`, existing adapter/hook test files; no shared CLI |
+| In-call governed effect finality, FR04 | One backward-compatible publisher owns safe in-call retry and frozen **typed B1→B2 hook seam** | **B1 [#68](https://github.com/kaicreator-mm/task-meta/issues/68)** | `src/publish/**` + existing `test/publish*.test.ts`/`test/publication-*.test.ts`; pre-POST durable reserve + per-GET-page charge hook + typed PostEffect; runner unchanged must typecheck |
+| Durable recovery, FR04 | B2 consumes accepted B1 hooks, solely owns durable Outbox status projection and retry budget/journal | **B2 [#69](https://github.com/kaicreator-mm/task-meta/issues/69)** | `src/autoreport/**`, `config/auto-report.json`, existing auto-report/spool/store tests, fault harness; IN_FLIGHT gap fail closed, full-ID lock hash, recovery-cost counters, A21 |
+| Measurable capture quality, FR03/06-minimal | Six private metrics consume only frozen T0 types/fixtures, **not unmerged A2**; optional cost extensions excluded | **C1 [#70](https://github.com/kaicreator-mm/task-meta/issues/70)** | `src/aggregates/**`, `src/metrics/**`, `test/{aggregates,metric-comparison}.test.ts`; Binding 2/3, pair 1/2, publication 3/4 terminal vs 1/4 success; A12 span union |
+| Real overhead baseline, FR05a MUST | One independent **pre-change** real Host measurement; R separately remeasures exact release candidate | **C2 [#71](https://github.com/kaicreator-mm/task-meta/issues/71)** | Windows Node24 real ≥5 paired Hook runs, raw measured receipt, baseline input to I only (frozen L2 C2→I) |
+| GitHub-only producer boundary, FR08 | Strict schema/clearance **offline source Golden**, not B1 publisher HTTP/NOT_PUBLISHED behavior | **E [#72](https://github.com/kaicreator-mm/task-meta/issues/72)** | Isolated `docs/v0.4/integration/**` + `test/v0.4/producer-*.test.ts`; real Tally App external NOT_RUN |
+| Shared wiring + source integration, Product MUST | One `src/cli.ts`/manifest/Skill owner; I real CLI E2E is integration evidence only | **I [#73](https://github.com/kaicreator-mm/task-meta/issues/73)** | Shared CLI/package/Skill, `test/cli.test.ts` + actual CLI regression; C2 baseline is not candidate performance PASS |
+| Version qualification, Product RQ | Actual exact-candidate Host measurement + independently **required** RQ review | **R [#74](https://github.com/kaicreator-mm/task-meta/issues/74)** | Candidate exact SHA/Tree, qualified Node24 real E2E, independent RQ, main only after READY |
 
 **Scope held outside core mandatory DAG:** FR05b performance optimization (measurement-triggered), FR06 C3 expanded provider/cost comparisons, FR07 D private planning-Lane observations, FR09 general experience/evolution are **SHOULD/DEFER**; if separately admitted, use a new source-qualified ADD DAG mutation/Task Pack, do not silently broaden C1 or I. Historic product-intake [#7](https://github.com/kaicreator-mm/task-meta/issues/7), [#8](https://github.com/kaicreator-mm/task-meta/issues/8), [#9](https://github.com/kaicreator-mm/task-meta/issues/9), [#14](https://github.com/kaicreator-mm/task-meta/issues/14), [#17](https://github.com/kaicreator-mm/task-meta/issues/17) stay open by prior Product decision until their full real owner-qualified evidence is complete.
 
@@ -91,18 +91,49 @@ The Task Packs' durable minimal Tests/Contract/Implementation/Failure content re
 
 | Candidate execution workfront | Source writer | Disjoint sibling writer? | Read-only/physical handoff |
 | --- | --- | --- | --- |
-| T0 (root) | `src/model.ts`, own private-contract tests | YES with C2/E | WEB contract owner; independent security/contract Review |
-| C2 (root) | `scripts/bench-task-meta-*.ts`, own evidence docs | YES with T0/E | LOCAL Windows Node24 **real paired Host measurements** REQUIRED, not necessarily implementation of other concerns |
-| E (root) | `docs/v0.4/integration/**`, own producer-only tests | YES with T0/C2 | WEB/CI; no Tally App dependency |
-| A1 | `src/doctor/**` only | YES with A2/B1/C1 **after T0** | WEB and source CI, no auto-install |
-| A2 | `src/lifecycle/**` + bounded adapter files | YES with A1/B1/C1 **after T0** | WEB source; LOCAL real Client for version RQ, not new global UI prerequisite |
-| B1 | `src/publish/**` only | YES with A1/A2/C1 **after T0** | WEB security, real GitHub scoped permission proof later only if applicable |
-| C1 | `src/aggregates/**` and `src/metrics/**` | YES with A1/A2/B1 | WEB/CI, conditional denominators |
-| B2 | `src/autoreport/**` + owned fault harness | YES with A1/A2/C1 **after B1** | WEB/CI, optional LOCAL isolated native Issue test; no second publisher |
-| I | `src/cli.ts`, `package.json`, `AGENTS.md`, canonical Skill, integration tests | **NO** with upstream source owners; sole central integration writer | WEB controller + CI and lawful LOCAL Agent CLI real E2E |
-| R | `docs/v0.4/release/**`, release-only metadata and exact candidate | **NO** with I until eligible | RQ reviewer distinct from author, CI/Host valid receipts |
+| T0 (root) | `src/model.ts`, `test/binding.test.ts`, `test/canonical.test.ts` + own private contract tests | YES with C2/E | WEB one source writer; shared PostEffect/status enum and versioned source-only fixtures |
+| C2 (root) | `scripts/bench-task-meta-*.ts`, dedicated benchmark tests/evidence | YES with T0/E | LOCAL Windows Node24 pre-change baseline (≥5 real pairs), R new candidate remeasurement distinct |
+| E (root) | `docs/v0.4/integration/**` + source-only producer Golden tests | YES with T0/C2/B1 | WEB/CI only strict report fixture, no B1 transport/outcome test |
+| A1 | `src/doctor/**` + dedicated doctor tests | YES with A2/B1/C1 after T0 | Source-only T0 status fixtures; no B2 code dependency; CLI registration reserved to I |
+| A2 | `src/lifecycle/**` + explicit `src/adapters/{claude,codex,zcode}/{capability,hooks,index}.ts`, existing adapter/hook tests | YES with A1/B1/C1 after T0 | WEB source; agent Host real E2E belongs I/R |
+| B1 | `src/publish/**` + existing publish/publication test suite | YES with A1/A2/C1 after T0 | WEB security; safe typed effect+pre-POST durable reserve+per-GET-page charge, no runner source edits |
+| C1 | `src/aggregates/**`, `src/metrics/**`, existing aggregates/metric-comparison tests | YES with A1/A2/B1 after T0 | T0-only diagnostic fixtures, no A2 code dependency, span union and conditional denominator |
+| B2 | `src/autoreport/**`, `config/auto-report.json`, existing `test/auto-report*.test.ts`, `test/{store,spool}.test.ts`, owned fault harness | YES with A1/A2/C1 after accepted B1 | Sole Outbox persisted status/lock/budget writer, no second publisher |
+| I | `src/cli.ts`, `package.json`, `AGENTS.md`, canonical Skill, existing `test/cli.test.ts`/CLI dispatch tests and dedicated integration | NO concurrent shared writer | I uses C2 pre-change baseline as evidence only; R qualifies actual candidate |
+| R | `docs/v0.4/release/**`, approved release-only metadata | NO with I until qualified | Independent RQ Reviewer REQUIRED; fresh candidate Windows Node24 benchmark and real installed Agent CLI |
 
 Any new overlap discovered during source JIT shall trigger native DAG amendment/Issue write-set conflict resolution, **not** simultaneous source writing. In particular B1/B2 are sequential on publisher contract; I is a separate owner of all shared entrypoints so A1/A2/C1 cannot edit `src/cli.ts` by convenience. No write to `vendor/ads/**` or unqualified v4.18 runtime adoption.
+
+### 3.1 Existing-test exclusive owner map — R0 P1-02 repair
+
+Every legacy test affected by the frozen v0.4 behavioral change now belongs to an exact **single** Task Pack Issue body; test execution does not grant universal edit rights:
+
+| Task | Existing regression tests allowed to modify ONLY when source-affected |
+| --- | --- |
+| T0 #65 | `test/binding.test.ts`; `test/canonical.test.ts` |
+| A1 #66 | none; new doctor fixtures, shared `test/cli.test.ts` **I only** |
+| A2 #67 | `test/claude-adapter.test.ts`, `test/codex-adapter.test.ts`, `test/zcode-adapter.test.ts`, `test/zcode-hooks.test.ts`, `test/zcode-hooks-v2.test.ts` |
+| B1 #68 | `test/publish.test.ts`, `test/publish-faults.test.ts`, `test/publication-authority.test.ts`, `test/publication-native-permission.test.ts` |
+| B2 #69 | `test/auto-report.test.ts`, `test/auto-report-claude.test.ts`, `test/auto-report-codex.test.ts`, `test/auto-report-flood.test.ts`, `test/auto-report-watch.test.ts`, `test/store.test.ts`, `test/spool.test.ts` |
+| C1 #70 | `test/aggregates.test.ts`, `test/metric-comparison.test.ts` |
+| C2 #71 | none; dedicated benchmark tests/evidence |
+| E #72 | none; dedicated strict producer Golden only |
+| I #73 | `test/cli.test.ts`, `test/claude-cli.test.ts`, `test/codex-cli.test.ts` |
+| R #74 | none; qualification reads/tests source, no unauthorized runtime changes |
+
+These sets are pairwise disjoint. Other existing tests remain **read/execute-only**; new discovered file modifications need a narrow current Task Pack amendment with one owner and appropriate independent review before changing content. Plugin runtime scripts remain out of v0.4 write sets.
+
+### 3.2 T0 private outcome vocabulary and frozen B1→B2 seam — R0 P1-01/P1-03 repair
+
+**T0 #65** owns the ONLY versioned private `PostEffect` (`PROVEN_NOT_SENT | REMOTE_SAME | REMOTE_DIFFERENT_OR_DAMAGED | SENT_OR_MAY_HAVE_SENT`), diagnostic MissingReason/EvidenceLevel and terminal/status vocabulary (`PENDING, IN_FLIGHT, PUBLISHED, ALREADY_PUBLISHED, DENIED, CONFLICT, HELD, UNKNOWN, JOURNAL_INCOMPLETE, FAILED_PROVEN_PRE_SEND`) in `src/model.ts`. A1/C1/B1 read this contract and synthetic T0 fixtures only; they cannot import mutable/unmerged B2 state. **B2 alone** maps this vocabulary to persisted Outbox records and owns `src/autoreport/outbox.ts`.
+
+**B1 #68** must preserve existing `PublishOutcome` discriminant union and unchanged `runner.ts` compile; it adds private *additive* effect certainty metadata/wrapper rather than a new naked union arm which forces B2-owned source edits. Its safe publisher seam shall expose typed `PublisherEffectHooks` (or demonstrably equivalent): `beforePhysicalPost` must durably append `IN_FLIGHT`, reserve + debit shared report identity/digest attempt budget **before each physical createIssueComment**; `beforeNativeGetPage` charges **each page** of pre-admission, clearance, report identity reconciliation and post-write native GET **before network access**. B1 takes this explicit hook/context and returns source-qualified typed `PostEffect`; B2 supplies the durable Outbox implementation after B1 acceptance. **No production no-op hook:** direct publisher without a trustworthy journal/budget backend must fail closed (HELD/UNKNOWN, zero outbound POST), not circumvent the reservation requirement. The B1 tests must prove the existing runner compiles unchanged and a missing trusted reservation backend prevents any POST.
+
+No change to ADS public report schema/privilege; in-call `SENT_OR_MAY_HAVE_SENT` stops POST retry immediately even after empty fully paginated readback. B1→B2 is a real dependency and one of the existing 12 native planned edges; adding B2→A1/C1 would be unnecessary fake serialization. B2's expected independent test oracles include corrupt `IN_FLIGHT`, segment inventory/gaps, full-ID lock hashes, `config/auto-report.json` bounded opt-in, GET/POST/time/cycle counters and A21 backlog/disk-full/stale-lock classification. If a fix would actually require `src/store/spool.ts` implementation edits, **HOLD + authorize a narrowly reviewed DAG/Task Pack amendment**; do not silently cross the B2 allowed write set.
+
+### 3.3 C2 Host evidence and Review policy (R0 P2-02/03/06)
+
+The **C2→I** edge is preserved as frozen L2 §7's evidence-convergence prerequisite. C2 is **a root task** and should run in parallel with T0/E once admitted, avoiding delayed measurement. I only consumes C2's witnessed **pre-change ON/OFF baseline** as a source fact, never signs post-change performance qualification. **R separately reruns >=5 paired measurements on the frozen exact candidate**, and independently validates actual installed Agent CLI Hook E2E (I's earlier CLI run, if any, is integration evidence and not automatic R release PASS). Moving C2→R requires an actual L2 amendment; cannot silently drop the frozen mandatory edge to improve apparent concurrency. R #74 review policy is now **required**, not the accidental previous "recommended" default.
 
 ## 4. Decomposition alternatives and non-fabricated efficiency analysis
 
@@ -149,7 +180,7 @@ No root Task is "Ready" just because its expected native blocked_by is empty. Co
 Use PowerShell or Linux shell with authenticated `gh` in a repo with permission to update issue dependencies. For each approved edge, invoke official:
 
 ~~~bash
-gh api --method POST repos/kaicreator-mm/task-meta/issues/<blocked_issue>/dependencies/blocked_by -f issue_id=<blocking_database_id>
+gh api --method POST repos/kaicreator-mm/task-meta/issues/<blocked_issue>/dependencies/blocked_by -F issue_id=<blocking_database_id>
 ~~~
 
 Example (not yet authorized for execution): `gh api --method POST repos/kaicreator-mm/task-meta/issues/66/dependencies/blocked_by -F issue_id=6028433009`.
@@ -160,9 +191,44 @@ Example (not yet authorized for execution): `gh api --method POST repos/kaicreat
 gh api repos/kaicreator-mm/task-meta/issues/73/dependencies/blocked_by --paginate
 ~~~
 
-Controller should verify **precisely 12 expected edge pairs across all 10 Issues** using real issue database IDs, fail on missing/extraneous edges and incomplete pages; this file is not a substitute for proof. Issue states remain PLANNED until qualified transition.
+Controller should verify **precisely 12 expected edge pairs across all 10 Issues**, including both `blocked_by` and reciprocal `blocking` lists, using real issue database IDs, fail on missing/extraneous edges and incomplete pages; this file is not a substitute for proof. Issue states remain PLANNED until qualified transition.
 
-## 8. Independent DAG Review / Freeze request
+## 8. A01–A28 Product acceptance to Task / Release crosswalk (R0 P2-04)
+
+| Product oracle IDs | Source owner / verification | Release gate disposition |
+| --- | --- | --- |
+| A01,A07,A18,A23 | A1 Doctor privacy/diagnosis, A2 Hook errors, B2 resource refusal, I final CLI glue | Core MUST; no credential leak, duplicate rule source, fake Host |
+| A02,A03,A04,A19 | A2 installed-Agent profile event truth, I integrated CLI, R current candidate CLI | Core MUST for supported claimed Windows Agent CLI; old Codex desktop evidence not equivalent |
+| A05,A06,A22 | T0 single event/terminal source and C1 six denominator-safe measurements | Core MUST Binding 2/3, Tool pair 1/2, terminal 3/4 vs publish 1/4 |
+| A08,A09,A10,A21 | B1 direct publisher permission/finality, B2 Outbox corruption/budget/overflow, E strict offline source projection | Core MUST, POST after MAY_HAVE_SENT=zero |
+| A11 | C2 real n≥5 baseline, R fresh candidate n≥5 + I read-only baseline provenance | Core physical Windows Node24 MUST; no invented real Host |
+| A12,A13,A20 | C1 nested spans union, cache/model/cost provenance and comparability | Core numerical/source truth; no model ranking |
+| A15,A16,A17 | E producer-only strict schema/Tally handoff + R downstream NOT_RUN boundary | Core **producer** Golden; REAL_TALLY_APP may stay NOT_RUN |
+| A28 | E/B1 qualified effective adopted pin/native source, I/R release currentness | Core no new v4.18 public fields or unauthorized report |
+| A14,A24,A25,A26,A27 | Optional private FR07 D owner **not materialized** under Product SHOULD/DEFER | NOT_IN_CORE_GATE; future DAG ADD mutation if selected, no CLAIM/PASS now |
+
+This table does not authorize changing sibling Issue write sets. Any incomplete source-owned negative proof remains `NOT_RUN`, never inherited from this planning crosswalk.
+
+## 9. R0 review P1/P2 repair disposition and R1 independent re-review
+
+Independent Claude [DAG R0 review](https://github.com/kaicreator-mm/task-meta/pull/75#issuecomment-6402384336) at `46db01ead6d1a5423d852b410d3bff787b2ed0e0` / blob `fb5df38cb82f05de50adc953f547fd64e36a15a4` found `P0=0,P1=3,P2=7,DAG_REVIEW=BLOCK`. **All ten native Issue Task Packs #65–#74 were updated**, still `PLANNED`; the change to this GitHub PR is one DAG Markdown file. No Task has Builder admission and no native edge was written.
+
+| Original finding | R1 author response |
+| --- | --- |
+| P1-1 | §3.2 + Issue #65 T0 owns single PostEffect/status vocabulary; B2 persistence only; A1/C1 T0 fixture consumer |
+| P1-2 | §3.1 + all task body write sets allocate every source-affected legacy test to exact one writer |
+| P1-3 | §3.2 + Issue #68 B1 additive publisher effect, durable pre-POST reservation, per-GET-page budget, unchanged runner typecheck; B2 callback consumer |
+| P2-1 | #67 exact adapter module filenames/legacy test ownership |
+| P2-2 | #74 independent RQ review `required` |
+| P2-3 | §3.3 C2 baseline at root, C2→I as frozen evidence gate, R new candidate measurement; no premature L2 mutation |
+| P2-4 | #69 full-ID hashed lock keys, recovery cost, config, backlog; #70 A12 span union; #66/#67 A07 Hook error; §8 acceptance crosswalk |
+| P2-5 | #72 E strictly offline producer Golden, B1 owns publisher transport negatives |
+| P2-6 | #70 C1 uses T0 DiagnosticFact fixtures only, not unmerged A2 code |
+| P2-7 | Native `-F issue_id=<integer>`, full `blocked_by` AND reciprocal `blocking` readback |
+
+**R1_AUTHOR_FIXES=TEXT_ONLY / INDEPENDENT_R1_DAG_REVIEW=NOT_RUN / DAG_FREEZE=NO / NATIVE_DAG=0/12 / BUILDER_CLAIM=NONE / HOST/CI/RQ_V04=NOT_RUN / MAIN_MERGE=NO.** Independent Claude must read this **new exact HEAD/blob** and live updated Issue #65–#74 bodies to determine whether all 3 P1/7 P2 genuinely close; no author-side fixes are treated as approval.
+
+## 10. Independent DAG R1 Review / Freeze request
 
 Independent Claude Reviewer, **read entire DAG document at exact PR HEAD and immutable Git blob**; verify the real 10 Issue bodies and IDs/permissions, L2 frozen contract+source and now-qualified ADS v4.18 main Product/L2 normative standards.
 
@@ -172,4 +238,4 @@ Independent Claude Reviewer, **read entire DAG document at exact PR HEAD and imm
 4. Confirm **no accepted Scaffold**, conditional SF↔DF/MI N/A, genuine native Option A blocked_by/Claim/JIT and no "merge-only" unauthorized implementation. If the connected tool cannot write native edges, classify `NATIVE_DAG_NOT_PROVEN`, not full materialization PASS.
 5. Return `P0/P1/P2, DAG_REVIEW=PASS|BLOCK, DAG_FREEZE_READY=YES|NO` at **exact source SHA/blob**, with minimal repairs, to DAG PR and Issue #64. **Read-only independent Review, no merge/freezing or source build, no native dependency mutation or unauthorized Claim.**
 
-**R0 truth:** `10_ISSUES_CREATED_PLANNED; INTENDED_EDGES=12; NATIVE_EDGES_WRITTEN=0; NATIVE_DAG_ADMITTED=NO; ISSUE_TASKPACK_REVIEW=NOT_RUN; DAG_REVIEW=NOT_RUN; DAG_FREEZE=NO; BUILDER_CLAIMS=0; V04_RUNTIME/LOCAL/CI/RQ=NOT_RUN; MAIN_MERGE=NO`.
+**R1 candidate truth:** `10_ISSUES_CREATED_PLANNED; INTENDED_EDGES=12; NATIVE_EDGES_WRITTEN=0; NATIVE_DAG_ADMITTED=NO; ISSUE_TASKPACK_REVIEW=NOT_RUN; DAG_REVIEW=NOT_RUN; DAG_FREEZE=NO; BUILDER_CLAIMS=0; V04_RUNTIME/LOCAL/CI/RQ=NOT_RUN; MAIN_MERGE=NO`.
