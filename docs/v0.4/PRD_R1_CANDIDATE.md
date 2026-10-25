@@ -109,7 +109,7 @@
 ### FR05 [P0/P1, Lane C] Capture Overhead 与存储/并发基线
 
 1. 真实 Node24 Host 测量 Hook 子进程启动/Wall、CPU/内存、Spool I/O、Git metadata 调用、auto-report 从 Stop 到 Outbox 时间、GitHub 请求次数、缓存/锁竞争。必须先建立 **未安装/禁用采集** 对照，再测**同 Agent 版本、同任务、同 Host** 启用采集。
-2. 不预设“0 开销”、“提升 30%”或固定通过阈值。Product R0 指定先测，并由 Product/L2 Review 批准实际预算/告警阈值；若无法构造合法对照，报告 `NOT_MEASURED` 而不是声称性能改进。
+2. 不预设“0 开销”、“提升 30%”或固定通过阈值。Product R1 指定先测，并由 Product/L2 Review 批准实际预算/告警阈值；若无法构造合法对照，报告 `NOT_MEASURED` 而不是声称性能改进。
 3. 保持现有无需 DB 的持久化/append-only/CAS 路径；默认不引入 SQLite/Postgres/Web dashboard/常驻服务器。仅在测得的真实规模需求支持时，才评估 batch、incremental scan、WAL 或轻量索引。
 4. 采集/上传失败不得阻塞 Agent 正常执行；必须为资源耗尽和无限队列提供有界行为和告警。
 
@@ -158,7 +158,7 @@
 | 测试诚实 | source-only fixture、Hook fixture、真实 Agent CLI、真实 GitHub、真实 Tally、CI/Host/Release 结论分别签发；CI 不可用用限定 waiver/NOT_RUN，不假 PASS |
 | 兼容成本 | 1.0 前不强制兼容旧内部 API，但已公开的 ADS v3/v4/v5 历史记录不得重新解释或破坏；新增私有诊断字段必须明确当前版本 |
 
-## 6. 可证伪验收矩阵（R0 候选）
+## 6. 可证伪验收矩阵（R1 候选）
 
 | Case | 场景 | 期望结果 / 层级 |
 | --- | --- | --- |
@@ -224,7 +224,7 @@
 - CI 若不可用，单独记录 `CI_UNAVAILABLE_WAIVER` 的版本 Owner 范围与具体缺失，不能声称 CI PASS；真实 Host/平台是否仍为必需由当版冻结 Release 规则决定。
 - v0.3 已冻结 Release PIN `9731b03…` 仅作历史比较来源；v0.4 只有自身独立 Candidate 和 RQ 成立才能入 main。不得借本 PRD 改写旧 RQ。
 
-## 10. 数据/收益验收指标（R0 不设虚构阈值）
+## 10. 数据/收益验收指标（R1 不设虚构阈值）
 
 - **采集可靠性**：按 Host/Agent/Plugin cohort 记录已证实成功 Hook 会话数、已证实事件缺失、未知结局及重复事件；出现 `denominator unknown` 的覆盖率不以数字表示。
 - **恢复有效性**：已确认正常恢复、HELD、CONFLICT、UNKNOWN、不可恢复/人工处理数量、恢复延迟、远端请求数；“0 重复 POST”需通过实际原生 readback 而不是只看本地日志。
@@ -236,7 +236,7 @@ L2 根据首轮实际基线与使用场景提出轻量合理预算/验收阈值�
 
 ## 11. 风险、取舍与开放 Product 问题
 
-| ID | 风险/待决定事项 | R0 候选决策与 Reviewer 核查 |
+| ID | 风险/待决定事项 | R1 候选决策与 Reviewer 核查 |
 | --- | --- | --- |
 | Q01 | v0.4 是否过大？ | P0 FR01–04 核心闭环 + FR05 首测；FR06–08 可子任务/条件验收；FR09 延后。请审核 MUST/SHOULD 的边界 |
 | Q02 | Doctor 应新增命令还是复用现有 CLI？ | 产品只定义能力 `task-meta doctor` 候选，具体 CLI/模块复用由 L2 决定；不可无端增加安装代理或守护进程 |
@@ -247,7 +247,7 @@ L2 根据首轮实际基线与使用场景提出轻量合理预算/验收阈值�
 | Q07 | Node24 Windows/Ubuntu 支持承诺？ | 先检查现有实际用户运行平台/Build Host，再明确冻结支持矩阵；每个声称 PASS 的 lane 须有真实证据 |
 | Q08 | 质量数据是否公开？ | 只能采用现有 ADS 合规 typed/public 可表达子集及 per-source clearance；剩余私有观测不流向 Tally |
 | Q09 | CLI 自动 repair 权限边界？ | 默认 read-only、用户确认、无修改 trusted_hash/Token、无静默 Home/全局配置写入 |
-| Q10 | 私有对象保留期限/压缩策略？ | 不在 Product R0 擅设 retention 数值；L2 先量测磁盘/隐私/恢复需求和明确删除/纠错语义 |
+| Q10 | 私有对象保留期限/压缩策略？ | 不在 Product R1 擅设 retention 数值；L2 先量测磁盘/隐私/恢复需求和明确删除/纠错语义 |
 | Q11 | 实际反馈尚未集成如何展示演进效果？ | 只提供证据来源与 MISSING/NOT_RUN；不制造胜率或 Agent 排行，正式实验决策仍在 Tally |
 | Q12 | task-meta 当前 README/历史账本部分仍使用 v0.1/早期 NOT_RUN 描述？ | 由下一文档维护 concern 规范化“历史 snapshot / 当前索引”，不修改旧 exact-SHA/不可篡改回执 |
 
