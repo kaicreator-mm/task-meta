@@ -1,9 +1,9 @@
 # task-meta v0.4.0 — Reliable Collection & Execution Intelligence
-## Product Requirements Document · R1 / ADS v4.18 Claude Independent Review Candidate
+## Product Requirements Document · R2 / ADS v4.18 Claude Independent Differential Review Candidate
 
 | 字段 | 冻结前状态 |
 | --- | --- |
-| Product Status | **R1_CANDIDATE / ADS_V418_TARGET / NOT_FROZEN** |
+| Product Status | **R2_CANDIDATE / ADS_V418_TARGET / NOT_FROZEN / R1_BLOCK_9P1_8P2_UNDER_REPAIR** |
 | Review | `INDEPENDENT_CLAUDE_REVIEW=NOT_RUN`；`FREEZE_READY=NO_PENDING_REVIEW` |
 | Version | `v0.4.0`，不修改已接受 `v0.3.0` 发布身份 |
 | Repository | `kaicreator-mm/task-meta` |
@@ -11,7 +11,7 @@
 | Implementation authority | **NONE**；本文不是 L2/Task DAG/Task Claim/Builder 准入 |
 | task-meta source basis | `main@adc0a823bc2be636292fef4dd96d24076646ee20` |
 | Frozen v0.3.0 release source | `9731b03e263527e15ae24815a7e26b45e4dd809a`；8/8 Task，Windows Node24 544/544 |
-| **ADS 目标规范** | **v4.18.0**；[Product #1320 Freeze](https://github.com/kaicreator-mm/ai-development-standard/issues/1320#issuecomment-6388802387) PRD blob `98772b4594caa44b2611853ae482132f7aefa36b`；[L2 #1321 Freeze](https://github.com/kaicreator-mm/ai-development-standard/issues/1321#issuecomment-6395575157) L2 blob `e3b5106c2fdaa8b2a0bbac5adb32b810fcbd51dd`；设计核查基准 `version/v4.18@6581eb218524e453d16e23bef848f233b49f91c9`，**尚未完成 RQ/main** |
+| **ADS 目标规范** | **v4.18.0**；[Product #1320 Freeze](https://github.com/kaicreator-mm/ai-development-standard/issues/1320#issuecomment-6388802387) PRD blob `98772b4594caa44b2611853ae482132f7aefa36b`；[L2 #1321 Freeze](https://github.com/kaicreator-mm/ai-development-standard/issues/1321#issuecomment-6395575157) L2 blob `e3b5106c2fdaa8b2a0bbac5adb32b810fcbd51dd`；设计核查基准 `version/v4.18@2c627606b40f7c82120ae1a0d6736148fe0943e6`，**尚未完成 RQ/main** |
 | ADS 历史 main（非当前目标） | `main@a45644d734fdf94da3e6f9c3f90ffe4ce3c25fda`，v4.17 前任源码；v4.18 [#1322](https://github.com/kaicreator-mm/ai-development-standard/issues/1322) 正在完成 I/R |
 | Tally source basis | `tally main@fab321845a0eb630d50eb5791f3de54b6870f5fb`；[Tally #62](https://github.com/kaicreator-mm/tally/issues/62) 真实消费端未完成 |
 
@@ -43,13 +43,13 @@
 | TraceML/C08 | `src/trajectory`、owner-governed Pivot/Revisit、独立分母 | 仅补充有来源的执行协作与阶段时间 *事实*，不把技术候选升级成策略判断 |
 | 规范/契约 | ADS v4/v5 vendor pin、Golden、Release qualification | 只消费项目**明确采纳且兼容**的 ADS；v4.18 未正式采纳前仅做可逆私有映射/fixture，不能创造公开字段 |
 | Tally | GitHub-only handoff 已约定；消费者真实应用 E2E `NOT_RUN` | 隔离的跨项目测试计划/生产者配合、实际回读对账；外部依赖不可假装 task-meta 自己完成 |
-| 规则与知识复用 | `AGENTS.md` + `.agents/skills/task-meta-agent-cli-validation/SKILL.md`；Claude discovery alias | 运行时诊断复用既有 Skill，不再增加第二套安装脚本或重复维护静态兼容表 |
+| 规则与知识复用 | `AGENTS.md` + `.agents/skills/task-meta-agent-cli-validation/SKILL.md`；Claude alias、现有 README 排障流程 | v0.4 由**单一 typed Doctor 诊断规则表**负责问题类别/检测与状态；Skill 保留操作步骤并引用 Doctor 规则 ID，不复制另一套事实规则（无二次安装器/守护进程） |
 
 **历史验证事实：** v0.3 Windows Node24 544/544、source-only Golden 和三 Agent 不同范围真实证据见 [#27](https://github.com/kaicreator-mm/task-meta/issues/27) / [#46](https://github.com/kaicreator-mm/task-meta/issues/46)。Codex 桌面 0.3.0 Stop→Outbox 曾通过，但 **五种结束路径无 SessionEnd 事件**，`SessionEnd_Correlation=NOT_QUALIFIED`；参见 [#46 真实 Host 补充](https://github.com/kaicreator-mm/task-meta/issues/46#issuecomment-6384041266)。Claude 真实 Hook 观察与模型鉴权成功是两件事；ZCode 当前并不约定 SessionEnd Hook。所有本地配置/CLI 可用性均应在实际目标 Host 再核定。
 
 ### 2.1 ADS v4.18 的目标采用与当前权限边界
 
-**产品决定：选用最新 ADS v4.18.0 规范；R0 使用 v4.17 main 作为设计基准的做法被 R1 取代。** 设计语义的固定事实为 Product Freeze Git blob `98772b4594caa44b2611853ae482132f7aefa36b` 与 L2 Freeze blob `e3b5106c2fdaa8b2a0bbac5adb32b810fcbd51dd`。当前可读取标准分支 `version/v4.18@6581eb218524e453d16e23bef848f233b49f91c9`；截至该源核查，A/B/C 已完成、I 在独立复审、R 尚未执行。**设计与发布是不同权威：v4.18 尚未合 main、RQ 未完成，分支 SHA 不构成生产项目自动采用/发布授权。**
+**产品决定：明确选用 ADS v4.18.0 冻结 Product/L2 作为 v0.4 的设计参考；v4.18 未完成发布前不将规划提示视为新的运行时权限。** 冻结权威来自 [#1320 Product Freeze 评论](https://github.com/kaicreator-mm/ai-development-standard/issues/1320#issuecomment-6388802387) / Git blob `98772b4594caa44b2611853ae482132f7aefa36b` 和 [#1321 L2 Freeze 评论](https://github.com/kaicreator-mm/ai-development-standard/issues/1321#issuecomment-6395575157) / blob `e3b5106c2fdaa8b2a0bbac5adb32b810fcbd51dd`，**不是 PRD 文件头部旧 `NOT_FROZEN` 描述**。当前设计比对源 `version/v4.18@2c627606b40f7c82120ae1a0d6736148fe0943e6`；已观察 A/B/C/I 已关闭，R 正在实施、RQ/main 尚未完成；后续再次检查 currentness。
 
 | 规范层 | task-meta v0.4 的处理 |
 | --- | --- |
@@ -58,9 +58,11 @@
 | DAG / Builder / Claim | GitHub **native blocked_by** 仍是权威；v4.18 **Option A** 不创建 merge-only 绕过或新的 ready_builder/ready_merge。只读 PREP 不能授予源码写入；合法 Task 拆分与 native dependency mutation/readback 后独立 Claim 才能实施 |
 | 角色和 handoff | 在现有 Task Pack/Execution Pack 规划 WEB/CI/LOCAL/独立 Reviewer、可用 Agent 能力、写集/共享资源及最小 Local handoff；不新建调度器、模型 Router、强制人审或每 Step Issue |
 | task-meta 数据面 | 被动捕获 Native Issue/Claim/Review/Host、Lane/Step 的证据及缺失状态，不创建第二事实源、改变 Claim/Gate/Task 或以策略分析代替证据 |
-| 生产采用 | 仅在 ADS v4.18 **实际 Release-qualified、有明确项目 effective adoption + schema/source-owned clearance** 后按当时精确 pin 使用新规范做合法生产交互；在此之前 v4.18 所需新字段仅用 **私有 source-pinned 实验/Golden**，现有合法 ADS v5/旧报告遵循原固定采用契约、不可添加未知公共字段 |
+| 公开数据与发布 | **v4.18 不新增 ADS 公开 Schema**，因此即使未来 RQ/main 完成，也不会自动存在 lane/concern/parallelism 的合法公开字段。FR07 在 v0.4 **只做私有 source-pinned 事实/Golden**；公开此类新维度必须另走 [ADS #1258](https://github.com/kaicreator-mm/ai-development-standard/issues/1258)/[#1260](https://github.com/kaicreator-mm/ai-development-standard/issues/1260) 的规范新版本。现有 report 发布使用当时实际 qualified adopted pin + strict schema + target/source clearance，绝不借规划规范解锁权限 |
 
-此处 v4.18 是**选定的目标标准**，不是“可选研究方向”；但不能提前声称其分支代码已合法发布。task-meta v0.4 的 Product Freeze、L2 Freeze、Task DAG materialization 和最终 RQ 都应重新核查实际 ADS v4.18 HEAD/Blob、版本 RQ/main 状态及合法采纳 pin。若正式规范内容变化，走明确的兼容性差异修订，不能静默改写旧报告或把新字段写进旧 ADS v5。
+**两个不同用途不得混淆：** (a) ADS v4.18 作为 task-meta **自身 Product/L2/DAG 规划方法**，在正式 Release 前仅能采纳与现行有效规则不冲突的建议性结构分析；**当前有效 pin** 的 native Issue/JIT/Claim/ready_builder/Release 仍是执行硬门禁，不能用 v4.18 草案抢先降级；(b) ADS v4.18 作为 FR07 **观察对象**，只读实际 native 事实/明确 owner-written refs，不推断未物化的 Concern/Lane/Step。
+
+**单独的 ADS 采纳 Concern（不是 A/B/C Release 前置）：** 将来 ADS v4.18 Release-qualified/main 成立后，由独立版本采纳 PR 核对并更新 `config/ads-adoption.json`、`vendor/ads/PINS.md` 及 byte-identical vendored 来源（当前普通 v5 有效采用为 `adopted: 4.16.0 main@718fb02e33b31f568736447b2b905883cc6fcc3a`, schema blob `7478313cc006162432649d734e59c5cd77db5106`；候选版本 `owner_authorized.ads_pin=3041a1be...` 保留为无正式权限的历史记录）；复用 v3/v4/v5 回归 Golden、精确 source/blob 和 source-owned clearance。采用 v4.18 本身也 **不会**新增公开 Lane/Scaffold wire。Product/L2 Freeze、DAG Materialization 与 RQ 时分别复核有效 pin 和标准 currentness；实际新权限仅以合法 owner 发布记录授权。
 
 ## 3. 主用户旅程与主体
 
@@ -76,42 +78,59 @@
 
 ## 4. 功能需求（按 Lane/优先级）
 
-### FR01 [P0, Lane A] CLI-first Doctor 与插件兼容性诊断
+### FR01 [P0, Lane A] CLI-first Doctor — **仓库源码 CLI，不打包到插件**
 
-1. 建议的用户体验入口为 `task-meta doctor`（**产品候选命令，不是已存在 CLI**），默认 `READ_ONLY`。检测 Node 24、Windows/Ubuntu 平台、实际 Agent CLI 可达性与版本、已装插件 manifest/source、Hook 是否受支持/启用/受信任、Spool/Outbox 路径可访问性、runtime/config/ADS pin 状态和关键 `_errors.log` 错误类别；结果附来源和缺测状态。
-2. 诊断层区分 `SOURCE_ONLY`、`HOOK_FIXTURE`、`REAL_AGENT_CLI`、`REAL_HOST_GITHUB`、`DESKTOP_ONLY`。没有真实进程自动触发的 Hook 不得声明“插件集成 PASS”。
-3. 兼容性按 Agent/客户端版本、插件版本、Node/OS、已证实 Hook 事件及 CLI 能力记录；`--help` 无法证明的安装/升级/开启 Hook 子命令不执行。ZCode 工作区原生发现 `.agents/skills` 优先；可选用户级导入不是默认前置；Claude 项目 Skill alias、Codex 桌面 trust/CLI 分离。
-4. `doctor` 不接触密码/Token/原始 prompt，不对外发送 Host 信息；不得自动修改 `~/.codex`/`~/.claude`/`~/.zcode`、trust hashes、git working tree 或全局权限。`repair` 若设计，仅在准确诊断、明确边界与用户授权后才能做可回滚的最小操作。
-5. 必须清晰显示事件/功能 `SUPPORTED|UNSUPPORTED|UNKNOWN|DISABLED|NOT_RUN`；Codex `SessionEnd` 已声明但真实 Host 未发是 **missing observed event**，ZCode 没有声明 SessionEnd 是 **UNSUPPORTED_BY_PLUGIN_PROFILE**，语义不得混同。
+1. **Product 定案**：v0.4 提供 `node src/cli.ts doctor` 作为项目 checkout 的只读诊断入口；保持 `package.json private=true` 和无 `bin`，**不做全局 `task-meta doctor` 安装、不向三个 Agent 插件复制 Doctor、不新增升级管理器或长驻服务**。目标用户是持有 task-meta checkout 的工程 Agent/维护者；外部用户可先按现有 Skill 检查，不暗示插件天然附带 Doctor。
+2. **唯一问题定义源**：Doctor 代码内的 **typed versioned diagnostic catalog** 为规则 ID、条件、证据、等级、建议、支持矩阵的唯一机器权威；现有 `.agents/skills/task-meta-agent-cli-validation/SKILL.md` 只维护操作步骤/安全原则并引用 catalog ID 或 CLI 输出，不另复制诊断判断逻辑。规则版本/OS/Agent CLI 能力必须带可重现来源；改动相同症状时用源码/文档一致性检查防止两份知识分叉。
+3. 默认 `READ_ONLY`，明确只读允许集：manifest/marketplace/Hook config（仅支持字段）、`node --version`、受支持的 Agent `--help` 与 `--version`、插件版本、Spool/Outbox **元数据和聚合计数**、`_errors.log` 的**错误类别**、已选的公开 ADS pin 状态；仅查看 Trust **是否存在** 的可观测标志，不读取 Trust 值/hash 或认证储存库。**禁止读取** Codex/Claude/ZCode 的 auth/credentials、token/key/cookie、原始 prompt/转录、工具输入输出、绝对本地私有路径；不未经允许连接远程 GitHub 或打印 home 路径。报告必须过 privacy scrub。
+4. 输出分开：`SOURCE_ONLY|HOOK_FIXTURE|REAL_AGENT_CLI|REAL_HOST_GITHUB|DESKTOP_ONLY` 证据级别；`SUPPORTED|UNSUPPORTED|UNKNOWN|DISABLED|NOT_RUN` Client 能力。没有真实 Agent 自动触发 Hook 的事件时 `REAL_AGENT_CLI=NOT_RUN`；不通过调用 Hook fixture 替代。ZCode workspace `.agents/skills` 优先，Claude Skill alias、Codex 桌面 Trust/CLI 分别诊断；任何 CLI 子命令以本机 `--help` 为准。
+5. v0.4 **无自动 repair 命令**。Doctor 仅提示最小 CLI-first 手动修复方式；如涉及 Marketplace 更新、用户级 Home/trust 或权限修改，必须由用户实际显式授权另行执行，不能由 Doctor 提权。历史 Codex 五种桌面退出的 [#46 实测](https://github.com/kaicreator-mm/task-meta/issues/46#issuecomment-6384041266) 仅在相同版本/Host 下作为已有证据，绝不为了跑 Doctor 反复打开 UI。
 
-### FR02 [P0, Lane A] 会话生命周期与 Hook/Spool 完整度
+### FR02 [P0, Lane A] 生命周期和 Hook/Spool 完整度（共享 T0 私有契约消费端）
 
-1. 通过现有 Hook、source event ID、session/turn/tool ID、Spool JCS digest 和已观察的 provider capability 构建私有生命周期状态。允许缺 SessionEnd/重复 Stop、子进程退出、挂起会话；不以静默超时推导“正常完成”或外部 verifier PASS。
-2. 若存在 session/window 不匹配、Host Hook 根本未发、插件捕获崩溃，分离 `HOST_NO_EVENT|ADAPTER_FAILURE|UNBOUND_ID|UNOBSERVED|UNKNOWN`；根因仅证实后才归类，允许 `ROOT_CAUSE=UNKNOWN`。
-3. 保留真实不同的 logical/physical Attempt；仅相同 source event ID + digest 可安全去重，冲突须保留。不同 Agent 会话使用同 GitHub 登录或同 SHA 不合并。
-4. 诊断可以在缺 SessionEnd 下使用 Stop/settle/outbox 自身证据，但 **不制造** SessionEnd，也不因为有 HELD Outbox 就宣称已发布。
+1. 复用 v0.3 Hook/source event/session/turn/tool ID/JCS digest 与 Agent capability；不强迫所有 Host 都发 SessionEnd。Stop/settle/outbox 是自身证据，绝不伪造 SessionEnd 或 Task/Review/Host PASS。
+2. **统一采用 T0 私有枚举/结构**，FR02 不再定义第二套原因 taxonomy：`missing_reason = NOT_INSTRUMENTED|HOST_EVENT_NOT_OBSERVED|ADAPTER_FAILURE|UNBOUND|SOURCE_DROPPED|CLOCK_UNTRUSTED|OUT_OF_SCOPE|UNKNOWN`；`evidence_level = OBSERVED|SELF_REPORTED|INFERRED|UNKNOWN`，二者**正交**。缺事件不自动归因 HOST 或 ADAPTER；不能判定根因时是 `UNKNOWN`。ZCode SessionEnd 未声明为 `NOT_INSTRUMENTED`（不形成应观测分母）；Codex 已声明但当前五路径无事件为 `HOST_EVENT_NOT_OBSERVED` **只限事件缺失被实际证明时**，根因仍 UNKNOWN。
+3. FR02 根据实际 Source/Host/Agent 能力生成生命周期状态和缺失证据，FR03 只读取并聚合这一类型；同 source-event+digest 去重，同 ID 不同 digest = CONFLICT；不同 physical retry、逻辑 Agent、Session、GitHub 同登录独立保留。
+4. 真实 Host 缺 SessionEnd、重复 Stop、进程失效、窗口 ID 不一致可以影响覆盖率，但不阻塞 Agent 安全结束；Desk-only 五路径不作为新的 Windows CLI 验收通过。
 
-### FR03 [P0, Lane C] 可审计 Capture Quality
+### FR03 [P0, Lane C1] 可审计 Capture Quality — 六种测量按实际分母分级
 
-1. 每类观测应保留 `source_revision`、`agent/adapter_version`、`clock_basis`、`epistemic (OBSERVED|SELF_REPORTED|INFERRED|UNKNOWN)`、`capture_scope`、`missing_reason`、`coverage_denominator_source`。应尽量重用 v0.3 `src/model.ts`/Capability/MetricIdentity，不另建公共协议。
-2. 至少支持以下**可重算私有**指标：source-identity binding coverage、tool hook pair/latency coverage、lifecycle coverage、token/billing basis coverage、publication reconciliation coverage、verifier/source coverage。分母只来自可证明的事件集合/Host/Provider 声明；无法获知应显示 `DENOMINATOR_UNKNOWN/NOT_COMPARABLE`，绝不可用“已观测总量”伪装总应观测量。
-3. 原因分组可包括 `NOT_INSTRUMENTED|SOURCE_DROPPED|UNBOUND|CLOCK_UNTRUSTED|OUT_OF_SCOPE|UNKNOWN`（**私有候选分类**，不得直接塞进 ADS v5 public enum）。
-4. 质量变化按真实同 adapter/环境/版本 cohort 比较；未知不是 0、缺失不等于零成本；每个聚合必须附来源集合/窗口/去重规则和可信统计解释。
+1. 唯一私有诊断类型来自 T0（`src/model.ts` 单 Writer）：`source_revision`、adapter/Agent/Host version、epistemic、clock、coverage_scope、missing_reason、denominator proof/ref。重用 v0.3 `Epistemic`/`Coverage`/`MetricIdentity`/provider capability，**不另建 ADS public enum**。
+2. 各指标必须返回 `numerator`, `denominator|null`, `denominator_source`, `scope`, `coverage_kind=CONDITIONAL|ABSOLUTE`, `capability`, `provenance`, `exclusion_reason`。6 项按下表计算；条件比率**不等于全局绝对覆盖率**：
 
-### FR04 [P0, Lane B] 有界 Outbox/GitHub 恢复与隐私边界
+| 私有指标 | 合法分子 | 可证明分母及来源 | 缺失/受限语义 |
+| --- | --- | --- | --- |
+| Binding | 已与精确 Task/Attempt 绑定的**合法已观测**事件数 | JCS 验证后的去重观察事件集合（`CONDITIONAL`）；Host/Provider 若未报告总发出事件数，不得宣称总体采集完整率 | 无完整输入集合时总体 `DENOMINATOR_UNKNOWN` |
+| Tool pair | 匹配 Pre/Post 且 ID/类型可核的 Tool 调用数 | 已观测有真实 PreToolUse 的唯一调用 ID（`CONDITIONAL`）；未发 Pre 的潜在 Tool 不计入预期总体 | 仅单 Pre/无 Post 记作未配对；无 hook 的 Agent 为 NOT_INSTRUMENTED |
+| Lifecycle | 被该 Agent **声明支持且明确发出了起点**的 Session 中，观察到可比较终态事件的数量 | 可归属的 SessionStart session 集合 + provider/Host 支持与可观测结束事件契约（`CONDITIONAL`，终态必须标注 Stop≠SessionEnd） | ZCode SessionEnd N/A；Codex 终止事件未发只报告对应路径的非完整；SessionEnd 无预期证明不算缺漏 |
+| Token/cost basis | 有可核 provider usage/账单来源和单位/窗口的**已观测** model 调用数 | 有明确 model-call ID 的调用集合；若 Provider 不给总调用集合，标 `CONDITIONAL`，真正 billed 覆盖率另需账单全集 | 不支持 usage → `NOT_INSTRUMENTED`，不是 0 tokens；无可数 model call 时 `DENOMINATOR_UNKNOWN` |
+| Publication reconciliation | GitHub 实际确认 comment ID+digest 或明确拒绝/冲突的受管出版尝试数（状态分开统计） | 私有 Outbox 中可验证且身份稳定的 publish attempt 集合（`CONDITIONAL`） | ACK 丢失/不完整分页为 UNKNOWN；HELD 不等于成功发帖 |
+| Verifier/source | 有真实 exact source/Verifier 自身终态证据的 eligible Attempt 数 | Source 指明 eligible Attempt 全集；若范围只有已观察 Attempt 则 `CONDITIONAL` | 未被选入观察集的 verifier 不推断；未运行是 NOT_RUN |
 
-1. **复用** `src/autoreport`/`src/publish` 的 CAS、Outbox、已验证读回和锁。定义重启、网络抖动、503/429/403、TLS handshake timeout、提交后 ACK 丢失、分页中断、编辑/删除评论、同键异 digest、并发重复发布的确定性恢复/拒绝状态。
-2. 重试应有次数/退避/总体预算、权限复核、完整受限分页和精确 Report identity+digest reconciliation；可回收的失败先复核远端是否已生效。不可证实发布结果保持 `UNKNOWN/HELD`；禁止“404/超时立即重 POST”、无限重试或破坏性本地重置。
-3. 默认普通仓库 `PUBLISH_DENIED/HELD`，除非选定精确已授权 ADS adoption/version+schema、target/Source pin、clearance 和 native GitHub write grant 均通过。候选 schema 仅在授权隔离 test sink 明确 test-only 使用；任何 `doctor`/`retry` 均不得绕过。
-4. 日志和错误信息仅保存安全原因类别/时间/非敏感 IDs；Outbox/Spool/CLI 输出不得泄漏 prompt、CoT、tool args/result、模型文本、API key、私有绝对路径、Host 内部对象内容、hidden grading/验证数据。
-5. 记录恢复代价（重复 GET 次数、等待、最终状态、错误类别）；真实 GitHub 429/403 负面实验采用受控代理/隔离凭据，不人为刷爆远端配额。
+3. 表内 denominator = 0 **不返回 100% 或 0%**，输出 `NOT_COMPARABLE` / null；每个指标实际不支持/尚未观察到就显示 `DENOMINATOR_UNKNOWN`，不编造总体 Agent 使用率。新增正例 A22 明确两个有 Pre 的独立 Tool、一个匹配 Post，Tool pair = **1/2 CONDITIONAL**；三条合法可归属事件中两条有 Attempt ref，则 Binding = **2/3 CONDITIONAL**；重复事件不增分母（A05）。
+4. 相同比较 cohort 的最小 identity：`task_kind, risk_class, agent_id, plugin_version, provider_capability_revision, pricing_revision_or_UNKNOWN, OS/Host_class, observation_window, measurement_basis`；只有对应维度具备足够 Source 并兼容才 `COMPARABLE`，否则标 `NOT_COMPARABLE`。FR06/FR07 统一引用这一规则；不得仅凭模型名称/成功样本生成排行榜。
 
-### FR05 [P0/P1, Lane C] Capture Overhead 与存储/并发基线
+### FR04 [P0, Lane B] Outbox 恢复的 **v0.4 真增量**（复用 T18）
 
-1. 真实 Node24 Host 测量 Hook 子进程启动/Wall、CPU/内存、Spool I/O、Git metadata 调用、auto-report 从 Stop 到 Outbox 时间、GitHub 请求次数、缓存/锁竞争。必须先建立 **未安装/禁用采集** 对照，再测**同 Agent 版本、同任务、同 Host** 启用采集。
-2. 不预设“0 开销”、“提升 30%”或固定通过阈值。Product R1 指定先测，并由 Product/L2 Review 批准实际预算/告警阈值；若无法构造合法对照，报告 `NOT_MEASURED` 而不是声称性能改进。
-3. 保持现有无需 DB 的持久化/append-only/CAS 路径；默认不引入 SQLite/Postgres/Web dashboard/常驻服务器。仅在测得的真实规模需求支持时，才评估 batch、incremental scan、WAL 或轻量索引。
-4. 采集/上传失败不得阻塞 Agent 正常执行；必须为资源耗尽和无限队列提供有界行为和告警。
+**已有真实证据，禁止重做为新功能**：v0.3 `src/publish/publish.ts` 已实现完整分页核对、同身份幂等/冲突；`src/publish/client.ts` 已解析 Retry-After；`src/autoreport/outbox.ts` 具备私有 append-only 与 Session 锁；`scripts/e2e-fault-injection.ts` **T18 已在 v0.3 固定精确源码**测试丢 ACK/POST 后崩溃、并发 Publisher/Session Lock、已编辑评论及分页等路径，参见 [v0.3 #46 RQ](https://github.com/kaicreator-mm/task-meta/issues/46) / [PR #54 独立 RQ](https://github.com/kaicreator-mm/task-meta/pull/54#issuecomment-6382732452)。A08 仅需当前 v0.4 SHA 上对现有 T18 Oracle 回归；发布逻辑无变更时可以复用原真实 GitHub 回执，不强迫刷新网络负面试验。
+
+**v0.4 独有增量：**
+1. 在现有 `auto-report --retry` **人工重试** 之上，支持独立、可停止的 **受控自动重试**（可设最大次数、单次退避/Retry-After、总时限与资源预算；默认不开无限恢复）。错误 429/503/TLS/断网选择原因敏感、权限与 Source 再核验；每次外部效果前进行真实原生分页 readback，结果不完全保持 UNKNOWN/HELD。
+2. 私有 Outbox 新增 `UNKNOWN` 用于**已尝试效果但远端结果不可证明**；`FAILED` 专指有可靠证据确认**未执行或未成功应用**的确定失败。已存在 `HELD`/其他 Outbox 状态保持语义，不能把 UNKNOWN 混到 FAILED 重驱；新类型由 T0 统一只定义一次，其迁移/旧 Outbox replay 必须不篡改历史数据。
+3. 每次重试重新验证 ADS effective adoption+schema blob/Target/Source/clearance/当前 GitHub grant；不可复核的权限/网络不许乐观 POST。删除的评论或同键异 digest 必须走 **原有 publish reconciliation** 或明确 UNKNOWN/CONFLICT，不盲目创建第二条。延迟 403/429/timeout 的源头采用可控本地代理+隔离 E2E sink，不使用恶意真实配额刺激。
+4. 收集 GET/readback 数量、恢复延迟、重试预算消耗、最后状态、信息安全的错误原因；Spool/Outbox/private 记录保持 append-only/JCS-digest，日志不得包含 token、原始模型/工具正文或私有路径。
+5. 和 A/C 的接口仅使用冻结 T0 private types；**B 独占** `src/autoreport/**`, `src/publish/**`, `scripts/e2e-fault-injection.ts` 等写集，且不修改共享 `src/model.ts`。
+
+### FR05a [P0, Lane C2] 最小真实测量基线（MUST）
+
+1. **不可被 NOT_MEASURED 空白替代**：在**Windows + Node24** 实际 Host，至少构造一个可重复、无外部模型费率依赖的 `HOOK_FIXTURE` 同版本对照组：捕获关闭/仅启动 shell/Node 空 Hook vs 启用真实 metadata-only Hook（**同样任务负载、事件 fixture、Host、进程版本**）。采集实际子进程 wall clock、CPU、peak RSS（不可计则单项明确 N/A 但 wall+Spool bytes 必须真实）、Spool bytes/append 数；对 Stop→Outbox 执行单独有来源测量。
+2. 所有必须测量的最小组合至少做 **5 次成对重复**，给出样本量、median、range、测量工具与精度、Host OS/Node/插件/commit SHA 和原始但脱敏回执。此采集基线为运行时测量，不等于实际 Agent CLI 全链路质量或 CI PASS。
+3. 若 Windows Node24 实际 Host 不可达，`FR05a=NOT_RUN` 且版本核心 RQ **不得默认为 READY**；只能按既有合法 Release-owner 对该具体 Host 义务作有证据的限定 waiver/CONDITIONAL 评估，不能把未测量说成通过。**不是**“无可信对照所以未测也满足 MUST”。
+
+### FR05b [P1, Lane C2 or future] 性能优化（SHOULD）
+
+4. 高并发 Agent/实际完整模型会话、Ubuntu、新电脑/Agent 版本等**额外** cohort 在缺乏同风险合法对照时允许 `NOT_MEASURED`，不能宣称加速百分比；不预设 0 开销、30% 性能提升等。
+5. **保留现有 append-only/CAS 无 DB 优先**。先测磁盘/队列与 Host 调用成本，只有真实瓶颈才评估 batch/incremental-scan/索引/WAL；不默认添加 SQLite/Postgres、Web Dashboard 或常驻服务。磁盘满、Backlog 增长、stale lock 要有有界且不阻塞 Agent 的状态/告警（A21）。
 
 ### FR06 [P1, Lane C] Token/工具/成本可比性与来源质量
 
@@ -120,15 +139,24 @@
 3. 统计至少包括失败/取消/UNKNOWN Attempt 分母；不能只选成功样本给出 Agent 成本排名。跨模型/项目/Host 仅在任务种类/风险、能力捕获和定价一致时可比较，不满足则 `NOT_COMPARABLE`。
 4. 数据够用的事实输出仅通过已合法选定 ADS public schema/clearance 发布；否则内部可查，但不能在 GitHub free text 冒充结构化可计算指标。规范缺口指向 [ADS #1258](https://github.com/kaicreator-mm/ai-development-standard/issues/1258)。
 
-### FR07 [P1, Lane D] **ADS v4.18** Capability/Lane/Scaffold/Agent 执行事实
+### FR07 [P1, Lane D] ADS v4.18 **私有、被动、真实来源** 的 Task DAG 观察（公开增强 DEFER）
 
-1. 明确以 **ADS v4.18 已冻结 Product/L2** 的 Capability-first、Concern/Lane、Scaffold-aware Task DAG、Agent/Human 协作语义为设计目标；被动关联实际 GitHub Issue/PR/native blocked_by/Claim/Dispatch/Review/CI/Host 与 Task/Run/Attempt/Step。任务、Claim、JIT、Release 权限全部由 GitHub/ADS 原 owner 管理，task-meta 不作调度。
-2. 候选私有索引可以保存 `capability_ref/concern_ref/lane_ref/step_ref/role/source_ref/clock_basis`；仅使用原始 Source pin、native ID、实际 Agent/Host/Reviewer 时序与允许的事实关联。计划中并行不等于真实执行并行，不得按工具名猜测 Agent 所处阶段。
-3. v4.18 采用 **Option A**：native `blocked_by` / Task Pack /合法 Claim/JIT 不能被 “merge-only edge” 或只读 PREP 规划绕过；提前可合法独立实现的 Concern 要依据正式 Task Split/Add、native 依赖更新与新 Writer Claim 进入，不由 task-meta 自动授权。
-4. Scaffold 只引用已有被接受的 SF↔DF/MI、唯一 Writer/Anchor。无已接受 SF 标记 `NOT_APPLICABLE`；不因为 Task DAG 规划自动生成 Scaffold，不能以不同行使相同共享文件写入权。
-5. 能确证时统计 `active_union_ms`、`waiting_union_ms`、交接延迟、重试、返工与验收活动的来源及覆盖率；多个 Host 时钟不一致、并发重叠或缺失时标注 UNKNOWN；`wall-active != thinking`。基础时间语义沿用 ADS 现有 §10；[ADS #1260](https://github.com/kaicreator-mm/ai-development-standard/issues/1260) 仍为未来细化，不在本项目发明新强制 phase/OTel wire。
-6. **正式公共报告需独立有效采用**：v4.18 冻结设计和当前开发分支均不能授权向现有 ADS v5 typed Report 注入额外字段；只允许在私有事实/源限定 Golden 实验阶段先行实现。生产发布前重新核验 v4.18 已有效 RQ/main/adoption、原目标 Source/Schema/clearance，禁止旧报告静默迁移。
-7. 验收正负例包括 A∥B∥C→I→R 与无故全串行、共享 Manifest 写冲突、无 Scaffold 的 N/A、只读 PREP 不得 Builder 及跨 Host 时钟 UNKNOWN。真实 Task 决策/Agent 能力挑选仍属于 Tally。
+1. v4.18 Product/L2 已冻结的 Capability/Concern/Lane/Scaffold 仅用于 **本项目 DAG 规划与私有 source-only 研究**。ADS v4.18 **不产生新机器可读的 Capability/Lane/Step 字段或公开 Schema**；FR07 不进行任意 Markdown 模板文本语义抽取、不构建替代 Native DAG/Claim/Readiness、不授予执行准入。
+2. 可观测事实来源映射：
+
+| 私有事实 | 唯一许可的原始 Source | 缺失时 |
+| --- | --- | --- |
+| Task/Issue/PR/native edge | GitHub Issue/PR 编号、native blocked_by 完整读回、exact HEAD/Tree | UNKNOWN（无完整分页/权限时不可推断无 edge） |
+| Dispatch/Claim/Actor role | ADS 实际有效的有身份签发的 Dispatch/Claim、原生 Reviewer/CI run source refs；仅记录实际 `actor_role/operator_id` | UNKNOWN，不能从 GitHub 登录或模型名称推断 |
+| Concern/Lane | **只有**物化 Task Issue 或冻结 Task Pack 内由 owner **显式填写并精确 pin** 的 identifier 才可追踪；普通非机器化 Lane 文本不解析 | `NOT_APPLICABLE` 或 `UNKNOWN`（按对象是否应存在） |
+| Step | 内部局部 Step 不保证成为 Issue 或公开字段，**默认 NOT_APPLICABLE**；确有 owner/source ID 才可做私有 ref | NOT_APPLICABLE |
+| Review/CI/Host/Elapsed | 真实 GitHub Review/CI URL+Run ID、实际 Host/Agent Hook 原始时间及钟域与精度 | UNKNOWN/NOT_RUN，绝不伪造已通过 |
+| Source Scaffold | 已**合法接受**的 SF↔DF/MI 与精确 Anchor/owner，Task Pack 明确绑定 | 当前 task-meta **无已接受 Source Scaffold**：`SF_Binding=NOT_APPLICABLE` |
+
+3. v4.18 **Option A**：Native blocked_by/JIT/Claim/ready_builder/Review Gate 仍取本项目当时**实际 effective standard pin** 的正式准入；一个“准备可以并行”的规划注释绝不能改变原生依赖。只读 PREP 与 Task 可写权限分离；Reviewer 的 `operator_id` 与 Builder 不同仅是事实字段，**不是独立性 PASS**（由真正 Review 权威判断）。
+4. 仅有可比较的单 Host/单时钟域原始 Span/开始-结束证据才给出 `active_union_ms` 等有意义的时间数字；跨 Host Skew/重叠与缺失为 UNKNOWN，不能从 tool_name 推断分析/思考时长，也不判断串行 Task DAG “不合理”。可以给出**计划表边数 vs 原生 edge 数 vs 观察到的重叠时段**，但不能输出 `JUSTIFIED|UNJUSTIFIED` 的拓扑质量评审结论。
+5. **公开范围 DEFER**：即使 ADS v4.18 未来 RQ/main/adoption 完成，它也**没有任何新的公开 lane/concern/topology metric wire**。FR07 的事实、演练、Golden 只在 private/source-only 保存；真正需要公开需由 [ADS #1258](https://github.com/kaicreator-mm/ai-development-standard/issues/1258)/[#1260](https://github.com/kaicreator-mm/ai-development-standard/issues/1260) 的后续独立规范版本制定合法 Schema 和权限，再单独 Product 准入。Tally 不读取私有 FR07。
+6. v0.4 **不把 D 作为核心 Release Gate**；仅要求在 Product/L2 评审中有真实来源/权限决策、与 v4.18 frozen 语义兼容的 **source-only fixture/文档**。如果 D 的实现未被后续 Task DAG 采纳，作为明确 DEFER 而不声称完整执行可观测性。
 
 ### FR08 [P1, Lane E] GitHub-only Tally 真实闭环的生产者配合
 
@@ -158,63 +186,94 @@
 | 测试诚实 | source-only fixture、Hook fixture、真实 Agent CLI、真实 GitHub、真实 Tally、CI/Host/Release 结论分别签发；CI 不可用用限定 waiver/NOT_RUN，不假 PASS |
 | 兼容成本 | 1.0 前不强制兼容旧内部 API，但已公开的 ADS v3/v4/v5 历史记录不得重新解释或破坏；新增私有诊断字段必须明确当前版本 |
 
-## 6. 可证伪验收矩阵（R1 候选）
+## 6. 可证伪验收矩阵（R2 候选；精确结果不可代替真实 Host）
 
-| Case | 场景 | 期望结果 / 层级 |
+| Case | 输入/场景 | 明确 Oracle / 证据等级 |
 | --- | --- | --- |
-| A01 | 已安装三种插件；Node24/Agent CLI 可用性不同；无修改权限 | Doctor 只读、分 Agent 列版本/Hook/状态和来源；不存在的命令为 UNKNOWN/UNSUPPORTED |
-| A02 | 手工执行 Node Hook 夹具但 Agent 本体未启动 | 只能 `HOOK_FIXTURE_PASS`；`REAL_AGENT_CLI=NOT_RUN` |
-| A03 | 实际 Codex SessionStart→Stop 且五种正常退出都没有 SessionEnd | 事件/Spool真实保留；`SessionEnd=NOT_QUALIFIED`，root cause UNKNOWN；不假造 |
-| A04 | 实际 ZCode 插件并未声明 SessionEnd | `UNSUPPORTED_BY_PROFILE`，而非“ZCode 丢事件/失败” |
-| A05 | Spool 中同 ID 同 digest 重复、同 ID 不同 digest、两个合法 physical retry | 同 digest 幂等、不同 digest 冲突、合法 retry 分开统计 |
-| A06 | 缺工具结束事件、Provider usage 未提供、Git Head 不可信 | 各覆盖率分母/缺失原因明确；UNKNOWN 不统计为 0 或 COMPLETE |
-| A07 | Hook 退出/超时/无法创建文件 | Agent 正常完成受控操作；诊断返回可定位错误而不暴露日志内容 |
-| A08 | GitHub POST 已成功但 ACK 丢失、随后重复启动 | 完整受限 readback 证明同一 comment/digest，最终仅 1 份发布；无第二次无条件 POST |
-| A09 | 真实/受控 429、TLS timeout、403、分页不完整 | 有界退避/权限拒绝；UNKNOWN/HELD，不假负面或无限重试 |
-| A10 | 普通仓库无 ADS adopted qualified-main pin / clearance | 所有 doctor/retry/publish 均 0 未授权 POST；HELD + 原因 |
-| A11 | 同一已校准 Host/Task，禁用采集 vs 启用采集 | 报真实差值与采样、版本、成本；无可信对照则 `NOT_MEASURED` |
-| A12 | parent span 与 tool spans 重叠、多个 physical retry 和 cache inclusive tokens | 可重算不双计；不由 `wall-active` 推定 thinking |
-| A13 | 无账单只有 provider-reported usage 和估算价 | basis 正确、不能宣称 BILLED；不同币种/窗口不能误合 |
-| A14 | Task DAG 声称并行，但 GitHub 实际有 native serial dependency；Host 时钟漂移 | 并行计划与真实状态区分；无可比区间则 UNKNOWN |
-| A15 | 已选定 ADS v4.18 冻结 Product/L2，但目标版本仍未 RQ/main，新 lane/scaffold 字段不能作为现有生产 ADS v5 字段 | 字段只保留私有实验，公开 v5 无新增未知 key |
-| A16 | Tally C GitHub-only consumer 尚不存在 | 生产者 Golden 可 PASS；`REAL_TALLY_APP=NOT_RUN`；不阻断独立基础 Release |
-| A17 | 实际 Tally 反馈仅 PRESENTED 未 APPLIED 或已 APPLIED 未独立验证 | 不自动宣称有效经验；源对象、revision、native feedback 关联准确 |
-| A18 | 公开报告/诊断包含合成 secret、prompt/tool content 或私有绝对路径 | 严格拒绝/清理；允许元数据继续按授权行为运行 |
-| A19 | 三 Agent 真实 CLI/Host 测试有不同版本差异 | 每个 lane 固定 Agent/Plugin/Node/OS/命令/exit code；不可用者明确 NOT_RUN 与 waiver，不伪造全平台 PASS |
-| A20 | 单个 Task/项目聚合只包含成功样本 | 显示缺失失败/取消分母与不相容风险；`NOT_COMPARABLE`，不生成 Agent Leaderboard |
+| A01 | 在 repo checkout 运行 `node src/cli.ts doctor`，三 CLI 支持状态不同 | 只读实际 Agent/Plugin/Node24; `NOT_RUN/UNKNOWN/UNSUPPORTED` 诚实，`SOURCE_ONLY`/命令帮助来源 |
+| A02 | 手动 Node Hook fixture，没有 Agent 自动调用 | 只得 `HOOK_FIXTURE_PASS`；`REAL_AGENT_CLI=NOT_RUN` |
+| A03 | Codex desktop 0.3.0 五路径退出没有 SessionEnd；新的 Client 未实测 | 仅复用 [#46](https://github.com/kaicreator-mm/task-meta/issues/46#issuecomment-6384041266) 历史 `DESKTOP_ONLY` 事实；新 CLI 未验收；不制造终态或新 UI 义务 |
+| A04 | ZCode 0.3.0 Hook profile 不声明 SessionEnd | `NOT_INSTRUMENTED`，SessionEnd 不进入生命周期预期分母 |
+| A05 | 同 event/digest duplicate + 同 ID 异 digest + 两次真正 Retry | 前者计 1、第二种 CONFLICT、合法 physical attempts 计 2；覆盖率分母同样去重 |
+| A06 | 缺 PostToolUse、Provider token usage、Verifier 或真实 Source | 按 FR03 六指标的具体分母和 `missing_reason` 返回 null/UNKNOWN；未观测值不等于 0 |
+| A07 | Hook 出错、权限不足无法写 Spool、错误分类 | Agent 仍可完成，Doctor 不读取/输出敏感文件，分类与 source-level 问题目录一致 |
+| A08 | v0.3 T18 lost-ACK/post-crash/同键冲突/分页回归 | 复用 `scripts/e2e-fault-injection.ts` + v0.3 原回执；新 v0.4 SHA 上的 source regression；**仅 publish/retry 路径变更后才需追加真实 GH 回读** |
+| A09 | 受控本地代理注入 429/503/TLS timeout，断网、失败分页、重启 | 预算有界、Retry-After 受控、权限再核对、`UNKNOWN/HELD` 不盲 POST、实测回执 |
+| A10 | 无合格 ADS adopted-main pin/source clearance 的普通 GitHub repo | `doctor/retry/collect` 都未授权 POST，`HELD` 且具体原因；负例可本地 fixture |
+| A11 | **Windows Node24** 最少 5 组相同 synthetic workload Hook OFF/ON | wall clock、Spool bytes、Stop→Outbox 实际测量；标 sample n/median/range/version/exit；未运行 `FR05a=NOT_RUN`，不得算 MUST PASS |
+| A12 | 嵌套/重叠 parent-tool Span 与物理 retry | leaf 统计/时间区间 union 不双计；`wall-active` 不解释为 thinking |
+| A13 | 只有 provider-reported，没有真正 invoice | 结果 `PROVIDER_REPORTED` 而非 `BILLED`；币种/窗口不兼容则不可比较 |
+| A14 | native blocked_by 是串行，但 Planning 文档说可并行，Host 钟漂移 | 私有仅输出 source/provenance 与 observed overlap；不做“无故串行”策略判定 |
+| A15 | ADS v4.18 已选 Product/L2 但尚无新公开 Schema | 不论未来是否 RQ/main，**任何新 Lane/Topology/Scaffold public key 都不得发**；需另行 ADS Schema Owner |
+| A16 | Tally 实际 C GitHub reader 未交付 | producer conformance Golden 在 Gate；`REAL_TALLY_APP=NOT_RUN` 被允许为外部未完成，不能自称全环 PASS |
+| A17 | Tally feedback PRESENTED≠APPLIED≠独立核定成效 | 维持不同事实阶段/Ref，零无来源 effectiveness promotion |
+| A18 | Doctor/公开报告输入 synthetic secret、prompt/tool content、local absolute path | Doctor 严格只读 allowlist 且 scrub，公开来源无泄漏、无越权读 auth stores |
+| A19 | 三 Agent 的版本与 Hook 支持不一致 | 三者 source-level 契约 MUST；至少一个实测 **Claude Code CLI 优先**（若非可用或认证阻断则 ZCode CLI 作为经 source 验证的后备，Codex CLI 不因桌面 PASS 被推定支持），其余明确 NOT_RUN/真实来源；Windows Node24 |
+| A20 | 仅成功 Attempt 的 cohort + 已失败/取消未观察样本 | cohort key 至少 `task_kind/risk/agent+plugin/provider capability/pricing/Host+OS/window/basis`；缺风险/失败分母时 `NOT_COMPARABLE`，不输出 Agent 排名 |
+| A21 | Spool/Outbox 发生 backlog、disk-full 或 stale lock | 有界队列/错误分类、显式告警/可恢复状态，不阻塞正常 Agent 操作，不静默丢已确认事件 |
+| A22 | 三条合法去重事件 2 个有 Task/Attempt refs；两 Pre 调用仅一匹配 Post | Binding `2/3 CONDITIONAL`；Tool pair `1/2 CONDITIONAL`；**不宣称总体 coverage**；重复来源不改变分母 |
+| A23 | Skill 与 Doctor 对同一已知问题的诊断规则不一致 | typed Doctor catalog 是唯一 rule source；Skill 仅引用诊断 ID；source-level 一致性 oracle 不能同时两种不同 severity |
+| A24 | FR07 文档称可并行、Task-native edge 实际依赖、无合法 SF | 来源完整 native readback + 规划说明只作对照；`SF_Binding=NOT_APPLICABLE`，不判断哪个拓扑更优 |
+| A25 | FR07 两 Task 写同 Manifest、无 source writer/Claim，或只读 PREP 想改源码 | 输出真实写集冲突证据与 `CLAIM_NOT_ADMITTED` 的引用，**不代替 GitHub Gate**；source-only fixture |
+| A26 | FR07 多 Host 钟漂移、未显式物化 Concern/Lane/Step | `UNKNOWN`/N/A，不从 Markdown/Large-Language-model 自创 machine IDs；source-only fixture |
+| A27 | Reviewer/Builder ID 不同但登录相同且无独立上下文凭据 | 可记录身份不同的原始 Claim/Review 来源，不输出 `INDEPENDENT_REVIEW=PASS`；授权独立性由 ADS Reviewer/Authority |
+| A28 | v4.18 candidate 规范未来 RQ/main，task-meta effective ads pin 尚未改 | 正式 Source/Gate 始终用现有有效 pin；新的规划 v4.18 方法不自动 grant publication/profile |
 
-**测试策略：** source-only 表驱动 Golden + 最小 CLI fixture + 少量**真实** Host/Agent/隔离 GitHub E2E；失败注入优先受控本地代理，避免远程 GitHub 配额/凭据损伤。对已证明且 SHA/环境完全一致的既有证据复用，不按每小任务全量重测。任一物理测试如未实际执行，Release 账本必须保留 `NOT_RUN`。
+**测试复用**：优先已有 v0.3 source-level/T18 真实授权隔离 sink 的具体 Oracle，只对变更的发布路径补跑真实 GitHub；429/503/TLS fault 注入使用受控本地代理，不向真实 provider 制造流量。R0/R1 审核是文档回执，不能替代 Windows Node24 A11 和最小真实 CLI E2E。
 
-## 7. 版本范围、优先级和 Release 门槛
+## 7. v0.4 范围、平台与冻结 Release 门槛（Product Owner 决策）
 
-### MUST（v0.4 核心价值，可独立验收）
-- FR01、FR02、FR03、FR04 的可靠性闭环；FR05 **先测基线及对照**，是否实现性能优化由测量驱动。
-- 保留 v0.3 三 Agent Hook/Golden/ADS v5 权限和真实 GitHub 路径，不回退历史行为。
-- 最少有 **一个**实际 Agent CLI→Hook→Spool→Outbox 的真实 end-to-end 正例和一个真实/安全受控的恢复或拒绝负例；三 Agent source-level 契约均需核定；其他 Client/OS/Plugin trust 项根据声明支持范围独立实际验证或明确限定 waiver。不能用一个 Agent 替代三个都 PASS。
-- 实测所有“新增受支持平台/CLI 行为”；Release OWNER 将最低能力矩阵在 L2 时冻结，不能在结束时临时改变分母。
-- Windows Node24 全量/相关真实 Host Evidence、独立审查、最终 Candidate Freeze/RQ、版本分支先合后 main，实际 Tag 可选。
+**v0.4 实际平台**：**Windows + Node24** 是核心 Release 真实 Host 支持矩阵；Ubuntu/Linux 本版本 `NOT_CLAIMED`，若后来增加，必须 Amendment/真正 Ubuntu evidence，不因 Windows/fixture PASS 宣称 Linux。**Agent 范围**：ZCode、Claude Code、Codex 三插件 source-level 兼容与隐私 MUST；至少 **1 个**真实 Windows CLI Agent→Hook→Spool→Outbox 正例和 1 个独立受控故障/权限负例 MUST，首选 **Claude Code CLI**，若可用性/模型认证受限则 **ZCode headless CLI** 经现行 `--help` 和真实 Hook 证明后作为替代；Codex CLI 不支持插件时记录 `UNSUPPORTED/NOT_RUN`，不可将 Codex desktop 证据当 CLI PASS；若三种 CLI 都无法实际激活，Release Owner 必须 BLOCK/有依据 CONDITIONAL，不可凭 Hook fixture 替代。**不存在强制重新体验所有 UI**。
 
-### SHOULD（可并行开发，有界 Release 资格）
-- FR06 兼容性/质量可比性、FR07 以 **ADS v4.18 冻结 Product/L2 作为明确目标** 的 Task DAG/Lane/Scaffold 时间与交接事实，实际生产公开仍**仅允许被授权有效采纳的 ADS 语义和来源子集**；无法采用时仍交付私有 source-only fixtures 与明确阻断，不编造公开 v5。
-- FR08 生产者 Golden/Consumer 合约与只读对账；Tally 已可运行时额外真实闭环，但**不强制成为 task-meta 基础 Release 硬门禁**。
+### MUST — RQ 前必须有真实证据或合法限定处理
+- T0 私有状态/覆盖分母契约、FR01 read-only source CLI Doctor、FR02 生命周期区分、FR03 六种私有指标及 A22 正确计算、FR04 v0.4 真增量（bounded retry/UNKNOWN/permission re-check/metrics），FR05a **Windows Node24 5 组对照实测**。
+- 三个插件 source-only Hook/manifest/Golden 防回归；适用的 v0.3 T18 回归（对未改逻辑不重跑昂贵真实发布）、1 个真实 CLI end-to-end + 1 个安全负例，Windows Node24 scoped 回归/独立 Review/whole-version RQ。
+- **FR08 中仅生产者侧**已采纳 ADS GitHub safe Report/Golden+Tally 消费者接口文档、负面 contract fixtures **必须完成**；`REAL_TALLY_APP` 因外部 App 未交付允许 `NOT_RUN` 且不宣称全闭环。
 
-### DEFER（v0.5 或独立跨项目）
-- FR09 大规模经验/效果评估、AutoSaddler 类优化器、Agent 排名/模型路由、自动生成/改写 Skill/Rule/Package、Web Dashboard、分布式数据集群。
-- 真实 Tally B/S/K/C 应用、ADS public schema 升级、Scaffold authoring、跨项目人/Agent 调度策略不在 task-meta Repo 中实施。
+### SHOULD — 不成为核心 Release Gate
+- FR05b 真实测量推动的优化、FR06 provider/cost comparability 精化；FR07 **source-only private facts/Golden/协议说明** 可独立做，但**明确排除 v0.4 核心 Release Gate**，未实际采纳需留下 DEFER 的 Issue/原因。不得因 ADS v4.18 版本外部发布不及时而卡死 A/B/C。
+- Tally 实际 C GitHub reader、feedback 往返属于 Tally #62/ADS #1210 外部 E2E，`REAL_TALLY_APP=NOT_RUN` 不代表 v0.4 失败，但不得对完整消费链签 PASS。
 
-## 8. 依赖与候选并行工作流（仅 Product 规划，不是已批准 Task DAG）
+### DEFER
+- FR07 的**公开**新增 Lane/Concern/Topology 字段必须等另一个 ADS Public Schema Amendment，**v4.18 RQ/main 不会自行解锁**；FR09 大规模 Experience/Skill/Domain Package/Agent Router/模型训练/UI，Linux 支持承诺、分布式存储、性能未证实的优化。
+- **v4.18 effective pin 的正式生产采纳**单独 Product/版本 Issue（待合格 v4.18 main 后）。当前 v0.4 采集核心可以继续在已合法 adopted effective ADS 标准+权限下运行，不把 ADS v4.18 规划建议当新 Gate。
 
-`Product Review/Freeze → L2（适用 ADS+权限/命令/Host 契约）→ Native Task DAG/Task Claim → concern 实施+独立 Review → 版本级回归/Host/Golden/Qualification → main`。
+### 现有五开放 Issue 的不重复处分
 
-**可并行 workfront 建议：**
-- **A 采集/诊断**：FR01/FR02，Owner 仅修改 CLI/Hook/adapter bounded APIs；与 B/C 通过冻结的共享 source event/status 契约接口协作。
-- **B 发布恢复**：FR04，以已有 `src/autoreport`/`src/publish` 为唯一写集 Owner，可独立开发；与 A 使用只读 private envelope contract。
-- **C 质量/性能**：FR03/FR05/FR06，复用 `src/model.ts`、MetricIdentity、CAS，先冻结 metric provenance contract；共享文件冲突要指定单 writer，不能盲并行写 model。
-- **D ADS Task DAG facts**：FR07 的 schema/来源映射/fixture 可独立并行预研；**新正式公开字段依赖 ADS 合法采纳**。
-- **E Tally 外部闭环**：FR08 的 producer-side contract fixture 可独立准备，真实消费者受 Tally [#62](https://github.com/kaicreator-mm/tally/issues/62) 和 [ADS #1210](https://github.com/kaicreator-mm/ai-development-standard/issues/1210) 外部状态约束。
-- **R 版本整合**：需要 A/B/C 适用必需证据；D/E 是否被纳入当前 Release Gate 应在 Product/L2 Freeze 明确，不能过后把 `NOT_RUN` 冒充完成。
+| Intake Issue | v0.4 实际接入点 | Release/保留决定 |
+| --- | --- | --- |
+| [#7 Learning/Agent evidence](https://github.com/kaicreator-mm/task-meta/issues/7) | FR03 provenance 部分复用、FR09 扩展 | **KEEP_OPEN / DEFER 大部分**：经验判断/匹配由 Tally/下版负责 |
+| [#8 Real E2E/fault/quality](https://github.com/kaicreator-mm/task-meta/issues/8) | FR01/02/03/04/05a、A08/09/11/A22 | **KEEP_OPEN**：v0.4 可关闭其中可确证生产者相关的子范围，但含外部完整应用链的尾项未达真实 E2E 前不关闭总 Issue |
+| [#9 Experience usage & capture-quality](https://github.com/kaicreator-mm/task-meta/issues/9) | **FR03 Capture Quality 是 v0.4 MUST**；FR09 feedback effectiveness defer | **KEEP_OPEN**：不能把 #9 全部误标为 FR09 DEFER；可在版本完成时建立真实 scope-based evidence crosswalk |
+| [#14 ADS publisher/reader integration](https://github.com/kaicreator-mm/task-meta/issues/14) | FR04 publisher + FR08 Golden / Tally reader seam | **KEEP_OPEN** 直到真实合法 Publisher+Tally GitHub-only Reader E2E |
+| [#17 TraceML analytics](https://github.com/kaicreator-mm/task-meta/issues/17) | FR06 metric comparability、FR07 private observation、FR09 future insight | **KEEP_OPEN / DEFER** 公共 cohort 成果直至 ADS 兼容公有 wire 和足够现场证据 |
 
-依赖至少区分 **Contract/Source draft readiness**、**exclusive write set**、**validation/review eligibility**、**actual merge/release convergence**、**physical Host/credential capability**。对于未争用共享路径的任务，源准备可并行，不要人为制造 A→B→C→D 串行链；但不能绕开原生 GitHub Task/Claim/Issue Dependencies 和实际提交权限。避免“一条大任务”替代按 concern 拆分；对应 **ADS v4.18 已冻结设计目标**，真实 Task/Claim/Scaffold 准入仍由当时有效规范和 GitHub native readback 判定；正式生产 v4.18 采用需核实 Release-qualified pin。
+以上是 Intake 处理范围，不因文档交叉引用关闭旧 Issue。
+
+## 8. ADS v4.18 Capability-first / Scaffold-aware 并行 Task 预览（未物化）
+
+本节仅是候选 Workfront，不是合法 Source Claim、GitHub native blocked_by 或正式 Task DAG；仍需 Product Freeze→L2→源码写集检视→native Issue materialization/readback 和单 Writer/Claim。
+
+**Scaffold 结论：** 当前 task-meta **没有已被接受的 Source Scaffold**，`SF_Binding=NOT_APPLICABLE`；若未来正式接受才按已有 SF↔DF/MI 绑定，绝不为优化并行虚构 Anchor。
+
+| Concern/Capability | 需求 | 候选独占写集/Owner | 来源权限/环境/证据 | 真依赖/准入理由 |
+| --- | --- | --- | --- | --- |
+| **T0 Private Contract** | FR02/03 missing reason+epistemic, B UNKNOWN | **唯一 writer `src/model.ts`**，冻结已有共享身份/types 的增量接口；必要私有单一 contract fixture | WEB source/独立 Reviewer（如 Task 规则要求），CI source | 首批共享类型合同；A/C1 依赖其接受后才源码实现，B 可先 PREP |
+| **C2 Overhead baseline** | FR05a 测量 MUST | 仅隔离测量脚本/证据路径（后续 L2 定），不写 `src/model.ts` | LOCAL Windows Node24 真实 Hook fixture，CLI source receipts | **与 T0 并行**；无虚构功能先验，最少 5 组 |
+| **A Doctor + Lifecycle** | FR01/02 | 私有 `src/doctor/**`, `src/adapters/**` 的约定子树；不动共享 `src/cli.ts` 注册 | WEB/CI source+LOCAL Windows Node24 Agent CLI Hook，Reviewer 按风险 | T0 合同已接受、真实 CLI 支持能力可核 |
+| **B Safe Recovery** | FR04 | `src/autoreport/**`, `src/publish/**`, `scripts/e2e-fault-injection.ts` 的**唯一 B writer**；不碰共享模型/CLI | WEB/CI source+LOCAL Windows 代理/隔离 GitHub sink，审查权限 | B 现有安全路径可先独立 PREP；`UNKNOWN` outbox 使用 T0 接口后实施 |
+| **C1 Capture Quality** | FR03 | `src/aggregates/**`, `src/metrics/**` 被 C1 唯一 writer（C3 FR06 若采纳必须隔离文件或串行） | WEB/CI source+真实脱敏 fixture；LOCAL 对照由 C2 | T0 结构后真正计算，A 的来源为现有 Adapter 契约 |
+| **C3 Cost comparability（SHOULD）** | FR06 | 与 C1 隔离源文件或置 C1 后，绝不双写 `src/metrics/comparison.ts` | WEB/CI Source、可选真实 Provider usage | C1 API 稳定之后可开发；不作为核心版本硬门禁 |
+| **D v4.18 private DAG facts（SHOULD）** | FR07 | 独立 private fixtures/文档，不写 shared model、public ADS schema | WEB source-only，Reviewer 可选 | ADS 已冻结设计可预研；真实 runtime/公开 wire 不在当前 Gate |
+| **E GitHub-only producer contract** | FR08 | 专门 producer Golden/契约文档（Tally 仅外部读），不改本地 Tally | WEB/CI source-only，真实 App E2E 外部 | 旧 ADS 有效 adopted pin，Golden 源确认；不依赖 Tally 实现 |
+| **I Central Wiring** | 共用 CLI/manifest/文档和 integration tests | **唯一 writer `src/cli.ts` 命令注册、`package.json` 脚本、`AGENTS.md`/Skill 指针、跨 concern 集成测试** | WEB/CI + 独立 Reviewer，涉及 Host 的具体来源归 LOCAL | Core A/B/C1 + C2 的实际适用交付与 source contract；如果 E 改共享入口必须先协调，D/C3 若未采纳不阻塞 |
+| **R Release** | version metadata/whole Version RQ | 唯一 R owner，冻结版本分支元数据、资格与 main 准入 | 主控、CI/LOCAL 真实证据、独立 Release Reviewer | I 源已集成及所有适用 MUST tests，whole exact-SHA 资格 |
+
+**候选拓扑：** `(T0 ∥ C2)`，然后 `A ∥ B ∥ C1 ∥ D ∥ E`（A、C1 合同受 T0 限制；B 在 T0 前只读 PREP，E/D source-only 可更早）；`C3` 按是否采纳并有唯一写集；`MUST A+B+C1+C2+E → I → R`。D/C3 不纳入硬 Gate。最终真实 native edges、当前分支、Claim、审查和资源互斥以 ADS 权威重算，不用本表授予 Builder READY。
+
+**并行/串行可复算评估：** 方案 1 `T0→A→B→C1→C2→I→R` 人为串行、写集无此必要；方案 2 如上有合法独立 workfront，中央 I 集成共享入口，优先；方案 3 在无合同/同文件 Writer 条件下全部并行违反安全，不允许。实际工期、成本、速率改善均 `NOT_MEASURED`，不得宣称数值节省；只读 PREP 可以独立先做但 **Option A** 的受 native 边阻断 Task 不能提前写源码。
+
+**关键外部边界**：D 只消费 ADS v4.18 frozen planning norms，不抢先放新的 lane 字段到 ADS v5；E 真正 Tally reader 由 [Tally #62](https://github.com/kaicreator-mm/tally/issues/62) 和 [ADS #1210](https://github.com/kaicreator-mm/ai-development-standard/issues/1210) 负责，不为 task-meta 额外创造 private API。
 
 ## 9. Release Qualification 与证据要求
 
@@ -234,34 +293,39 @@
 
 L2 根据首轮实际基线与使用场景提出轻量合理预算/验收阈值，由 Product Reviewer 审核是否足够可证伪；避免未经测量就设定过度承诺的性能目标。
 
-## 11. 风险、取舍与开放 Product 问题
+## 11. 产品决策与仍需监测的风险（R2 已作 Freeze 必需选择）
 
-| ID | 风险/待决定事项 | R1 候选决策与 Reviewer 核查 |
+| ID | 本轮 Product 定案或风险 | 判断 |
 | --- | --- | --- |
-| Q01 | v0.4 是否过大？ | P0 FR01–04 核心闭环 + FR05 首测；FR06–08 可子任务/条件验收；FR09 延后。请审核 MUST/SHOULD 的边界 |
-| Q02 | Doctor 应新增命令还是复用现有 CLI？ | 产品只定义能力 `task-meta doctor` 候选，具体 CLI/模块复用由 L2 决定；不可无端增加安装代理或守护进程 |
-| Q03 | 如何避免误报覆盖率？ | 先证明观测分母和 provider capability；未知分母→UNKNOWN/NOT_COMPARABLE，禁止用推测总量 |
-| Q04 | Codex SessionEnd 不发是否 P0 阻断？ | 不将不受控 Host 缺事件改成插件“成功”；应有 Stop/settle fallback 与真实诊断。若承诺某 Client 的 SessionEnd 完成语义，需要真实证明 |
-| Q05 | 已选 ADS v4.18 Product/L2、但正式 RQ/main 尚未完成，如何处理？ | Product/L2 与源码 Golden 锚定最新已冻结 v4.18 Product/L2；正式生产 GitHub wire/权限仍按有效 pin。D 私有事实可独立开发，D 正式公开字段待 ADS 合法采用；v0.4 核心 A/B/C 不应因外部发布无期限阻塞 |
-| Q06 | Tally 真实 E2E 能否阻断 v0.4？ | 不阻断主采集可靠性 Release；独立 issue/资格在 Tally/ADS 完成，v0.4 不能自称完整跨系统 E2E |
-| Q07 | Node24 Windows/Ubuntu 支持承诺？ | 先检查现有实际用户运行平台/Build Host，再明确冻结支持矩阵；每个声称 PASS 的 lane 须有真实证据 |
-| Q08 | 质量数据是否公开？ | 只能采用现有 ADS 合规 typed/public 可表达子集及 per-source clearance；剩余私有观测不流向 Tally |
-| Q09 | CLI 自动 repair 权限边界？ | 默认 read-only、用户确认、无修改 trusted_hash/Token、无静默 Home/全局配置写入 |
-| Q10 | 私有对象保留期限/压缩策略？ | 不在 Product R1 擅设 retention 数值；L2 先量测磁盘/隐私/恢复需求和明确删除/纠错语义 |
-| Q11 | 实际反馈尚未集成如何展示演进效果？ | 只提供证据来源与 MISSING/NOT_RUN；不制造胜率或 Agent 排行，正式实验决策仍在 Tally |
-| Q12 | task-meta 当前 README/历史账本部分仍使用 v0.1/早期 NOT_RUN 描述？ | 由下一文档维护 concern 规范化“历史 snapshot / 当前索引”，不修改旧 exact-SHA/不可篡改回执 |
+| Q01 | v0.4 过大 | MUST 范围 T0/A/B/C1/C2/E+I/R；D/C3 SHOULD 不为核心 RQ Gate；FR09 和新公有 Schema DEFER |
+| Q02 | Doctor 交付与唯一知识源 | repo checkout `node src/cli.ts doctor`；不新 `bin`/installer；typed catalog 是唯一 rule source，Skill 引用 CLI 诊断 ID |
+| Q03 | 覆盖率正确性 | FR03 六指标表的 conditional 分母明确定义，null/unknown 无假百分比，A22 精确值 Oracle |
+| Q04 | Codex SessionEnd 不发 | #46 历史桌面事实不强迫 Host 发 Hook；未知 root cause；真实 CLI 路径须有不同证据 |
+| Q05 | ADS v4.18 的双重身份 | v4.18 是设计规范；当前有效 pin 决定实时 Claim/JIT/public GitHub；v4.18 不新增公开 Schema，所以 FR07 private；未来正式采纳独立 concern |
+| Q06 | Tally 跨系统阻断 | E producer Golden+contract 是 MUST，但真实 Tally app 单独 NOT_RUN，不阻断 core Release 但不能宣称全环 PASS |
+| Q07 | OS/Agent Release 支持矩阵 | Windows Node24；三 Agent 源兼容；Claude CLI 优先至少一真 Agent E2E，失败/不可用转 ZCode headless；Ubuntu/Linux NOT_CLAIMED |
+| Q08 | 可公开数据 | 只能已有 strict ADS public profile + effective source-owned grants；本版的 FR07 lane/topology 不合法公开 |
+| Q09 | CLI repair | Doctor 仅只读；不自动安装/变更用户 Trust 或 Token；明确人工授权仍可使用现有 Skill |
+| Q10 | Retention/性能 | 先实测 C2 采集磁盘/CPU/Spool；压缩/数据库/保留量化优化推迟，任何资源溢出不阻塞 Agent |
+| Q11 | 经验效果与 Provider 阶段 | D 私有 observation + E producer facts，不从 feedback presented 推断 effectiveness，Tally 决策 |
+| Q12 | 历史文档混有旧版本文字 | 只在必要文档 concern 中加 currentness 索引，不能重写旧 v0.3 RQ 或对旧 SHA 补签 PASS |
 
-## 12. Claude 独立 Product Review 指令（审核本文 exact SHA）
+**Review 重点不再请求 L2 替 Product 决定这些发布范围。** L2 只能在本矩阵上细化模块、接口、资源、安全机制与测量预算，不得擅自把 SHOULD/DEFER 转成新 Gate。
 
-请以当前 PRD 的 **Git blob + PR exact HEAD** 为锚点，仅审核本次 Product PR 的范围，不使用对话推断已通过的 Gate：
+## 12. Claude 独立 Product R2 差异审核范围
 
-1. **基线差异/重复 ROI**：v0.3 已有的 Hook/Autoreport/Compare/Feedback/Trajectory/Golden 是否被错误重建？FR01–FR08 是否存在重叠或过度大而无法独立拆 Task？
-2. **权责/安全**：是否越过 ADS 公共 wire、Tally 决策/K、GitHub 原生事实、真实 Node24/Client 权限？是否可能新增未授权写入、Prompt/CoT/凭据泄漏？
-3. **验收与数据正确性**：每项 MUST/SHOULD 是否可证伪？Hook/CLI/Desktop/Source/Host/Real GH/Tally 证据是否正确分层？统计分母、Token 缓存、成本重试、时间重叠、SessionEnd/未知是否可信？
-4. **并行/依赖**：A∥B∥C 能否真正在冻结共享契约和独立写集后并行？D/E 外部依赖是否会意外无限阻塞核心 Release？是否正确落实**已冻结的 ADS v4.18 Product/L2**，并避免在未 RQ/main/adoption 时错误认定生产有效？重点复核 native blocked_by/Option A/JIT/Claim、条件 SF↔DF 和 Writer 排他
-5. **Reviewer 输出**：`P0/P1/P2`（每项有准确章节、缺陷、最小修复）；`PRODUCT_REVIEW=PASS|BLOCK`、`FREEZE_READY=YES|NO`；若缺必需决策给出优先顺序，不要求 Builder 先实施。
-6. **权限**：仅只读审核并将结论写回 Product PR/#60，不合并、不修改源文件、不设 Product Freeze、不生成 L2/Task DAG；如新 HEAD，需按差异重审。
+请以本次 PR #61 **最新 exact HEAD + 新 PRD Git blob** 为对象，对照两份既有独立审核 [R0 P1×6/P2×5](https://github.com/kaicreator-mm/task-meta/pull/61#issuecomment-6398129388) 与 [R1 P1×9/P2×8](https://github.com/kaicreator-mm/task-meta/pull/61#issuecomment-6398264751)。专注确认 **R0 六项 P1、v4.18 新三项 P1、八项 P2** 的真实关闭，不重读不可变旧代码当新 Host PASS：
 
-**R1 最终状态（ADS v4.18 目标规范修订）：** `PRD_WRITTEN_ONLY`；`PRODUCT_REVIEW=NOT_RUN`；`PRODUCT_OWNER_FREEZE=NO`；`L2=NOT_STARTED`；`TASK_DAG=NOT_ADMITTED`；`IMPLEMENTATION=NOT_STARTED`；`HOST_CLI=NOT_RUN`；`RQ=NOT_RUN`。
+1. 对照 T18 v0.3 既有源/回执与 FR04 **有界自动重试/UNKNOWN/outbox 权限** 新增，而非昂贵回归重复；统一私有 T0 missing reason / single source Writer。
+2. Doctor 是 **repo-only `node src/cli.ts doctor`**；唯一 Catalog 不与 Skill 诊断状态重复维护；隐私 allowlist 与无全局 mutation。
+3. FR03 六指标的分子/可证明分母/Provider capability/conditional-vs-absolute/正例 A22；FR05a 真实五组 Windows Node24 对照仍是 MUST。
+4. v0.4 的 Windows+Node24/Agent matrix, E producer Golden MUST、D 和 Tally REAL_APP 非阻断、旧 Issue #7/#8/#9/#14/#17 的 KEEP_OPEN 有无正确拆分；A∥B∥C1 + T0 + I/R 的写集独占/合法 native Option A。
+5. ADS v4.18 Product/L2 source Freeze コメント是权威；文档中 `version/v4.18@` 是当前性快照；其 v4.18 **只作规划建议**而不替换有效 Claim/JIT/ready_builder；公开 Lane/Topology 仍不存在 Schema，即使 v4.18 主线发布也须另立 ADS schema issue。
+6. FR07 只能以真实 native GitHub/owner-written exact Task Pack 得到 Concern/Lane/ref，不能 parse 人类模板猜字段，不判断“无故串行”；Reviewer 不自行签独立角色 PASS。
+7. 核对新增 A21–A28/Doctor privacy/T18 注入/cohort-key 样例，回报 P0/P1/P2、新问题、`PRODUCT_REVIEW=PASS|BLOCK`、`FREEZE_READY=YES|NO`，**只读写回本 PR 和 Issue #60**。任何合法 Product Freeze/L2/Task DAG/Build/Host 都是后续独立动作，不在本审核授权范围内。
 
-**R0 → R1 差异范围：** 用户明确要求采用 ADS 最新 v4.18。R1 只调整 ADS 设计规范 pin/§2.1 权威矩阵、FR07、A15、优先级/依赖、Q05 与 Review 指令；FR01–06/FR08–09 的原先可靠性/隐私边界保持。旧 R0 PRD blob `afeebab4476b9fa4b8c1c8ec0e35b0f55234c32c` / HEAD `a672386e49ddc8656faca195c70e4477b5db5191` 已被新候选取代；Claude 必须审核本 PR 新的 exact SHA/PRD blob。
+**R2 候选未获独立批准：** `PRODUCT_REVIEW=NOT_RUN_AT_R2_HEAD`；`PRODUCT_OWNER_FREEZE=NO`；`L2=NOT_STARTED`；`TASK_DAG=NOT_ADMITTED`；`IMPLEMENTATION=NOT_STARTED`；`HOST_CLI=NOT_RUN`；`RQ=NOT_RUN`。
+
+
+
+**R1 → R2 差异说明：** Claude R1 `P0=0/P1=9/P2=8/BLOCK`。R2 的修复覆盖 9 个 P1（恢复历史既证范围、统一模型、Doctor 决策、可证伪实测/coverage、实际平台/Gate/Issue、v4.18 Workfront/来源/公开 Schema）及 8 个 P2（资源耗尽、敏感只读、Codex Desktop-only、T18、cohort 规则、ADS SHA currentness、D fixture、Reviewer 不独立判定）。最终以新的 Git blob/HEAD 和独立 Reviewer 的正式差异结论为准。
