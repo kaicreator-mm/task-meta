@@ -228,7 +228,7 @@ Enforce strict bounded config validation: only finite nonnegative integers in va
 | Doctor/version/Skill | A01/A02/A03/A04/A07/A18/A23 | source tests of read allowlist, no side effects, version/agent capabilities, missing CLI, symlink traversal, leaking synthetic secret; no desktop result promoted to CLI |
 | T0 + lifecycle | A03/A04/A05/A06 | ZCode absent declared SessionEnd N/A, Codex historical missing unknown cause, duplicate same digest vs conflict, distinct retry preserved |
 | C1 six quality metrics | A05/A06/A12/A13/A20/A22 | positive 2/3 and 1/2 fixture, null denominator & conditional basis, cohort/source consistency, no double counted model/cache |
-| B recovery + security | A08/A09/A10/A18/A21 | T18 source regression, crash-before/after write, persisted budgets, partial pagination UNKNOWN, grant/permission changed and **observed by pre-POST check** before attempt #2 => **0 further POST**; concurrent check/write race is recorded, not assumed atomic, no unauthorized normal repo publishing |
+| B recovery + security | A08/A09/A10/A18/A21 | Existing T18 regression; **direct in-call lost ACK + late commit after fully empty readback → exactly 1 POST and UNKNOWN**; damaged/truncated IN_FLIGHT with older valid PENDING → UNKNOWN/HELD, zero follow-on POST; per-POST revocation detected → 0 further POST; shared report-identity budget POST=3, GET default=200/hard=1000 pages, wall 10min, cycles=3 |
 | C2 real measured overhead | A11/A19 | **n≥5** paired Windows Node24 real fixture measurements, reproducible stdout/exit evidence; simulated fixture is not REAL_AGENT_CLI |
 | D private ADS v4.18 facts | A14/A15/A24–A28 | source-only native IDs, SF=N/A, no public key, no topology judgment, no independent Review fabrication; optional nonblocking |
 | E Tally producer seam | A16/A17/A18 | source-qualified strict public report Golden, native readback/permission negatives, no private Tally ingress; REAL_TALLY_APP only if actual available |
@@ -243,22 +243,37 @@ Enforce strict bounded config validation: only finite nonnegative integers in va
 | D01 | Keep repo-only Doctor; no plugin packaging/global CLI. Is \`node src/cli.ts doctor\` a valid current Node24 invocation with existing CLI dispatch? The command is a **future implementation target**, not currently runnable |
 | D02 | One T0 `src/model.ts` writer and one B `outbox.ts` writer; no duplicate missing reason enums, private JCS version stays explicit |
 | D03 | C1 only computes **conditional** coverage when denominator is observed-only; verifier absolute requires source-owned full eligible list |
-| D04 | Existing v0.3 publisher already retries per-call; new coordinator only handles durable cross-process recovery + UNKNOWN; **per-POST** permission/source/currentness even inside legacy in-call retries |
-| D05 | Recovery after crash at durable IN_FLIGHT is **UNKNOWN until native readback**, including restart after zero executed network sends; safety takes priority over liveness |
+| D04 | In-call ambiguous MAY_HAVE_SENT must **stop publisher retry loop immediately**, even after fully empty readback; single typed transport-finality outcome consumed by direct publisher and Outbox, with per-POST current permission on provably safe retry |
+| D05 | Spool.replay.skipped, missing/corrupt IN_FLIGHT, segment/epoch/ordinal gap => JOURNAL_INCOMPLETE/UNKNOWN/HELD + GET only and **zero POST**, even after apparently empty remote readback |
 | D06 | Is native clearance revalidation in `checkPublicationGrant` plus `verifyIssuePublicationPermission` enough for every physical POST? Must re-read effective ADS adoption/schema, no user-grant caching across retry, explicit source-owned eligibility |
 | D07 | Performance C2 start early, n≥5 paired Host measurements; Linux not claimed; public GitHub 429/403 abuse prohibited |
 | D08 | FR07 local/private only even after ADS v4.18 RQ/main; any future public facts require separate ADS schema change/clearance. Reviewer independence evidence is observation, not PASS |
 | D09 | GitHub native source is sole public bridge to Tally; no Tally SDK/DB/manifest reading or scheduler coupling |
 | D10 | Writer scopes enforce actual A∥B∥C1 and central I; native Option A and current Claim gates must precede code implementation |
+| D11 | Reconciliation resolved terminal counts **verified PUBLISHED, DENIED, CONFLICT**: Golden 3/4 terminal vs 1/4 successful; UNKNOWN excluded from terminal numerator |
+| D12 | Shared identity-bound budget: POST total 3, GET page default 200/hard 1000, wall 10min, coordinator cycles 3; charge before effects and never reset across restarts/digest swaps |
 
-## 10. Independent Architecture Review dispatch
+## 10. Independent Architecture R1 Differential Review dispatch
 
-Independent Claude reviewer **reads this entire L2 at exact SHA+Git blob** and the exact frozen Product/ADS sources before returning **`P0/P1/P2; L2_REVIEW=PASS|BLOCK; L2_FREEZE_READY=YES|NO`**, with minimum fixes. Independently verify:
+Independent Claude reviewer **reads this R1 L2 at NEW exact SHA+Git blob**, [prior independent R0 BLOCK](https://github.com/kaicreator-mm/task-meta/pull/63#issuecomment-6401397561) and the exact frozen Product/ADS sources before returning **`P0/P1/P2; L2_REVIEW=PASS|BLOCK; L2_FREEZE_READY=YES|NO`**, with minimum fixes. Independently verify:
 1. Product R2 `FR01–FR09` and A01–A28 coverage, MUST/SHOULD boundaries/Agent/Host matrix, hard v4.18 planning vs public schema restrictions.
 2. Actual source seams for `publishReport` retry, `auto-report --retry`, fail-closed grant and native permission, outbox states and JCS/CAS; classify network ambiguity without unsafe replay.
-3. Per-physical-POST grant recheck race/failure cases; combined network budgets and crash recovery must not introduce a second publisher, privileged background process or unauthorized POST.
+3. **R0 P1-01** typed SENT_OR_MAY_HAVE_SENT blocks extra POST in the **same direct `publishReport` call** after lost ACK/empty readback/late commit; fresh grant is not finality. **R0 P1-02** corrupted/missing IN_FLIGHT/epoch with `Spool.replay().skipped` must keep shard fail-closed. **R0 P2-01/02** 3/4 resolved vs 1/4 success, and single persistent POST/GET/time/cycle cap; inspect original fault injection and no unauthorized POST.
 4. T0/Doctor/metrics single writer, source URL/Issue Task DAG/Claim/Scaffold N/A and parallelism without overlapping files. Check architecture testability/overengineering and request smaller independent concerns only if necessary.
 5. Privacy allowlist, source-only versus real Client/Local/CI/Tally evidence honesty, exact source/ADS frozen blobs and 1.0-pre internal compatibility.
 6. Reviewer writes results to **this L2 PR and Issue #62**, read-only/no merge, no architecture Freeze, no Task DAG, no Builder/Host execution.
 
-**L2 R0 state**: `SOURCE_DOCUMENT_ONLY`; `INDEPENDENT_REVIEW=NOT_RUN`; `L2_FREEZE=NO`; `NATIVE_TASK_DAG=NOT_ADMITTED`; `IMPLEMENTATION=NOT_STARTED`; `WINDOWS_NODE24_C2=NOT_RUN`; `REAL_AGENT_CLI_V04=NOT_RUN`; `REAL_TALLY_APP=NOT_RUN`; `RELEASE_QUALIFICATION=NOT_RUN`.
+**L2 R1 state**: `SOURCE_DOCUMENT_ONLY`; `R0_INDEPENDENT_REVIEW=BLOCK(P0=0,P1=2,P2=2)`; `R1_INDEPENDENT_REVIEW=NOT_RUN`; `L2_FREEZE=NO`; `NATIVE_TASK_DAG=NOT_ADMITTED`; `IMPLEMENTATION=NOT_STARTED`; `WINDOWS_NODE24_C2=NOT_RUN`; `REAL_AGENT_CLI_V04=NOT_RUN`; `REAL_TALLY_APP=NOT_RUN`; `RELEASE_QUALIFICATION=NOT_RUN`.
+
+## 11. R0 BLOCK → R1 repair crosswalk (author-side only)
+
+Original [independent R0 L2 review](https://github.com/kaicreator-mm/task-meta/pull/63#issuecomment-6401397561) at exact HEAD `77060679cc8f1cbf8be89a8cecbb3209335fce11` / blob `18ebd4f1cdcd09ea8e4364e9e8dc127b4f4b28d4`: `P0=0/P1=2/P2=2/L2_REVIEW=BLOCK`. These author-side fixes are NOT an independent PASS.
+
+| Finding | R1 fix + falsifiable oracle | State |
+| --- | --- | --- |
+| P1-01 | `L2-06a` typed transport-failure proof covers direct publisher AND Outbox; may-have-sent + empty native list = UNKNOWN + **no next POST**; A09 late commit after readback | FIXED_IN_DOCUMENT_PENDING_REVIEW |
+| P1-02 | `L2-07a` checks Spool.replay.skipped, full journal segments, epoch/sequence/predecessor integrity; corrupt/truncated IN_FLIGHT cannot fall back to PENDING; 0 additional POST | FIXED_IN_DOCUMENT_PENDING_REVIEW |
+| P2-01 | `L2-04` counted terminal outcomes published, DENIED and CONFLICT = 3/4 versus 1/4 successful publication, 1/4 UNKNOWN separately | FIXED_IN_DOCUMENT_PENDING_REVIEW |
+| P2-02 | `L2-07b` identity-based POST 3 total, GET 200 default/1000 hard, 10-minute deadline, 3 coordinator cycles; persist spend before effect | FIXED_IN_DOCUMENT_PENDING_REVIEW |
+
+**R1_AUTHOR_REPAIR_ONLY / INDEPENDENT_R1_REVIEW=NOT_RUN / L2_FREEZE=NO / NATIVE_TASK_DAG=NOT_ADMITTED / LOCAL_HOST=NOT_RUN / MAIN_MERGE=NO.** Only after independent R1 exact-SHA review PASS and separate Owner Freeze may Task DAG be materialized.
