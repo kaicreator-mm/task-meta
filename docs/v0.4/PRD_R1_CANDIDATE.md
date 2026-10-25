@@ -3,7 +3,7 @@
 
 | 字段 | 冻结前状态 |
 | --- | --- |
-| Product Status | **R2_CANDIDATE / ADS_V418_TARGET / NOT_FROZEN / R1_BLOCK_9P1_8P2_UNDER_REPAIR** |
+| Product Status | **R2_CANDIDATE / ADS_V418_TARGET / NOT_FROZEN / R1_REVIEW_BLOCK_9P1_8P2_REPAIRED_PENDING_R2_REVIEW** |
 | Review | `INDEPENDENT_CLAUDE_REVIEW=NOT_RUN`；`FREEZE_READY=NO_PENDING_REVIEW` |
 | Version | `v0.4.0`，不修改已接受 `v0.3.0` 发布身份 |
 | Repository | `kaicreator-mm/task-meta` |
@@ -12,7 +12,7 @@
 | task-meta source basis | `main@adc0a823bc2be636292fef4dd96d24076646ee20` |
 | Frozen v0.3.0 release source | `9731b03e263527e15ae24815a7e26b45e4dd809a`；8/8 Task，Windows Node24 544/544 |
 | **ADS 目标规范** | **v4.18.0**；[Product #1320 Freeze](https://github.com/kaicreator-mm/ai-development-standard/issues/1320#issuecomment-6388802387) PRD blob `98772b4594caa44b2611853ae482132f7aefa36b`；[L2 #1321 Freeze](https://github.com/kaicreator-mm/ai-development-standard/issues/1321#issuecomment-6395575157) L2 blob `e3b5106c2fdaa8b2a0bbac5adb32b810fcbd51dd`；设计核查基准 `version/v4.18@2c627606b40f7c82120ae1a0d6736148fe0943e6`，**尚未完成 RQ/main** |
-| ADS 历史 main（非当前目标） | `main@a45644d734fdf94da3e6f9c3f90ffe4ce3c25fda`，v4.17 前任源码；v4.18 [#1322](https://github.com/kaicreator-mm/ai-development-standard/issues/1322) 正在完成 I/R |
+| ADS 历史 main（非当前目标） | `main@a45644d734fdf94da3e6f9c3f90ffe4ce3c25fda`，v4.17 前任源码；v4.18 [#1322](https://github.com/kaicreator-mm/ai-development-standard/issues/1322) 的 I 已完成、R 实施中（须复核现行状态） |
 | Tally source basis | `tally main@fab321845a0eb630d50eb5791f3de54b6870f5fb`；[Tally #62](https://github.com/kaicreator-mm/tally/issues/62) 真实消费端未完成 |
 
 > 本文件所述 `PASS` 指历史 **有精确来源的 v0.3 证据**，不是本 PRD、新版本、跨平台或新 CLI 命令的实际测试通过。除非另有实测回执，本文所有 v0.4 实现、真实 E2E 和 Release Gate 均为 `NOT_RUN`。
@@ -283,7 +283,7 @@
 - CI 若不可用，单独记录 `CI_UNAVAILABLE_WAIVER` 的版本 Owner 范围与具体缺失，不能声称 CI PASS；真实 Host/平台是否仍为必需由当版冻结 Release 规则决定。
 - v0.3 已冻结 Release PIN `9731b03…` 仅作历史比较来源；v0.4 只有自身独立 Candidate 和 RQ 成立才能入 main。不得借本 PRD 改写旧 RQ。
 
-## 10. 数据/收益验收指标（R1 不设虚构阈值）
+## 10. 数据/收益验收指标（R2 不设虚构阈值）
 
 - **采集可靠性**：按 Host/Agent/Plugin cohort 记录已证实成功 Hook 会话数、已证实事件缺失、未知结局及重复事件；出现 `denominator unknown` 的覆盖率不以数字表示。
 - **恢复有效性**：已确认正常恢复、HELD、CONFLICT、UNKNOWN、不可恢复/人工处理数量、恢复延迟、远端请求数；“0 重复 POST”需通过实际原生 readback 而不是只看本地日志。
@@ -320,7 +320,7 @@ L2 根据首轮实际基线与使用场景提出轻量合理预算/验收阈值�
 2. Doctor 是 **repo-only `node src/cli.ts doctor`**；唯一 Catalog 不与 Skill 诊断状态重复维护；隐私 allowlist 与无全局 mutation。
 3. FR03 六指标的分子/可证明分母/Provider capability/conditional-vs-absolute/正例 A22；FR05a 真实五组 Windows Node24 对照仍是 MUST。
 4. v0.4 的 Windows+Node24/Agent matrix, E producer Golden MUST、D 和 Tally REAL_APP 非阻断、旧 Issue #7/#8/#9/#14/#17 的 KEEP_OPEN 有无正确拆分；A∥B∥C1 + T0 + I/R 的写集独占/合法 native Option A。
-5. ADS v4.18 Product/L2 source Freeze コメント是权威；文档中 `version/v4.18@` 是当前性快照；其 v4.18 **只作规划建议**而不替换有效 Claim/JIT/ready_builder；公开 Lane/Topology 仍不存在 Schema，即使 v4.18 主线发布也须另立 ADS schema issue。
+5. ADS v4.18 Product/L2 source Freeze 评论是权威；文档中 `version/v4.18@` 是当前性快照；其 v4.18 **只作规划建议**而不替换有效 Claim/JIT/ready_builder；公开 Lane/Topology 仍不存在 Schema，即使 v4.18 主线发布也须另立 ADS schema issue。
 6. FR07 只能以真实 native GitHub/owner-written exact Task Pack 得到 Concern/Lane/ref，不能 parse 人类模板猜字段，不判断“无故串行”；Reviewer 不自行签独立角色 PASS。
 7. 核对新增 A21–A28/Doctor privacy/T18 注入/cohort-key 样例，回报 P0/P1/P2、新问题、`PRODUCT_REVIEW=PASS|BLOCK`、`FREEZE_READY=YES|NO`，**只读写回本 PR 和 Issue #60**。任何合法 Product Freeze/L2/Task DAG/Build/Host 都是后续独立动作，不在本审核授权范围内。
 
