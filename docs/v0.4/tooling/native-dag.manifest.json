@@ -3,10 +3,10 @@
   "version_branch": "version/v0.4",
   "pr": 75,
   "controller_issue": 64,
-  "head_sha": "ce28f171284360cc104ae86ed67233018df18414",
-  "dag_blob_sha": "68dd26467f8743a8cfa84111c7b1f2e6b3a8c8a6",
+  "head_sha": "97571c5b02b897870b8f7093089f537f1a394ee9",
+  "dag_blob_sha": "2ec105578b9d7e4e7f9103e59fb7773890696d93",
   "base_sha": "ecf38c7cb1a1b5b8238a0eaf97dac15f70584e54",
-  "dag_path": "docs/v0.4/TASK_DAG_R2_CANDIDATE.md",
+  "dag_path": "docs/v0.4/TASK_DAG_R3_CANDIDATE.md",
   "issue_ids": {
     "65": 6028433009,
     "66": 6028433996,
