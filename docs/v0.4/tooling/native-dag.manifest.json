@@ -1,0 +1,75 @@
+{
+  "repository": "kaicreator-mm/task-meta",
+  "version_branch": "version/v0.4",
+  "pr": 75,
+  "controller_issue": 64,
+  "head_sha": "ce28f171284360cc104ae86ed67233018df18414",
+  "dag_blob_sha": "68dd26467f8743a8cfa84111c7b1f2e6b3a8c8a6",
+  "base_sha": "ecf38c7cb1a1b5b8238a0eaf97dac15f70584e54",
+  "dag_path": "docs/v0.4/TASK_DAG_R2_CANDIDATE.md",
+  "issue_ids": {
+    "65": 6028433009,
+    "66": 6028433996,
+    "67": 6028434988,
+    "68": 6028435986,
+    "69": 6028437009,
+    "70": 6028438007,
+    "71": 6028438978,
+    "72": 6028439945,
+    "73": 6028441142,
+    "74": 6028442135
+  },
+  "edges": [
+    [
+      66,
+      65
+    ],
+    [
+      67,
+      65
+    ],
+    [
+      68,
+      65
+    ],
+    [
+      70,
+      65
+    ],
+    [
+      69,
+      68
+    ],
+    [
+      73,
+      66
+    ],
+    [
+      73,
+      67
+    ],
+    [
+      73,
+      69
+    ],
+    [
+      73,
+      70
+    ],
+    [
+      73,
+      71
+    ],
+    [
+      73,
+      72
+    ],
+    [
+      74,
+      73
+    ]
+  ],
+  "review_comment_id": null,
+  "freeze_comment_id": null,
+  "integrated_sha": null
+}
