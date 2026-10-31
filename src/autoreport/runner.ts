@@ -50,7 +50,7 @@ import { type AutoReportConfig, loadAutoReportConfig, resolvePublisherSha } from
 import { findConventionGateLogs } from "./gates.ts";
 import { type AutoReportGitHub, GhAutoReportClient } from "./github.ts";
 import { Outbox, type OutboxEntry, type OutboxState, safeName } from "./outbox.ts";
-import { RecoveryJournal, recoveryHooks } from "./recovery.ts";
+import { buildGovernedRecoveryContext } from "./recovery.ts";
 import { findWritebackComments } from "./writeback.ts";
 
 export type AutoReportTrigger = "stop" | "session-end" | "retry";
@@ -630,13 +630,13 @@ async function drive(
   // legacy default remains only for pre-B2 callers that never opted in.
   const governedContext: PublicationContext | undefined =
     cfg.recovery.enabled === true
-      ? {
-          kind: "governed_outbox",
-          hooks: recoveryHooks(
-            new RecoveryJournal(join(cfg.outbox, "recovery-journal"), cfg.recovery.budgets),
-            String(doc.data.report_id),
-          ),
-        }
+      ? await buildGovernedRecoveryContext(
+          cfg.recovery.budgets,
+          join(cfg.outbox, "recovery-journal"),
+          String(doc.data.report_id),
+          revision,
+          spoolText,
+        )
       : undefined;
   const outcome = await publishReport(client, {
     repo,
