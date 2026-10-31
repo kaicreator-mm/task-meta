@@ -201,29 +201,31 @@ export function computeCaptureQuality(input: QualityCohortInput): CaptureQuality
     ),
   );
 
-  // 2) tool_pair — paired request/response calls / provably pairable calls.
+  // 2) tool_pair — paired request/response calls / observed request cohort.
+  // Denominator semantics: every OBSERVED tool request stays in the denominator
+  // in BOTH coverage kinds — an unpaired request is an observed fact, never
+  // dropped to inflate the pairing rate (two known requests with one pair are
+  // 1/2, not 1/1). ABSOLUTE only additionally asserts the listed cohort is the
+  // complete eligible universe; CONDITIONAL marks it observed-only.
   const paired = input.tool_calls.filter((t) => t.response_ref !== null);
   out.push(
     build(
       input,
       "tool_pair",
-      {
-        numerator: paired.length,
-        denominator:
-          input.tool_calls.length === 0
-            ? 0
-            : input.universe_witnessed
-              ? input.tool_calls.length
-              : paired.length,
-      },
+      { numerator: paired.length, denominator: input.tool_calls.length },
       {
         numerator: paired.map((t) => t.call_ref),
-        denominator: (input.universe_witnessed ? input.tool_calls : paired).map((t) => t.call_ref),
+        denominator: input.tool_calls.map((t) => t.call_ref),
       },
       {
         reason: input.tool_calls.find((t) => t.response_ref === null)?.missing_reason ?? null,
         epistemic: "OBSERVED",
         comparability: "COMPARABLE",
+        limits: [
+          input.universe_witnessed
+            ? "ABSOLUTE: the listed calls are the complete eligible request universe"
+            : "CONDITIONAL: denominator covers every observed request; unpaired requests stay counted",
+        ],
       },
     ),
   );
@@ -270,8 +272,16 @@ export function computeCaptureQuality(input: QualityCohortInput): CaptureQuality
     ),
   );
 
-  // 4) token_cost_basis — calls on one witnessed pricing basis / provable basis calls.
-  const basisProvable = input.token_basis.filter((t) => t.counted_basis === true);
+  // 4) token_cost_basis — calls on one witnessed pricing basis / comparable basis calls.
+  // Without a witnessed pricing revision there is NO comparable rate at all:
+  // numerator/denominator stay null and the metric is NOT_COMPARABLE — never a
+  // misleading success-style ratio built on missing price provenance.
+  const basisProvable = input.token_basis.filter(
+    (t) => t.counted_basis === true && t.pricing_basis !== null,
+  );
+  const countedWithoutBasis = input.token_basis.filter(
+    (t) => t.counted_basis === true && t.pricing_basis === null,
+  ).length;
   const bases = new Set(
     basisProvable.map((t) => t.pricing_basis).filter((b): b is string => b !== null),
   );
@@ -288,16 +298,16 @@ export function computeCaptureQuality(input: QualityCohortInput): CaptureQuality
       {
         reason: input.token_basis.find((t) => t.counted_basis !== true)?.missing_reason ?? null,
         epistemic: "OBSERVED",
-        comparability:
-          mixedPricing || (bases.size === 0 && !input.universe_witnessed)
-            ? "NOT_COMPARABLE"
-            : bases.size === 0
-              ? "UNKNOWN"
-              : "COMPARABLE",
+        comparability: mixedPricing || bases.size === 0 ? "NOT_COMPARABLE" : "COMPARABLE",
         limits: [
           ...(bases.size > 0
             ? [`pricing_basis=${[...bases].join("|")}`]
-            : ["no witnessed pricing basis"]),
+            : [
+                "no witnessed pricing basis: no comparable rate is expressible",
+                ...(countedWithoutBasis > 0
+                  ? [`counted_without_pricing_basis=${countedWithoutBasis}`]
+                  : []),
+              ]),
           "missing source universe or price revision => NOT_COMPARABLE, never a numeric 0",
         ],
       },

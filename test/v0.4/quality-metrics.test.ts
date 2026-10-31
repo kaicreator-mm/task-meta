@@ -63,7 +63,7 @@ test("C1: golden binding 2/3 pairs with CONDITIONAL coverage and no fabricated z
   assert.equal(binding.schema, "task-meta/private-diagnostics/v1");
 });
 
-test("C1: tool_pair 1/2 with unproved pairing excluded from a CONDITIONAL denominator", () => {
+test("C1 R1: two known requests with one pair are 1/2 in a CONDITIONAL cohort, never 1/1", () => {
   const metrics = computeCaptureQuality(
     cohort({
       tool_calls: [
@@ -75,8 +75,9 @@ test("C1: tool_pair 1/2 with unproved pairing excluded from a CONDITIONAL denomi
   const pair = byName(metrics, "tool_pair");
   assert.ok(pair);
   assert.equal(pair.numerator, 1);
-  assert.equal(pair.denominator, 1);
+  assert.equal(pair.denominator, 2);
   assert.equal(pair.reason, "SOURCE_DROPPED");
+  assert.ok(pair.limits.some((l) => l.includes("unpaired requests stay counted")));
 });
 
 test("C1: zero/unknown denominators stay null, never a numeric 0 placeholder", () => {
@@ -161,8 +162,14 @@ test("C1: missing pricing universe or price revision => NOT_COMPARABLE, never 0"
       ],
     }),
   );
-  assert.equal(byName(noUniverse, "token_cost_basis")?.comparability, "NOT_COMPARABLE");
-  assert.equal(byName(noUniverse, "token_cost_basis")?.numerator, 1);
+  const noBasis = byName(noUniverse, "token_cost_basis");
+  assert.ok(noBasis);
+  assert.equal(noBasis.comparability, "NOT_COMPARABLE");
+  // R1: no witnessed pricing revision => no comparable rate is expressible at all.
+  assert.equal(noBasis.numerator, null);
+  assert.equal(noBasis.denominator, null);
+  assert.ok(noBasis.limits.some((l) => l.includes("counted_without_pricing_basis=1")));
+  assert.ok(noBasis.limits.some((l) => l.includes("no comparable rate")));
 
   const mixed = computeCaptureQuality(
     cohort({
