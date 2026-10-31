@@ -572,3 +572,115 @@ test("B2 R1: A21 resource errors classify to bounded tokens, never raw text", ()
   );
   assert.equal(classifyRecoveryError(new Error("spool: whatever /raw/path")), "UNKNOWN_CAUSE");
 });
+
+test("B2 R3: a lost/reset ledger never restarts the wall budget (cross-revision reset)", async () => {
+  const dir = await tmpDir();
+  let clock = 1_000_000;
+  const budgets = { ...DEFAULT_BUDGETS, post: 3, getPage: 50, wallMs: 10 * 60_000, cycles: 3 };
+  const j1 = new RecoveryJournal(dir, budgets, () => clock);
+  await j1.reserve({ repo: REPO, issue: ISSUE, reportId: REPORT_ID, dataDigest: "1".repeat(64) });
+  clock += 1000;
+  await j1.recordEffect(
+    REPORT_ID,
+    "REMOTE_SAME",
+    { attempts: 1, lastHttpStatus: null, outcomeState: "PUBLISHED" },
+    1,
+  );
+  // The reviewer's counterexample: the budget ledger AND pages sidecar are lost,
+  // then a new process admits revision 2 eleven minutes later.
+  const { rm: rmFile } = await import("node:fs/promises");
+  await rmFile(join(dir, `${reportIdHash(REPORT_ID)}.budget.json`), { force: true });
+  await rmFile(join(dir, `${reportIdHash(REPORT_ID)}.pages.json`), { force: true });
+  clock += 11 * 60_000;
+  const j2 = new RecoveryJournal(dir, budgets, () => clock);
+  await assert.rejects(
+    j2.reserve({
+      repo: REPO,
+      issue: ISSUE,
+      reportId: REPORT_ID,
+      dataDigest: "2".repeat(64),
+      revision: 2,
+      supersedes: 1,
+    }),
+    isRefusal("WALL_BUDGET_UNPROVED"),
+  );
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R3: a legacy ledger without started_at_ms and prior posts fails closed", async () => {
+  const dir = await tmpDir();
+  let clock = 2_000_000;
+  const budgets = { ...DEFAULT_BUDGETS, post: 3, getPage: 50, wallMs: 10 * 60_000, cycles: 3 };
+  const j1 = new RecoveryJournal(dir, budgets, () => clock);
+  await j1.reserve({ repo: REPO, issue: ISSUE, reportId: REPORT_ID, dataDigest: "1".repeat(64) });
+  clock += 1000;
+  await j1.recordEffect(
+    REPORT_ID,
+    "REMOTE_SAME",
+    { attempts: 1, lastHttpStatus: null, outcomeState: "PUBLISHED" },
+    1,
+  );
+  // Legacy-shape ledger: counters survived, the wall anchor field did not.
+  const { writeFile: wf } = await import("node:fs/promises");
+  await wf(
+    join(dir, `${reportIdHash(REPORT_ID)}.budget.json`),
+    JSON.stringify({ post: 1, getPage: 0, wallMs: 0, cycles: 1 }),
+    "utf8",
+  );
+  const j2 = new RecoveryJournal(dir, budgets, () => clock + 5_000);
+  await assert.rejects(
+    j2.reserve({
+      repo: REPO,
+      issue: ISSUE,
+      reportId: REPORT_ID,
+      dataDigest: "2".repeat(64),
+      revision: 2,
+      supersedes: 1,
+    }),
+    isRefusal("WALL_BUDGET_UNPROVED"),
+  );
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R3: intact anchor still admits an in-budget later revision (no over-blocking)", async () => {
+  const dir = await tmpDir();
+  let clock = 3_000_000;
+  const budgets = { ...DEFAULT_BUDGETS, post: 3, getPage: 50, wallMs: 10 * 60_000, cycles: 3 };
+  const j1 = new RecoveryJournal(dir, budgets, () => clock);
+  await j1.reserve({ repo: REPO, issue: ISSUE, reportId: REPORT_ID, dataDigest: "1".repeat(64) });
+  clock += 60_000;
+  await j1.recordEffect(
+    REPORT_ID,
+    "REMOTE_SAME",
+    { attempts: 1, lastHttpStatus: null, outcomeState: "PUBLISHED" },
+    1,
+  );
+  clock += 60_000; // 2 minutes since first admission: inside the 10-minute budget
+  const j2 = new RecoveryJournal(dir, budgets, () => clock);
+  const rev2 = await j2.reserve({
+    repo: REPO,
+    issue: ISSUE,
+    reportId: REPORT_ID,
+    dataDigest: "2".repeat(64),
+    revision: 2,
+    supersedes: 1,
+  });
+  assert.ok(rev2.token.length > 0);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R3 P2: an entry that fails canonicalization is skipped and holds the source", async () => {
+  // JSON.parse succeeds, but the integer exceeds the JCS-safe range, so
+  // canonicalDigest(e) throws -> "entry not canonicalizable" (Spool.replay class).
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir);
+  const line = '{"d":"' + "9".repeat(64) + '","e":{"n":9007199254740993}}' + NEWLINE;
+  const ev = computeChainEvidence(validSpool(1) + line);
+  assert.deepEqual(ev.skipped, [{ line: 2, reason: "entry not canonicalizable" }]);
+  await journal.attachReplayEvidence(REPORT_ID, ev);
+  const rec = await journal.load(REPORT_ID);
+  assert.equal(rec.state, "HELD");
+  assert.equal(rec.last_cause, "SOURCE_UNPROVED");
+  assert.ok(rec.replay_skipped.includes("line2:entry not canonicalizable"));
+  await rm(dir, { recursive: true, force: true });
+});

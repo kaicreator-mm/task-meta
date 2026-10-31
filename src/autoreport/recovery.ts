@@ -150,6 +150,7 @@ export type RecoveryRefusalCode =
   | "GET_PAGE_BUDGET_EXHAUSTED"
   | "GET_BUDGET_UNREADABLE"
   | "WALL_BUDGET_EXHAUSTED"
+  | "WALL_BUDGET_UNPROVED"
   | "CYCLE_BUDGET_EXHAUSTED"
   | "CHAIN_PREDECESSOR_UNRESOLVED"
   | "CHAIN_INTEGRITY_BROKEN";
@@ -531,6 +532,7 @@ export class RecoveryJournal {
     try {
       // Predecessor chain: a later revision may only post when the prior
       // revision is durably TERMINAL with a non-ambiguous effect.
+      let predecessorTerminal = false;
       if (revision > 1) {
         const pred = await this.readRaw(target.reportId, revision - 1);
         if (
@@ -541,6 +543,7 @@ export class RecoveryJournal {
         ) {
           throw new RecoveryRefusedError("CHAIN_PREDECESSOR_UNRESOLVED");
         }
+        predecessorTerminal = true;
       }
       const existing = await this.readRawOrTorn(target.reportId, revision);
       if (existing !== null) {
@@ -560,6 +563,20 @@ export class RecoveryJournal {
       }
       const now = this.now();
       const ledger = await this.loadLedger(target.reportId);
+      // R3 P1: the wall anchor is established exactly ONCE, on the first
+      // admission. When any durable evidence of prior admissions exists but the
+      // ledger's anchor is missing (lost/reset/legacy ledger without
+      // started_at_ms), the elapsed budget is UNPROVED — refuse instead of
+      // restarting the 10-minute clock.
+      const priorAdmissions =
+        ledger.post > 0 ||
+        ledger.cycles > 0 ||
+        ledger.wallMs > 0 ||
+        predecessorTerminal ||
+        (existing !== null && (existing.state === "TERMINAL" || existing.counters.post > 0));
+      if (priorAdmissions && (ledger.started_at_ms === undefined || ledger.started_at_ms === null)) {
+        throw new RecoveryRefusedError("WALL_BUDGET_UNPROVED");
+      }
       // P1-02: persistent 10-minute wall budget across ALL recovery cycles and
       // revisions: an absolute first-admission deadline plus accumulated
       // measured elapsed time, both stored on the report-level ledger.
