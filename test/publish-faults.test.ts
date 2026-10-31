@@ -280,25 +280,33 @@ describe("publish faults (offline mirror of the live harness)", () => {
     assert.equal(c.creates, 0);
   });
 
-  it("6 HTTP 503 before commit: retried with backoff, then PUBLISHED once", async () => {
+  it("6 HTTP 503 before commit (ambiguous): exactly one POST, no same-call retry, UNKNOWN effect", async () => {
     const c = new FaultClient();
     c.failBefore.push(new GitHubHttpError(503, "unavailable"));
     const sleeps: number[] = [];
     const o = await publish(c, bodyFor(), { sleep: async (ms: number) => void sleeps.push(ms) });
-    assert.equal(o.state, "PUBLISHED");
-    assert.equal(c.creates, 2);
-    assert.equal(c.comments.length, 1);
+    if (o.state === "NOT_PUBLISHED") {
+      assert.match(o.reason, /^AMBIGUOUS_TRANSPORT/);
+    } else {
+      assert.fail("503-before-commit must stop the same-call POST");
+    }
+    assert.equal(o.effectMeta?.effect, "SENT_OR_MAY_HAVE_SENT");
+    assert.equal(o.effectMeta?.status, "UNKNOWN");
+    assert.equal(c.creates, 1);
+    assert.equal(c.comments.length, 0);
     assert.equal(sleeps.length, 1);
   });
 
-  it("6 HTTP 429 with Retry-After: the server delay is honoured", async () => {
+  it("6 HTTP 429 with Retry-After: delay honoured once for reconciliation; POST stopped", async () => {
     const c = new FaultClient();
     c.failBefore.push(new GitHubHttpError(429, "slow down", 7));
     const sleeps: number[] = [];
     const o = await publish(c, bodyFor(), { sleep: async (ms: number) => void sleeps.push(ms) });
-    assert.equal(o.state, "PUBLISHED");
+    assert.equal(o.state, "NOT_PUBLISHED");
     assert.deepEqual(sleeps, [7000]);
-    assert.equal(c.comments.length, 1);
+    assert.equal(c.creates, 1);
+    assert.equal(c.comments.length, 0);
+    assert.equal(o.effectMeta?.effect, "SENT_OR_MAY_HAVE_SENT");
   });
 
   it("6 HTTP 502 after commit (ambiguous): reconciled by readback, no duplicate", async () => {
@@ -310,23 +318,29 @@ describe("publish faults (offline mirror of the live harness)", () => {
     assert.equal(c.comments.length, 1);
   });
 
-  it("6 persistent 5xx: NOT_PUBLISHED after the retry budget, nothing posted", async () => {
+  it("6 persistent 5xx: exactly one ambiguous POST attempt, nothing committed", async () => {
     const c = new FaultClient();
     for (let i = 0; i < 10; i++) c.failBefore.push(new GitHubHttpError(500, "boom"));
     const o = await publish(c, bodyFor(), { maxRetries: 2 });
     assert.equal(o.state, "NOT_PUBLISHED");
-    assert.equal(c.creates, 3);
+    assert.equal(c.creates, 1);
     assert.equal(c.comments.length, 0);
+    assert.equal(o.effectMeta?.effect, "SENT_OR_MAY_HAVE_SENT");
   });
 
-  it("6 secondary rate limit (403 + Retry-After) retries; plain 403 is fatal", async () => {
+  it("6 secondary rate limit (403 + Retry-After) is ambiguous and stops; plain 403 is a proven rejection", async () => {
     const c = new FaultClient();
     c.failBefore.push(new GitHubHttpError(403, "rate limit", 30));
-    assert.equal((await publish(c, bodyFor())).state, "PUBLISHED");
+    const slow = await publish(c, bodyFor());
+    assert.equal(slow.state, "NOT_PUBLISHED");
+    assert.equal(slow.effectMeta?.effect, "SENT_OR_MAY_HAVE_SENT");
+    assert.equal(c.creates, 1);
     const d = new FaultClient();
     d.failBefore.push(new GitHubHttpError(403, "forbidden"));
     const o = await publish(d, bodyFor());
     assert.equal(o.state, "NOT_PUBLISHED");
     assert.equal(d.creates, 1);
+    assert.equal(o.effectMeta?.effect, "PROVEN_NOT_SENT");
+    assert.equal(o.effectMeta?.status, "FAILED_PROVEN_PRE_SEND");
   });
 });
