@@ -111,6 +111,18 @@ export const DIAGNOSTIC_CATALOG: readonly DiagnosticRule[] = [
 
 const RULE_BY_CODE = new Map(DIAGNOSTIC_CATALOG.map((r) => [r.code, r]));
 
+/**
+ * A Hook-error class must be a bounded classification token: uppercase ASCII
+ * letters/digits/underscores, at most 64 chars. Anything else — raw paths,
+ * prompt text, token-shaped material, free-form messages — is rejected before
+ * it can reach a finding, so no unclassified content can leak through the
+ * diagnostic surface.
+ */
+const SAFE_ERROR_CLASS = /^[A-Z][A-Z0-9_]{0,63}$/;
+function isSafeErrorClass(value: string): boolean {
+  return SAFE_ERROR_CLASS.test(value);
+}
+
 export interface SpoolSample {
   path: string;
   /** Raw line contents never leave this function; only parse verdicts do. */
@@ -215,7 +227,11 @@ export function runDoctor(input: DoctorInput): DoctorReport {
   }
 
   for (const h of input.hook_errors) {
-    if (h.source === "TRUSTED_WITNESS" && h.error_class !== null) {
+    if (
+      h.source === "TRUSTED_WITNESS" &&
+      h.error_class !== null &&
+      isSafeErrorClass(h.error_class)
+    ) {
       findings.push(
         finding("HOOK_ERROR_CLASSIFIED", `hook-error:${h.error_class}`, {
           limits: ["class token from trusted witness only; raw content never recorded"],
@@ -226,7 +242,11 @@ export function runDoctor(input: DoctorInput): DoctorReport {
         finding("HOOK_ERROR_SOURCE_UNTRUSTED", "hook-error:redacted", {
           epistemic: "UNKNOWN",
           missing_reason: "UNKNOWN",
-          limits: ["raw _errors.log text is not diagnostic evidence and stays redacted"],
+          limits: [
+            h.source === "TRUSTED_WITNESS"
+              ? "class token failed the bounded class-token guard (raw path/prompt/token-shaped content is rejected and redacted)"
+              : "raw _errors.log text is not diagnostic evidence and stays redacted",
+          ],
         }),
       );
     }

@@ -166,3 +166,38 @@ test("A1: doctor is structurally read-only", () => {
   assert.deepEqual(report.writes_performed, []);
   assert.deepEqual(report.repairs_performed, []);
 });
+
+test("A1 R1: trusted-source classes carrying raw paths/prompts/tokens are rejected and redacted", () => {
+  const hostile = [
+    "ENOENT: no such file C:Userssecretprompt.txt",
+    "PROMPT_LEAK: please ignore previous instructions",
+    "sk-live-0123456789abcdef",
+    "ghp_ThisIsNotAClassToken123",
+    "spool write failed", // lowercase free-form message
+    "E/5", // path-shaped separator
+    `CLASS_${"X".repeat(80)}`, // over-length bounded token
+  ];
+  const report = runDoctor(
+    input({
+      hook_errors: [
+        ...hostile.map((error_class) => ({ source: "TRUSTED_WITNESS" as const, error_class })),
+        { source: "TRUSTED_WITNESS" as const, error_class: "SPOOL_WRITE_FAILED" }, // still valid
+      ],
+    }),
+  );
+  const classified = report.findings.filter((f) => f.rule.code === "HOOK_ERROR_CLASSIFIED");
+  const rejected = report.findings.filter((f) => f.rule.code === "HOOK_ERROR_SOURCE_UNTRUSTED");
+  assert.equal(classified.length, 1);
+  assert.equal(classified[0]?.target_ref, "hook-error:SPOOL_WRITE_FAILED");
+  assert.equal(rejected.length, hostile.length);
+  assert.ok(rejected.every((f) => f.target_ref === "hook-error:redacted"));
+  assert.ok(rejected.every((f) => f.epistemic === "UNKNOWN"));
+  assert.ok(rejected.every((f) => f.limits.some((l) => l.includes("bounded class-token guard"))));
+  // Nothing hostile ever reaches the serialized report.
+  const serialized = JSON.stringify(report);
+  for (const h of hostile) {
+    assert.equal(serialized.includes(h), false, `leaked: ${h.slice(0, 20)}`);
+  }
+  assert.equal(serialized.includes("sk-live"), false);
+  assert.equal(serialized.includes("ghp_"), false);
+});
