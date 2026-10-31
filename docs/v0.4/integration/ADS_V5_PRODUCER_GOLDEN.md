@@ -9,11 +9,11 @@ Scope: strict source-only producer conformance to the effective ADS v5 report sc
 
 ## Strict offline Golden oracles
 - test/v0.4/producer-v5-golden.test.ts reuses synthetic ZCode fixtures to construct AttemptSummary and synthetic source-owned clearance.
-- Verify strict adopted v5 schema, parse/render roundtrip and proper ADS revision; forbidden private keys, missing schema-required metrics and missing clearance must fail.
+- Verify strict adopted v5 schema and the parsed report's actual report ID, revision, publisher namespace, report kind and source subject identity against the synthetic input. The entire parsed document and canonical data digest must match the producer output; render/parse again must preserve the same body and data. Forbidden private keys, missing schema-required metrics and missing clearance must fail.
 - No publisher invocation, native GitHub API call, HTTP denial/retry, or remote pagination in this E Task. Those tests belong B1/B2 exclusively.
 - Real Agent CLI and Tally external reader remain separate integration/Release acceptance; do not substitute fixture PASS for real E2E.
 
 ## GitHub → Tally
 Tally reads only source-qualified GitHub-published ADS v5 reports and independently validates source identity/currentness. No private Task-meta->Tally ingress or DB coupling is permitted here.
 
-Evidence: source fixture authored; Node24 lint/typecheck/full regression = NOT_RUN pending true Host receipt; REAL_TALLY_APP=NOT_RUN.
+Evidence: the original authoring receipt was NOT_RUN. Current exact-HEAD Windows Node24 command/exit receipts and independent-review status are recorded in Issue #72 / PR #78; do not infer a new PASS from an older SHA. REAL_TALLY_APP=NOT_RUN.

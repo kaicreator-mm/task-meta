@@ -8,14 +8,15 @@ import {
   ADS_V5_REVISION,
   buildReportDocument,
   loadAdoption,
+  parseReportComment,
   QUALIFIED_V416_MAIN_SHA,
   renderReportComment,
-  parseReportComment,
+  reportDataDigest,
   resolveProfile,
-  validateReportDocument,
-  VENDORED_V416_SCHEMA_BLOB,
-  vendoredV416SchemaBlob,
   UnrepresentableError,
+  VENDORED_V416_SCHEMA_BLOB,
+  validateReportDocument,
+  vendoredV416SchemaBlob,
 } from "../../src/report/index.ts";
 
 const fx = (file: string) =>
@@ -45,8 +46,8 @@ const manifest: ManifestPointer = {
   sha256: "c".repeat(64),
   access: "PROJECT_PRIVATE",
 };
-function golden() {
-  return buildReportDocument(source(), manifest, {
+function golden(summary = source()) {
+  return buildReportDocument(summary, manifest, {
     profile: "v5",
     revision: 1,
     supersedes: null,
@@ -57,21 +58,44 @@ function golden() {
 }
 test("v0.4 E: source-only Golden is exact qualified adopted v5, schema-valid, parseable", () => {
   const adopted = loadAdoption().adopted;
-  assert.deepEqual(adopted.map((x) => x.main_sha), [QUALIFIED_V416_MAIN_SHA]);
+  assert.deepEqual(
+    adopted.map((x) => x.main_sha),
+    [QUALIFIED_V416_MAIN_SHA],
+  );
   assert.equal(adopted[0]?.report_schema_blob, VENDORED_V416_SCHEMA_BLOB);
   assert.equal(vendoredV416SchemaBlob(), VENDORED_V416_SCHEMA_BLOB);
-  const doc = golden();
+  const summary = source();
+  const doc = golden(summary);
   assert.equal(doc.schema, "ads/github/v5");
   assert.deepEqual(validateReportDocument(doc, "v5"), { valid: true });
-  const parsed = parseReportComment(renderReportComment(doc));
+  const rendered = renderReportComment(doc);
+  const parsed = parseReportComment(rendered);
   assert.ok(parsed.ok && parsed.profile === "v5");
-  assert.equal((doc.data.subject as { ads_revision: string }).ads_revision, QUALIFIED_V416_MAIN_SHA);
+  assert.equal(parsed.doc.data.report_id, `task-meta:${summary.attempt_ref}`);
+  assert.equal(parsed.doc.data.revision, 1);
+  assert.equal(parsed.doc.data.publisher_namespace, `task-meta:${summary.repository}`);
+  assert.equal(parsed.doc.data.report_kind, "EXECUTION_SUMMARY");
+  const subject = parsed.doc.data.subject as Record<string, unknown>;
+  assert.equal(subject.repository, summary.repository);
+  assert.equal(
+    subject.issue_ref,
+    `https://github.com/${summary.repository}/issues/${summary.issue_number}`,
+  );
+  assert.equal(subject.task_ref, summary.task_ref);
+  assert.equal(subject.attempt_ref, summary.attempt_ref);
+  assert.equal(subject.source_sha, summary.source_sha);
+  assert.equal(subject.ads_revision, QUALIFIED_V416_MAIN_SHA);
+  assert.deepEqual(parsed.doc, doc);
+  assert.equal(parsed.dataDigest, reportDataDigest(doc.data));
+  const rerendered = renderReportComment(parsed.doc);
+  assert.equal(rerendered, rendered);
+  assert.deepEqual(parseReportComment(rerendered), parsed);
   assert.notEqual(ADS_V5_REVISION, QUALIFIED_V416_MAIN_SHA);
 });
 test("v0.4 E: strict public schema rejects extra private keys and missing required metrics", () => {
   const doc = golden();
   const extra = structuredClone(doc);
-  extra.data["private_diagnostics_v1"] = { secret: "not for public report" };
+  extra.data.private_diagnostics_v1 = { secret: "not for public report" };
   assert.equal(validateReportDocument(extra, "v5").valid, false);
   const missing = structuredClone(doc);
   delete missing.data.metrics;
@@ -80,28 +104,42 @@ test("v0.4 E: strict public schema rejects extra private keys and missing requir
 test("v0.4 E: producer never fabricates source-owned v5 publication clearance", () => {
   const summary = source();
   assert.throws(
-    () => buildReportDocument(summary, manifest, {
-      profile: "v5", revision: 1, supersedes: null,
-      adsRevision: QUALIFIED_V416_MAIN_SHA, publisherSourceSha: "b".repeat(40),
-    }),
+    () =>
+      buildReportDocument(summary, manifest, {
+        profile: "v5",
+        revision: 1,
+        supersedes: null,
+        adsRevision: QUALIFIED_V416_MAIN_SHA,
+        publisherSourceSha: "b".repeat(40),
+      }),
     (err) => err instanceof UnrepresentableError && err.code === "PUBLICATION_CLEARANCE_REQUIRED",
   );
 });
 test("v0.4 E: old candidate never grants ordinary publication; test purpose is restricted", () => {
   const adoption = loadAdoption();
   const forbidden = resolveProfile({
-    profile: "v5", adsPin: ADS_V5_REVISION, publish: true,
-    repository: "kaicreator-mm/task-meta", adoption,
+    profile: "v5",
+    adsPin: ADS_V5_REVISION,
+    publish: true,
+    repository: "kaicreator-mm/task-meta",
+    adoption,
   });
   assert.equal(forbidden.ok, false);
   const forbiddenTest = resolveProfile({
-    profile: "v5", adsPin: ADS_V5_REVISION, publish: true,
-    repository: "kaicreator-mm/task-meta", e2eTestOnly: true, adoption,
+    profile: "v5",
+    adsPin: ADS_V5_REVISION,
+    publish: true,
+    repository: "kaicreator-mm/task-meta",
+    e2eTestOnly: true,
+    adoption,
   });
   assert.equal(forbiddenTest.ok, false);
   const allowed = resolveProfile({
-    profile: "v5", adsPin: QUALIFIED_V416_MAIN_SHA, publish: true,
-    repository: "kaicreator-mm/task-meta", adoption,
+    profile: "v5",
+    adsPin: QUALIFIED_V416_MAIN_SHA,
+    publish: true,
+    repository: "kaicreator-mm/task-meta",
+    adoption,
   });
   assert.ok(allowed.ok && allowed.profile === "v5" && allowed.mode === "ADOPTED");
 });
