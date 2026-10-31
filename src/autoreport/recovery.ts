@@ -574,7 +574,10 @@ export class RecoveryJournal {
         ledger.wallMs > 0 ||
         predecessorTerminal ||
         (existing !== null && (existing.state === "TERMINAL" || existing.counters.post > 0));
-      if (priorAdmissions && (ledger.started_at_ms === undefined || ledger.started_at_ms === null)) {
+      if (
+        priorAdmissions &&
+        (ledger.started_at_ms === undefined || ledger.started_at_ms === null)
+      ) {
         throw new RecoveryRefusedError("WALL_BUDGET_UNPROVED");
       }
       // P1-02: persistent 10-minute wall budget across ALL recovery cycles and
