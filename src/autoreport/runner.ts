@@ -32,7 +32,7 @@ import {
 import type { ManifestPointer, TaskBinding } from "../model.ts";
 import { assertNoForbiddenContent } from "../privacy.ts";
 import type { PublicationPolicyProvider } from "../publish/authority.ts";
-import { findReports, publishReport } from "../publish/index.ts";
+import { findReports, type PublicationContext, publishReport } from "../publish/index.ts";
 import {
   type Adoption,
   buildReportDocument,
@@ -50,6 +50,7 @@ import { type AutoReportConfig, loadAutoReportConfig, resolvePublisherSha } from
 import { findConventionGateLogs } from "./gates.ts";
 import { type AutoReportGitHub, GhAutoReportClient } from "./github.ts";
 import { Outbox, type OutboxEntry, type OutboxState, safeName } from "./outbox.ts";
+import { RecoveryJournal, recoveryHooks } from "./recovery.ts";
 import { findWritebackComments } from "./writeback.ts";
 
 export type AutoReportTrigger = "stop" | "session-end" | "retry";
@@ -624,6 +625,19 @@ async function drive(
     throw new Held(["privacy guard refused the report body"], binding);
   }
   const digest = reportDataDigest(doc.data);
+  // B2: an opted-in (recovery-enabled) path selects the governed durable mode
+  // EXPLICITLY and never falls back to the legacy untagged direct mode; the
+  // legacy default remains only for pre-B2 callers that never opted in.
+  const governedContext: PublicationContext | undefined =
+    cfg.recovery.enabled === true
+      ? {
+          kind: "governed_outbox",
+          hooks: recoveryHooks(
+            new RecoveryJournal(join(cfg.outbox, "recovery-journal"), cfg.recovery.budgets),
+            String(doc.data.report_id),
+          ),
+        }
+      : undefined;
   const outcome = await publishReport(client, {
     repo,
     issue,
@@ -631,6 +645,7 @@ async function drive(
     publish: !dry,
     e2eTestOnly: cfg.e2e_test_only === true,
     ...(deps.publicationPolicy ? { publicationPolicy: deps.publicationPolicy } : {}),
+    ...(governedContext ? { publicationContext: governedContext } : {}),
   });
   const common = { binding, data_digest: digest, revision };
   switch (outcome.state) {
