@@ -461,6 +461,11 @@ export type PostEffect =
 /**
  * T0-shared vocabulary only: B2 exclusively owns persisted Outbox transitions,
  * journal CAS and mapping of legacy FAILED to modern conservative states.
+ * JOURNAL_INCOMPLETE is journal-integrity evidence, never a PostEffect or proof
+ * of non-send. B2 must persist its conservative UNKNOWN/HELD projection and
+ * prove zero follow-on POST after damaged/missing journal data (even when an
+ * older PENDING survives or remote readback is empty). T0's pure classifier
+ * neither reads journals nor verifies those persistence/runtime guarantees.
  */
 export type PrivatePublicationStatus =
   | "PENDING"

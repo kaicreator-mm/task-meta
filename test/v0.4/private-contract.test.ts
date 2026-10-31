@@ -48,6 +48,33 @@ test("v0.4 T0: UNKNOWN never becomes numeric zero or automatically eligible for 
   assert.equal(assessPostEffect("SENT_OR_MAY_HAVE_SENT").fresh_admission_required, false);
 });
 
+test("v0.4 T0: JOURNAL_INCOMPLETE is a status, never transport non-send proof", () => {
+  const incomplete: PrivatePublicationStatus = "JOURNAL_INCOMPLETE";
+  assert.equal(incomplete, "JOURNAL_INCOMPLETE");
+  // Type-boundary negatives are checked by npm run typecheck, not Node stripping.
+  const typeBoundaryOnly = () => {
+    // @ts-expect-error Journal damage is not transport-effect evidence.
+    const effect: PostEffect = incomplete;
+    // @ts-expect-error A journal status cannot authorize a non-send assessment.
+    assessPostEffect(incomplete);
+    void effect;
+  };
+  // Deliberately never invoke an invalid transport call at runtime.
+  void typeBoundaryOnly;
+  const effects: PostEffect[] = [
+    "PROVEN_NOT_SENT",
+    "REMOTE_SAME",
+    "REMOTE_DIFFERENT_OR_DAMAGED",
+    "SENT_OR_MAY_HAVE_SENT",
+  ];
+  for (const effect of effects) {
+    assert.notEqual(assessPostEffect(effect).status, incomplete);
+  }
+  // B2 owns durable UNKNOWN/HELD projection and corrupted-journal/restart tests
+  // proving zero follow-on POST, including older PENDING + empty remote readback.
+  // This source-only test proves the shared type boundary, not Outbox behavior.
+});
+
 test("v0.4 T0: per-event diagnostic provenance keeps capability distinct from observed absence", () => {
   const knownUnsupported: DiagnosticFact = {
     schema: "task-meta/private-diagnostics/v1",
@@ -74,7 +101,13 @@ test("v0.4 T0: per-event diagnostic provenance keeps capability distinct from ob
 });
 
 test("v0.4 T0: transported duplicate and distinct physical attempts retain distinct identities", () => {
-  const original = { adapter: "claude", source_event_id: "evt-1", revision: 1, digest: "a", attempt: "physical-1" };
+  const original = {
+    adapter: "claude",
+    source_event_id: "evt-1",
+    revision: 1,
+    digest: "a",
+    attempt: "physical-1",
+  };
   const sameDelivery = { ...original };
   const competing = { ...original, digest: "b" };
   const retried = { ...original, source_event_id: "evt-2", attempt: "physical-2" };
