@@ -135,3 +135,30 @@ test("A2 R1: a STOP carrying another session's id is not attributed to this sess
   assert.equal(terminalOnly.terminal_step, null);
   assert.ok(terminalOnly.limits.some((l) => l.includes("mismatch")));
 });
+
+test("A2 R2: facts exclude foreign-session and identity-doubtful events; quarantine is counted", () => {
+  const a = assessSessionLifecycle("zcode:s1", CLIENT_PROFILES.zcode, [
+    ev({ event_id: "own-1", step: "SESSION_START" }),
+    ev({ event_id: "own-2", step: "STOP" }),
+    // Foreign session: never this session's fact.
+    ev({ event_id: "foreign-1", session_ref: "zcode:s-other", step: "STOP" }),
+    // Identity-doubtful: claimed s1 but the alternate id disagrees.
+    ev({ event_id: "doubt-1", alt_session_ref: "zcode:s-other" }),
+  ]);
+  assert.equal(a.facts.length, 2);
+  assert.ok(a.facts.every((f) => f.agent === "zcode"));
+  assert.ok(a.facts.every((f) => f.source_ref !== "private-fixture:foreign"));
+  assert.equal(a.quarantined_foreign_events, 2);
+  assert.ok(a.limits.some((l) => l.includes("quarantined_foreign_events=2")));
+  assert.equal(a.session_id_mismatch, true);
+});
+
+test("A2 R2: facts inherit the client profile agent; no silent prefix fallback", () => {
+  // Session ref carries no recognizable prefix; the agent still comes from the
+  // profile instead of being silently mapped to zcode.
+  const a = assessSessionLifecycle("opaque-session-9", CLIENT_PROFILES.codex, [
+    ev({ event_id: "e1", session_ref: "opaque-session-9" }),
+  ]);
+  assert.equal(a.agent, "codex");
+  assert.ok(a.facts.every((f) => f.agent === "codex"));
+});

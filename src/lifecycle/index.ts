@@ -84,6 +84,8 @@ export interface SessionLifecycleAssessment {
   /** Primary vs alternate session id disagree on at least one event. */
   session_id_mismatch: boolean;
   /** Trusted witnessed Hook-error class tokens only. */
+  /** Events excluded from facts: foreign session or identity-doubtful attribution. */
+  quarantined_foreign_events: number;
   hook_error_classes: string[];
   facts: DiagnosticFact[];
   /** A fixture-backed witness never qualifies a real Agent CLI run. */
@@ -93,12 +95,13 @@ export interface SessionLifecycleAssessment {
 
 const SAFE_CLASS_TOKEN = /^[A-Z][A-Z0-9_]*$/;
 
-function factFor(e: HookEventObservation): DiagnosticFact {
+/** Facts inherit the assessed client profile's agent; no silent prefix fallback. */
+function factFor(e: HookEventObservation, agent: AgentId): DiagnosticFact {
   return {
     schema: SCHEMA,
     source_ref: e.source_ref,
     source_revision: 1,
-    agent: sessionAgent(e),
+    agent,
     plugin_version: null,
     host_class: null,
     evidence_level: e.evidence_level,
@@ -106,12 +109,6 @@ function factFor(e: HookEventObservation): DiagnosticFact {
     missing_reason: e.missing_reason,
     clock: { domain: "source", precision: "ms", synchronized: null },
   };
-}
-
-function sessionAgent(e: HookEventObservation): AgentId {
-  const prefix = e.session_ref.split(":", 1)[0] ?? "";
-  if (prefix === "claude" || prefix === "codex" || prefix === "zcode") return prefix;
-  return "zcode";
 }
 
 /**
@@ -179,6 +176,22 @@ export function assessSessionLifecycle(
   }
   if (idMismatch) limits.push("session id mismatch witnessed: identity attribution is not trusted");
 
+  // R2 P1-02: returned facts carry ONLY observations attributed to this session
+  // with trusted identity. Foreign-session events and identity-doubtful events
+  // (disagreeing alt_session_ref) are quarantined out of facts — counted, never
+  // projected as this session's evidence. The mismatch signal stays above.
+  const attributed = unique.filter(
+    (e) =>
+      e.session_ref === sessionRef &&
+      !(e.alt_session_ref !== null && e.alt_session_ref !== e.session_ref),
+  );
+  const quarantined = unique.length - attributed.length;
+  if (quarantined > 0) {
+    limits.push(
+      `quarantined_foreign_events=${quarantined} (foreign session or identity-doubtful; excluded from facts)`,
+    );
+  }
+
   return {
     schema: SCHEMA,
     session_ref: sessionRef,
@@ -189,8 +202,9 @@ export function assessSessionLifecycle(
     session_end_missing_reason: hasSessionEnd ? null : profile.session_end_absent_reason,
     repeated_stop_deliveries: Math.max(0, stops.length - 1),
     session_id_mismatch: idMismatch,
+    quarantined_foreign_events: quarantined,
     hook_error_classes: [...errorClasses],
-    facts: unique.map(factFor),
+    facts: attributed.map((e) => factFor(e, profile.agent)),
     real_agent_cli_qualified: false,
     limits,
   };
