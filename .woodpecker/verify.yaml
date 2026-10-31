@@ -1,0 +1,31 @@
+# task-meta — exact-SHA Woodpecker verification on the local Docker agent
+# (node:24-alpine image, node v24.21.0, npm registry pinned to the host
+# Verdaccio pull-through cache by the agent's global npmrc; no GitHub Actions).
+# Full gate sequence mirrors the Windows host gates: npm ci -> lint ->
+# typecheck -> npm test, plus source-identity echo for receipt binding.
+when:
+  - event: push
+    branch: [main, "version/*", "task/*", "maintenance/*", "tooling/*"]
+  - event: manual
+  - event: tag
+labels:
+  backend: local
+steps:
+  verify:
+    image: bash
+    commands:
+      - |
+        set -Eeuo pipefail
+        export CI=true
+        test "$(node --version)" = "v24.21.0"
+        echo "NODE=$(node --version)"
+        echo "HEAD=$(git rev-parse HEAD)"
+        echo "TREE=$(git rev-parse 'HEAD^{tree}')"
+        echo "BRANCH=${CI_COMMIT_BRANCH:-unknown}"
+        npm ci
+        npm run lint
+        npm run typecheck
+        npm test
+        test -z "$(git status --porcelain --untracked-files=all)"
+        echo "FINAL_HEAD=$(git rev-parse HEAD)"
+        echo "ALL_GATES_EXIT=0"
