@@ -33,6 +33,8 @@ export interface PublishEffectMeta {
   denialCode: string | null;
   attempts: number;
   lastHttpStatus: number | null;
+  /** Governed durable effect recording failed; the meta is not a journal commit. */
+  record_effect_failed?: true;
 }
 
 export type PublishOutcomeWithEffect = PublishOutcome & { effectMeta?: PublishEffectMeta };
@@ -311,17 +313,32 @@ export async function publishReport(
     attempts,
     lastHttpStatus,
   });
-  const recordEffectSafe = async (effect: PostEffect, outcomeState: string) => {
-    // Best-effort certainty recording: a broken recorder must never change the
-    // transport truth already established (and can never "prove" non-send).
-    if (governed) {
-      try {
-        await ctx.hooks.recordEffect(effect, { attempts, lastHttpStatus, outcomeState });
-      } catch {
-        /* conservative effect semantics are preserved in the returned effectMeta */
-      }
+  const recordEffectSafe = async (effect: PostEffect, outcomeState: string): Promise<boolean> => {
+    // Durable certainty recording for governed mode. A failed recorder must
+    // never "prove" non-send and never upgrades to successful finality; callers
+    // decide fail-closed based on the returned false.
+    if (!governed) return true;
+    try {
+      await ctx.hooks.recordEffect(effect, { attempts, lastHttpStatus, outcomeState });
+      return true;
+    } catch {
+      return false;
     }
   };
+  /**
+   * R2 P1-03: after a physical POST, a FAILED durable effect recording may not
+   * declare successful finality. Fail closed to UNKNOWN / reconciliation-only:
+   * the transport truth stays provable by a fresh readback, recovery must not.
+   */
+  const recordEffectFailedOutcome = (): PublishOutcomeWithEffect => ({
+    state: "NOT_PUBLISHED",
+    reason:
+      "RECORD_EFFECT_FAILED: comment created and read back, but durable effect recording failed; recovery must treat the effect as UNKNOWN (reconciliation-only), never as successful finality",
+    effectMeta: {
+      ...metaFor("SENT_OR_MAY_HAVE_SENT", "RECORD_EFFECT_FAILED"),
+      record_effect_failed: true,
+    },
+  });
   /** Remote summary says the report already exists: equal digest => REMOTE_SAME,
    *  differing digest (CONFLICT) => REMOTE_DIFFERENT_OR_DAMAGED, never REMOTE_SAME. */
   const effectForExisting = (outcome: PublishOutcome): PostEffect =>
@@ -488,8 +505,15 @@ export async function publishReport(
     const pre = await readback();
     if (pre.found) {
       const existingEffect = effectForExisting(pre.outcome);
-      await recordEffectSafe(existingEffect, pre.outcome.state);
-      return { ...pre.outcome, effectMeta: metaFor(existingEffect, null) };
+      const recorded = await recordEffectSafe(existingEffect, pre.outcome.state);
+      // No physical POST happened here; the read-only outcome stands, but a
+      // failed durable recording is surfaced instead of being silently dropped.
+      return {
+        ...pre.outcome,
+        effectMeta: recorded
+          ? metaFor(existingEffect, null)
+          : { ...metaFor(existingEffect, null), record_effect_failed: true },
+      };
     }
     const reportId = String(data.report_id);
     const broken = (lastFind as FindResult | null)?.damaged.find((d) => d.reportId === reportId);
@@ -540,11 +564,16 @@ export async function publishReport(
         const c = classify(err);
         if (c.kind === "fatal") {
           // Definitive rejection: the server did not process the create.
-          await recordEffectSafe("PROVEN_NOT_SENT", "NOT_PUBLISHED");
+          const recordedFatal = await recordEffectSafe("PROVEN_NOT_SENT", "NOT_PUBLISHED");
           return {
             state: "NOT_PUBLISHED",
             reason: c.reason,
-            effectMeta: metaFor("PROVEN_NOT_SENT", "HTTP_FATAL_REJECTION"),
+            effectMeta: recordedFatal
+              ? metaFor("PROVEN_NOT_SENT", "HTTP_FATAL_REJECTION")
+              : {
+                  ...metaFor("PROVEN_NOT_SENT", "HTTP_FATAL_REJECTION"),
+                  record_effect_failed: true,
+                },
           };
         }
         // Ambiguous transport (SENT_OR_MAY_HAVE_SENT / lost ACK / unknown 429/503/403).
@@ -554,7 +583,9 @@ export async function publishReport(
         if (post.found) {
           const outcome = reconciled(post);
           const foundEffect = effectForExisting(outcome);
-          await recordEffectSafe(foundEffect, outcome.state);
+          if (!(await recordEffectSafe(foundEffect, outcome.state))) {
+            return recordEffectFailedOutcome();
+          }
           return { ...outcome, effectMeta: metaFor(foundEffect, null) };
         }
         const backoff = Math.min(1000 * 2 ** attempt, MAX_BACKOFF_MS);
@@ -563,14 +594,21 @@ export async function publishReport(
         if (again.found) {
           const outcome = reconciled(again);
           const foundEffect = effectForExisting(outcome);
-          await recordEffectSafe(foundEffect, outcome.state);
+          if (!(await recordEffectSafe(foundEffect, outcome.state))) {
+            return recordEffectFailedOutcome();
+          }
           return { ...outcome, effectMeta: metaFor(foundEffect, null) };
         }
-        await recordEffectSafe("SENT_OR_MAY_HAVE_SENT", "NOT_PUBLISHED");
+        const recordedAmbiguous = await recordEffectSafe("SENT_OR_MAY_HAVE_SENT", "NOT_PUBLISHED");
         return {
           state: "NOT_PUBLISHED",
           reason: `AMBIGUOUS_TRANSPORT: ${c.reason}; same-call POST stopped (delayed commit still possible; zero-match readback is not non-send proof)`,
-          effectMeta: metaFor("SENT_OR_MAY_HAVE_SENT", "AMBIGUOUS_TRANSPORT"),
+          effectMeta: recordedAmbiguous
+            ? metaFor("SENT_OR_MAY_HAVE_SENT", "AMBIGUOUS_TRANSPORT")
+            : {
+                ...metaFor("SENT_OR_MAY_HAVE_SENT", "AMBIGUOUS_TRANSPORT"),
+                record_effect_failed: true,
+              },
         };
       }
     }
@@ -601,7 +639,9 @@ export async function publishReport(
         effectMeta: metaFor("REMOTE_DIFFERENT_OR_DAMAGED", "POST_COMMIT_READBACK_MISMATCH"),
       };
     }
-    await recordEffectSafe("REMOTE_SAME", "PUBLISHED");
+    if (!(await recordEffectSafe("REMOTE_SAME", "PUBLISHED"))) {
+      return recordEffectFailedOutcome();
+    }
     return { state: "PUBLISHED", comment: stored, effectMeta: metaFor("REMOTE_SAME", null) };
   } catch (err) {
     if (err instanceof HookRefusalError) {
@@ -618,6 +658,21 @@ export async function publishReport(
         effectMeta: metaFor(effect, err.code),
       };
     }
-    return { state: "NOT_PUBLISHED", reason: `error: ${String((err as Error)?.message ?? err)}` };
+    const msg = String((err as Error)?.message ?? err);
+    if (attempts > 0) {
+      // R2 P1-04: a physical POST already happened; a pagination/readback/sleep
+      // error must stay UNKNOWN, never a bare error without effect metadata
+      // and never a proven-not-sent claim.
+      return {
+        state: "NOT_PUBLISHED",
+        reason: `POST_COMMIT_ERROR: ${msg}; same-call POST stopped; effect unknown (reconciliation-only)`,
+        effectMeta: metaFor("SENT_OR_MAY_HAVE_SENT", "POST_COMMIT_ERROR"),
+      };
+    }
+    return {
+      state: "NOT_PUBLISHED",
+      reason: `error: ${msg}`,
+      effectMeta: metaFor("PROVEN_NOT_SENT", "PRE_POST_ERROR"),
+    };
   }
 }

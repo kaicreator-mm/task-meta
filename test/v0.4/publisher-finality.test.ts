@@ -353,3 +353,75 @@ test("B1 R1: a failing recordEffect never flips ambiguous transport to proven-no
   assert.equal(o.effectMeta?.status, "UNKNOWN");
   assert.equal(c.creates, 1);
 });
+
+test("B1 R2: successful POST with failed durable recording never declares successful finality", async () => {
+  const c = new CountingClient();
+  const { hooks } = recordingHooks({
+    recordEffect: async () => {
+      throw new Error("journal unavailable");
+    },
+  });
+  const o = await publish(c, { publicationContext: { kind: "governed_outbox", hooks } });
+  assert.equal(o.state, "NOT_PUBLISHED");
+  if (o.state === "NOT_PUBLISHED") {
+    assert.match(o.reason, /^RECORD_EFFECT_FAILED/);
+  }
+  assert.equal(o.effectMeta?.effect, "SENT_OR_MAY_HAVE_SENT");
+  assert.equal(o.effectMeta?.status, "UNKNOWN");
+  assert.equal(o.effectMeta?.record_effect_failed, true);
+  // The physical truth: exactly one POST, comment actually stored.
+  assert.equal(c.creates, 1);
+  assert.equal(c.comments.length, 1);
+  // Recovery is reconciliation-only: a later healthy publisher sees ALREADY_PUBLISHED.
+  const healthy = new CountingClient();
+  healthy.comments = [...c.comments];
+  const { hooks: goodHooks } = recordingHooks();
+  const again = await publish(healthy, {
+    publicationContext: { kind: "governed_outbox", hooks: goodHooks },
+  });
+  assert.equal(again.state, "ALREADY_PUBLISHED");
+  assert.equal(healthy.creates, 0);
+});
+
+test("B1 R2: a readback exception AFTER the POST keeps UNKNOWN semantics in both modes", async () => {
+  for (const ctx of [
+    undefined,
+    { kind: "governed_outbox", hooks: recordingHooks().hooks } as const,
+  ]) {
+    const c = new CountingClient();
+    const originalList = c.listIssueComments.bind(c);
+    let listed = 0;
+    c.listIssueComments = async (r: string, i: number, page: number, perPage: number) => {
+      listed++;
+      // First readback (pre-POST) works; everything after the POST throws.
+      if (listed > 1) throw new Error("network: readback connection reset");
+      return originalList(r, i, page, perPage);
+    };
+    const o = await publish(c, { publicationContext: ctx });
+    assert.equal(o.state, "NOT_PUBLISHED");
+    if (o.state === "NOT_PUBLISHED") {
+      assert.match(o.reason, /^POST_COMMIT_ERROR/);
+    }
+    assert.equal(o.effectMeta?.effect, "SENT_OR_MAY_HAVE_SENT");
+    assert.equal(o.effectMeta?.status, "UNKNOWN");
+    assert.equal(o.effectMeta?.denialCode, "POST_COMMIT_ERROR");
+    // The POST physically happened exactly once; no retry ever follows.
+    assert.equal(c.creates, 1);
+    assert.equal(c.comments.length, 1);
+  }
+});
+
+test("B1 R2: a pre-POST readback exception is PROVEN_NOT_SENT with zero POST", async () => {
+  const c = new CountingClient();
+  c.listIssueComments = async () => {
+    throw new Error("network: pre-readback unreachable");
+  };
+  const o = await publish(c);
+  assert.equal(o.state, "NOT_PUBLISHED");
+  if (o.state === "NOT_PUBLISHED") {
+    assert.match(o.reason, /^error: /);
+  }
+  assert.equal(o.effectMeta?.effect, "PROVEN_NOT_SENT");
+  assert.equal(o.effectMeta?.denialCode, "PRE_POST_ERROR");
+  assert.equal(c.creates, 0);
+});
