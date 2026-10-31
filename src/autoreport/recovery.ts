@@ -11,6 +11,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { canonicalDigest } from "../canonical.ts";
 import type { PostEffect } from "../model.ts";
 import type {
   EffectRecordDetail,
@@ -34,6 +35,8 @@ export interface RecoveryCounters {
   getPage: number;
   wallMs: number;
   cycles: number;
+  /** Wall-budget anchor: first admission time (ms epoch); null until set. */
+  started_at_ms?: number | null;
 }
 
 export interface RecoveryBudgets {
@@ -123,6 +126,8 @@ export interface JournalRecord {
   predecessor: string | null;
   /** Digest inventory of the consumed replay segments (bounded tail). */
   chain: string[];
+  /** Total proven segment count; the stored chain is its bounded tail. */
+  chain_len: number;
   /** Live reservation owner nonce; null once terminal (and for fresh records). */
   owner_nonce: string | null;
   counters: RecoveryCounters;
@@ -194,11 +199,18 @@ const EFFECTS: ReadonlySet<string> = new Set([
 ]);
 const STALE_LOCK_MS = 15 * 60_000;
 
-function isCountersShape(v: unknown): v is RecoveryCounters {
+function isCountersShape(v: unknown): v is RecoveryCounters & { started_at_ms?: number | null } {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
   const c = v as Record<string, unknown>;
-  return ["post", "getPage", "wallMs", "cycles"].every(
+  const base = ["post", "getPage", "wallMs", "cycles"].every(
     (k) => typeof c[k] === "number" && Number.isSafeInteger(c[k]) && (c[k] as number) >= 0,
+  );
+  const anchor = c.started_at_ms;
+  return (
+    base &&
+    (anchor === undefined ||
+      anchor === null ||
+      (typeof anchor === "number" && Number.isSafeInteger(anchor)))
   );
 }
 
@@ -221,6 +233,9 @@ function validRecord(rec: unknown, key: string): rec is JournalRecord {
     (r.predecessor === null || typeof r.predecessor === "string") &&
     Array.isArray(r.chain) &&
     r.chain.every((d) => typeof d === "string") &&
+    typeof r.chain_len === "number" &&
+    Number.isSafeInteger(r.chain_len) &&
+    r.chain_len >= 0 &&
     (r.owner_nonce === null || typeof r.owner_nonce === "string") &&
     isCountersShape(r.counters) &&
     (r.last_cause === null || typeof r.last_cause === "string") &&
@@ -242,22 +257,53 @@ export interface ReplayEvidence {
 }
 
 export function computeChainEvidence(text: string): ReplayEvidence {
+  // Mirrors src/store/spool.ts Spool.replay() byte-for-byte in semantics: a
+  // proven segment is exactly {"d":<digest>,"e":<entry>} with the digest equal
+  // to canonicalDigest(e) AND a terminating newline. Anything else — malformed
+  // shape, digest mismatch, uncanonicalizable entry, or a parseable last line
+  // missing its newline (crash mid-append) — is skipped, never trusted.
   const skipped: { line: number; reason: string }[] = [];
   const chain: string[] = [];
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const lines = text.split("\n");
+  const last = lines.length - 1;
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] as string;
-    if (i === lines.length - 1 && line.trim() === "") continue;
-    try {
-      const parsed: unknown = JSON.parse(line);
-      if (typeof parsed !== "object" || parsed === null) throw new Error("shape");
-      chain.push(createHash("sha256").update(line, "utf8").digest("hex"));
-    } catch {
-      skipped.push({
-        line: i + 1,
-        reason: line.trim() === "" ? "truncated trailing line" : "invalid JSON",
-      });
+    const raw = lines[i] as string;
+    if (raw === "") continue;
+    const n = i + 1;
+    if (i === last) {
+      // No terminating newline: crash mid-append. Never trust it, even if it parses.
+      skipped.push({ line: n, reason: "truncated trailing line" });
+      continue;
     }
+    let obj: unknown;
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      skipped.push({ line: n, reason: "invalid JSON" });
+      continue;
+    }
+    if (
+      typeof obj !== "object" ||
+      obj === null ||
+      typeof (obj as { d?: unknown }).d !== "string" ||
+      !("e" in obj)
+    ) {
+      skipped.push({ line: n, reason: "malformed line" });
+      continue;
+    }
+    const { d, e } = obj as { d: string; e: unknown };
+    let actual: string;
+    try {
+      actual = canonicalDigest(e);
+    } catch {
+      skipped.push({ line: n, reason: "entry not canonicalizable" });
+      continue;
+    }
+    if (actual !== d) {
+      skipped.push({ line: n, reason: "digest mismatch" });
+      continue;
+    }
+    chain.push(createHash("sha256").update(raw, "utf8").digest("hex"));
   }
   return {
     skipped,
@@ -394,6 +440,7 @@ export class RecoveryJournal {
       seq: 0,
       predecessor: null,
       chain: [],
+      chain_len: 0,
       owner_nonce: null,
       counters: { post: 0, getPage: 0, wallMs: 0, cycles: 1 },
       last_cause: null,
@@ -445,7 +492,7 @@ export class RecoveryJournal {
       raw = await readFile(this.budgetPath(reportId), "utf8");
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-        return { post: 0, getPage: 0, wallMs: 0, cycles: 0 };
+        return { post: 0, getPage: 0, wallMs: 0, cycles: 0, started_at_ms: null };
       }
       throw new RecoveryRefusedError("JOURNAL_UNREADABLE");
     }
@@ -498,10 +545,7 @@ export class RecoveryJournal {
       const existing = await this.readRawOrTorn(target.reportId, revision);
       if (existing !== null) {
         if (existing.state === "HELD") {
-          const cause = existing.last_cause;
-          throw new RecoveryRefusedError(
-            cause === "CHAIN_INTEGRITY_BROKEN" ? cause : "CHAIN_INTEGRITY_BROKEN",
-          );
+          throw new RecoveryRefusedError("CHAIN_INTEGRITY_BROKEN");
         }
         if (existing.state === "TERMINAL") {
           throw new RecoveryRefusedError(
@@ -516,6 +560,17 @@ export class RecoveryJournal {
       }
       const now = this.now();
       const ledger = await this.loadLedger(target.reportId);
+      // P1-02: persistent 10-minute wall budget across ALL recovery cycles and
+      // revisions: an absolute first-admission deadline plus accumulated
+      // measured elapsed time, both stored on the report-level ledger.
+      if (
+        (ledger.started_at_ms !== undefined &&
+          ledger.started_at_ms !== null &&
+          now - ledger.started_at_ms > this.budgets.wallMs) ||
+        ledger.wallMs >= this.budgets.wallMs
+      ) {
+        throw new RecoveryRefusedError("WALL_BUDGET_EXHAUSTED");
+      }
       if (ledger.post >= this.budgets.post) {
         throw new RecoveryRefusedError("POST_BUDGET_EXHAUSTED");
       }
@@ -533,7 +588,12 @@ export class RecoveryJournal {
         counters: { ...base.counters, post: base.counters.post + 1 },
         updated_at_ms: now,
       };
-      await this.persistLedger(target.reportId, { ...ledger, post: ledger.post + 1, cycles });
+      await this.persistLedger(target.reportId, {
+        ...ledger,
+        post: ledger.post + 1,
+        cycles,
+        started_at_ms: ledger.started_at_ms ?? now,
+      });
       await this.persist(next);
       this.liveNonce = nonce;
       return { token: `${next.record_key}:${next.epoch}:${next.seq}:${nonce}` };
@@ -630,6 +690,17 @@ export class RecoveryJournal {
     };
     await this.persist(next);
     this.liveNonce = null;
+    // Charge the measured admission duration into the persistent wall budget.
+    try {
+      const ledger = await this.loadLedger(reportId);
+      await this.persistLedger(reportId, {
+        ...ledger,
+        wallMs: ledger.wallMs + (now - rec.updated_at_ms),
+      });
+    } catch {
+      // A ledger charge failure never fabricates a terminal state; the wall
+      // deadline anchor on the ledger still bounds future admissions.
+    }
     await this.releaseLock(next.record_key);
   }
 
@@ -654,12 +725,35 @@ export class RecoveryJournal {
       if (rec !== null && rec.state !== "PENDING" && rec.state !== "TERMINAL") {
         return; // torn/held journals stay untouched (no repair path)
       }
-      const previous = base.chain;
-      const extended =
-        previous.length === 0 ||
-        (evidence.chain.length >= previous.length &&
-          evidence.chain.slice(0, previous.length).every((d, i) => d === (previous[i] as string)));
       const now = this.now();
+      // Unproved/incomplete source (any skipped line): no POST from this
+      // evidence; retain every skip class as bounded tokens and hold.
+      if (evidence.skipped.length > 0) {
+        await this.persist({
+          ...base,
+          state: "HELD",
+          last_cause: "SOURCE_UNPROVED",
+          chain: [],
+          chain_len: 0,
+          replay_skipped: [
+            ...base.replay_skipped,
+            ...evidence.skipped.map((s) => `line${s.line}:${s.reason}`),
+          ].slice(-20),
+          updated_at_ms: now,
+        });
+        return;
+      }
+      // P2-01: the stored chain is the bounded TAIL of chain_len total proven
+      // segments; a valid extension must agree where the retained tail aligns.
+      const storedTail = base.chain;
+      const totalPrev = base.chain_len;
+      const newLen = evidence.chain.length;
+      const tailStart = totalPrev - storedTail.length;
+      const extended =
+        totalPrev === 0 ||
+        (evidence.chain.length >= totalPrev &&
+          tailStart >= 0 &&
+          storedTail.every((d, i) => d === (evidence.chain[tailStart + i] as string)));
       if (!extended) {
         await this.persist({
           ...base,
@@ -675,10 +769,8 @@ export class RecoveryJournal {
         seq: evidence.seq,
         predecessor: evidence.predecessor,
         chain: evidence.chain.slice(-64),
-        replay_skipped: [
-          ...base.replay_skipped,
-          ...evidence.skipped.map((s) => `line${s.line}:${s.reason}`),
-        ].slice(-20),
+        chain_len: newLen,
+        replay_skipped: [...base.replay_skipped].slice(-20),
         updated_at_ms: now,
       });
     } finally {

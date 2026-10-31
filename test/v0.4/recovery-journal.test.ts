@@ -16,6 +16,7 @@ import {
   recoveryHooks,
   reportIdHash,
 } from "../../src/autoreport/recovery.ts";
+import { canonicalDigest, canonicalize } from "../../src/canonical.ts";
 import type { AttemptSummary, ManifestPointer } from "../../src/model.ts";
 import { type GitHubClient, type IssueComment, publishReport } from "../../src/publish/index.ts";
 import { buildReportDocument, renderReportComment } from "../../src/report/index.ts";
@@ -344,38 +345,133 @@ test("B2 R1: recovery cycles advance and hit the persistent cycle ceiling", asyn
   await rm(dir, { recursive: true, force: true });
 });
 
-test("B2 R1: spool chain reorder/edit marks HELD; skips are consumed as tokens", async () => {
+const NEWLINE = String.fromCharCode(10);
+const spoolLine = (entry: Record<string, unknown>): string =>
+  `{"d":"${canonicalDigest(entry)}","e":${canonicalize(entry)}}` + NEWLINE;
+
+function validSpool(count: number, offset = 0): string {
+  let out = "";
+  for (let i = 1; i <= count; i++) {
+    out += spoolLine({ n: offset + i, event: "Stop", session_id: "s" });
+  }
+  return out;
+}
+
+test("B2 R2: spool integrity mirrors Spool.replay byte-for-byte; unproved source holds with zero POST", async () => {
   const dir = await tmpDir();
   const journal = new RecoveryJournal(dir);
-  const line = (n: number) => JSON.stringify({ n, event: "Stop", session_id: "s" });
-  const good = `${line(1)}\n${line(2)}\n`;
+  const good = validSpool(2);
   await journal.attachReplayEvidence(REPORT_ID, computeChainEvidence(good));
-  let rec = await journal.load(REPORT_ID);
-  assert.equal(rec.seq, 2);
-  assert.equal(rec.replay_skipped.length, 0);
-  // Appending is a valid extension.
-  await journal.attachReplayEvidence(REPORT_ID, computeChainEvidence(`${good}${line(3)}\n`));
-  rec = await journal.load(REPORT_ID);
-  assert.equal(rec.seq, 3);
-  // Editing an earlier segment breaks the chain -> HELD, POSTs refuse.
-  await journal.attachReplayEvidence(
-    REPORT_ID,
-    computeChainEvidence(
-      `${JSON.stringify({ n: 1, event: "Stop", session_id: "tampered" })}\n${line(2)}\n${line(3)}\n`,
-    ),
+  const rec = await journal.load(REPORT_ID);
+  assert.equal(rec.state, "PENDING");
+  assert.equal(rec.chain_len, 2);
+
+  // Byte-level negatives, each with the authoritative skip reason.
+  const badLine = (line: string) => computeChainEvidence(validSpool(1) + line + NEWLINE);
+  // 1) malformed shape: JSON object without {d,e}
+  const malformed = badLine(JSON.stringify({ no: "envelope" }));
+  assert.deepEqual(malformed.skipped, [{ line: 2, reason: "malformed line" }]);
+  // 2) digest mismatch: valid envelope, wrong digest
+  const mismatch = badLine(`{"d":"${"0".repeat(64)}","e":${canonicalize({ x: 1 })}}` + NEWLINE);
+  assert.deepEqual(mismatch.skipped, [{ line: 2, reason: "digest mismatch" }]);
+  // 3) parseable last line missing its terminating newline (crash mid-append)
+  const truncated = computeChainEvidence(
+    `${validSpool(1)}{"d":"${canonicalDigest({ y: 1 })}","e":${canonicalize({ y: 1 })}}`,
   );
-  rec = await journal.load(REPORT_ID);
+  assert.deepEqual(truncated.skipped, [{ line: 2, reason: "truncated trailing line" }]);
+  // 4) invalid JSON
+  const invalid = badLine("not-json" + NEWLINE);
+  assert.deepEqual(invalid.skipped, [{ line: 2, reason: "invalid JSON" }]);
+
+  for (const ev of [malformed, mismatch, truncated, invalid]) {
+    await journal.attachReplayEvidence(`unproved-${ev.skipped[0]?.reason}`, ev);
+  }
+  for (const id of [
+    "unproved-malformed line",
+    "unproved-digest mismatch",
+    "unproved-truncated trailing line",
+    "unproved-invalid JSON",
+  ]) {
+    const held = await journal.load(id);
+    assert.equal(held.state, "HELD", id);
+    assert.equal(held.last_cause, "SOURCE_UNPROVED", id);
+    assert.ok(held.replay_skipped.length > 0, `${id} retains its skip tokens`);
+    await assert.rejects(
+      journal.reserve({ repo: REPO, issue: ISSUE, reportId: id, dataDigest: "a".repeat(64) }),
+      isRefusal("CHAIN_INTEGRITY_BROKEN"),
+    );
+  }
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R2: a tampered but well-formed segment still breaks the chain (HELD)", async () => {
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir);
+  await journal.attachReplayEvidence(REPORT_ID, computeChainEvidence(validSpool(2)));
+  const tampered =
+    spoolLine({ n: 1, event: "Stop", session_id: "tampered" }) +
+    spoolLine({ n: 2, event: "Stop", session_id: "s" });
+  await journal.attachReplayEvidence(REPORT_ID, computeChainEvidence(tampered));
+  const rec = await journal.load(REPORT_ID);
   assert.equal(rec.state, "HELD");
   assert.equal(rec.last_cause, "CHAIN_INTEGRITY_BROKEN");
-  await assert.rejects(
-    journal.reserve({ repo: REPO, issue: ISSUE, reportId: REPORT_ID, dataDigest: "a".repeat(64) }),
-    isRefusal("CHAIN_INTEGRITY_BROKEN"),
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R2: legitimate chains longer than the 64-entry tail still extend", async () => {
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir);
+  await journal.attachReplayEvidence(REPORT_ID, computeChainEvidence(validSpool(70)));
+  let rec = await journal.load(REPORT_ID);
+  assert.equal(rec.chain_len, 70);
+  assert.equal(rec.chain.length, 64); // bounded storage retained
+  // Appending 30 more segments is a valid extension of the 70-line chain.
+  await journal.attachReplayEvidence(REPORT_ID, computeChainEvidence(validSpool(100)));
+  rec = await journal.load(REPORT_ID);
+  assert.equal(rec.state, "PENDING");
+  assert.equal(rec.chain_len, 100);
+  assert.equal(rec.chain.length, 64);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R2: persistent wall budget spans cycles and revisions (fake clock)", async () => {
+  const dir = await tmpDir();
+  let clock = 1_000_000;
+  const j1 = new RecoveryJournal(
+    dir,
+    { ...DEFAULT_BUDGETS, post: 3, getPage: 50, wallMs: 10 * 60_000, cycles: 3 },
+    () => clock,
   );
-  // Skipped lines are consumed as bounded tokens.
-  const withSkip = computeChainEvidence(`${line(1)}\nnot-json\n`);
-  await journal.attachReplayEvidence("task-meta:other", withSkip);
-  const other = await journal.load("task-meta:other");
-  assert.deepEqual(other.replay_skipped, ["line2:invalid JSON"]);
+  const t = (digest: string, revision: number) => ({
+    repo: REPO,
+    issue: ISSUE,
+    reportId: REPORT_ID,
+    dataDigest: digest,
+    revision,
+    supersedes: revision > 1 ? revision - 1 : null,
+  });
+  await j1.reserve(t("1".repeat(64), 1));
+  clock += 60_000; // one minute of measured admission time
+  await j1.recordEffect(
+    REPORT_ID,
+    "REMOTE_SAME",
+    { attempts: 1, lastHttpStatus: null, outcomeState: "PUBLISHED" },
+    1,
+  );
+  // A new journal instance 11 minutes after first admission: past the deadline.
+  const j2 = new RecoveryJournal(
+    dir,
+    { ...DEFAULT_BUDGETS, post: 3, getPage: 50, wallMs: 10 * 60_000, cycles: 3 },
+    () => clock + 11 * 60_000,
+  );
+  await assert.rejects(j2.reserve(t("2".repeat(64), 2)), isRefusal("WALL_BUDGET_EXHAUSTED"));
+  // And accumulated measured time beyond the budget also refuses.
+  const j3 = new RecoveryJournal(
+    dir,
+    { ...DEFAULT_BUDGETS, post: 3, getPage: 50, wallMs: 90_000, cycles: 3 },
+    () => clock + 5 * 60_000,
+  );
+  await assert.rejects(j3.reserve(t("3".repeat(64), 2)), isRefusal("WALL_BUDGET_EXHAUSTED"));
   await rm(dir, { recursive: true, force: true });
 });
 
