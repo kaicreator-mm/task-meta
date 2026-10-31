@@ -135,7 +135,12 @@ export function assessSessionLifecycle(
   let idMismatch = false;
   for (const e of unique) {
     if (e.epistemic !== "OBSERVED" || e.missing_reason !== null) continue;
-    if (e.alt_session_ref !== null && e.alt_session_ref !== e.session_ref) idMismatch = true;
+    if (e.alt_session_ref !== null && e.alt_session_ref !== e.session_ref) {
+      // Identity-doubtful event: report the mismatch, but never attribute its
+      // facts to the session it claims.
+      idMismatch = true;
+      continue;
+    }
     if (e.session_ref !== sessionRef) continue;
     witnessed.add(e.step);
     if (e.step === "HOOK_ERROR" && e.error_class !== null && SAFE_CLASS_TOKEN.test(e.error_class)) {
@@ -143,9 +148,17 @@ export function assessSessionLifecycle(
     }
   }
 
-  const stops = unique.filter(
-    (e) => e.step === "STOP" && e.session_ref === sessionRef && e.epistemic === "OBSERVED",
-  );
+  // Repeated-Stop counting uses the SAME proof bar as step witnessing: an event
+  // must be OBSERVED with no missing_reason, and its session attribution must be
+  // trusted. An event whose alternate session id disagrees belongs to a
+  // different session's facts — it never inflates this session's delivery
+  // count (the mismatch itself is still reported above).
+  const trustedForSession = (e: HookEventObservation): boolean =>
+    e.session_ref === sessionRef &&
+    e.epistemic === "OBSERVED" &&
+    e.missing_reason === null &&
+    !(e.alt_session_ref !== null && e.alt_session_ref !== e.session_ref);
+  const stops = unique.filter((e) => e.step === "STOP" && trustedForSession(e));
   const hasSessionEnd = witnessed.has("SESSION_END");
   const terminal: "STOP" | "SESSION_END" | null = hasSessionEnd
     ? "SESSION_END"

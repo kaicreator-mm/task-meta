@@ -107,3 +107,31 @@ test("A2: non-observed or missing-reason events never prove a step", () => {
   // Still NOT_INSTRUMENTED from the zcode profile, not the event's own reason.
   assert.equal(a.session_end_missing_reason, "NOT_INSTRUMENTED");
 });
+
+test("A2 R1: unproved STOP events never count as repeated Stop deliveries", () => {
+  const a = assessSessionLifecycle("zcode:s1", CLIENT_PROFILES.zcode, [
+    ev({ event_id: "stop-1" }), // proved delivery
+    ev({ event_id: "stop-2", missing_reason: "HOST_EVENT_NOT_OBSERVED" }),
+    ev({ event_id: "stop-3", missing_reason: "SOURCE_DROPPED" }),
+    ev({ event_id: "stop-4", epistemic: "SELF_REPORTED" }),
+  ]);
+  assert.equal(a.repeated_stop_deliveries, 0);
+});
+
+test("A2 R1: a STOP carrying another session's id is not attributed to this session", () => {
+  const a = assessSessionLifecycle("zcode:s1", CLIENT_PROFILES.zcode, [
+    ev({ event_id: "stop-1" }),
+    // Same claimed session, but the payload's alternate id disagrees: the
+    // delivery belongs to the other session's facts, not s1's.
+    ev({ event_id: "stop-2", alt_session_ref: "zcode:s-other" }),
+    ev({ event_id: "stop-3", alt_session_ref: "zcode:s-other" }),
+  ]);
+  assert.equal(a.session_id_mismatch, true);
+  assert.equal(a.repeated_stop_deliveries, 0);
+  // And identity-doubtful steps never prove this session's terminal either.
+  const terminalOnly = assessSessionLifecycle("zcode:s1", CLIENT_PROFILES.zcode, [
+    ev({ event_id: "stop-9", alt_session_ref: "zcode:s-other" }),
+  ]);
+  assert.equal(terminalOnly.terminal_step, null);
+  assert.ok(terminalOnly.limits.some((l) => l.includes("mismatch")));
+});
