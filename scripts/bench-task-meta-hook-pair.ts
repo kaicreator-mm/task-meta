@@ -22,14 +22,15 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { hostname, cpus, platform, release } from "node:os";
+import { cpus, hostname, platform, release } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveSourceSha, summarize } from "./bench-task-meta-summary.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
@@ -42,8 +43,7 @@ function arg(name, fallback) {
 
 const ROOT = resolve(arg("root", join(REPO, "..", "..", "_tmp", "tm-v040-c2-bench", "runs")));
 const PAIRS = Number(arg("pairs", "6"));
-const SOURCE_SHA = arg(
-  "source-sha",
+const SOURCE_SHA = resolveSourceSha(arg("source-sha"), () =>
   execFileSync_(["git", "rev-parse", "origin/version/v0.4"], { cwd: REPO }).trim(),
 );
 const INSTALL = resolve(arg("install", join(ROOT, "install")));
@@ -103,7 +103,9 @@ function prepareInstall() {
 
 // ---------- fixture ----------
 function buildPayload(sessionId) {
-  const tpl = JSON.parse(readFileSync(join(REPO, "test", "fixtures", "zcode-hooks", "stop.json"), "utf8"));
+  const tpl = JSON.parse(
+    readFileSync(join(REPO, "test", "fixtures", "zcode-hooks", "stop.json"), "utf8"),
+  );
   tpl.sessionId = sessionId;
   tpl.session_id = sessionId;
   tpl.cwd = REPO; // real git worktree: gitFields() runs its true git commands
@@ -138,7 +140,10 @@ function countSpoolLines() {
   if (!existsSync(dir)) return 0;
   let n = 0;
   for (const f of readdirSync(dir)) {
-    if (f.endsWith(".jsonl")) n += readFileSync(join(dir, f), "utf8").split("\n").filter((l) => l.trim() !== "").length;
+    if (f.endsWith(".jsonl"))
+      n += readFileSync(join(dir, f), "utf8")
+        .split("\n")
+        .filter((l) => l.trim() !== "").length;
   }
   return n;
 }
@@ -147,7 +152,14 @@ function spoolFileFor(sessionId) {
   const p = join(ROOT, "spool", `${sessionId}.jsonl`);
   if (!existsSync(p)) return null;
   const buf = readFileSync(p);
-  return { path: p, bytes: buf.length, lines: buf.toString("utf8").split("\n").filter((l) => l.trim() !== "").length };
+  return {
+    path: p,
+    bytes: buf.length,
+    lines: buf
+      .toString("utf8")
+      .split("\n")
+      .filter((l) => l.trim() !== "").length,
+  };
 }
 
 function wait(ms) {
@@ -209,8 +221,21 @@ async function runOne(kind, seq, sessionBase) {
   };
 
   if (kind === "ON") {
-    const capture = join(INSTALL, "plugins", "zcode", "task-meta-capture", "scripts", "capture.mjs");
-    const r = await runChild("capture", capture, [], { TASK_META_HOME: INSTALL, TASK_META_ZCODE_SPOOL: join(ROOT, "spool") }, payload);
+    const capture = join(
+      INSTALL,
+      "plugins",
+      "zcode",
+      "task-meta-capture",
+      "scripts",
+      "capture.mjs",
+    );
+    const r = await runChild(
+      "capture",
+      capture,
+      [],
+      { TASK_META_HOME: INSTALL, TASK_META_ZCODE_SPOOL: join(ROOT, "spool") },
+      payload,
+    );
     rec.command = `node ${capture} < payload.json (env TASK_META_HOME=${INSTALL} TASK_META_ZCODE_SPOOL=${join(ROOT, "spool")})`;
     rec.exit_code = r.exit.code;
     rec.exit_signal = r.exit.signal;
@@ -251,7 +276,8 @@ async function runOne(kind, seq, sessionBase) {
     rec.outbox = null;
     rec.absence_witnessed = rec.spool_delta === 0 && rec.outbox_delta === 0;
   }
-  rec.cpu_rss = "N/A: win32 Node exposes no child rusage and the auto-report child is detached; not witnessed, not estimated";
+  rec.cpu_rss =
+    "N/A: win32 Node exposes no child rusage and the auto-report child is detached; not witnessed, not estimated";
   return rec;
 }
 
@@ -272,23 +298,35 @@ const envReceipt = {
   source_sha: SOURCE_SHA,
   worktree_head: git("", ["rev-parse", "HEAD"]),
   install_dir: INSTALL,
-  capture_mjs_sha256: sha256(join(INSTALL, "plugins", "zcode", "task-meta-capture", "scripts", "capture.mjs")),
-  worktree_capture_mjs_sha256: sha256(join(REPO, "plugins", "zcode", "task-meta-capture", "scripts", "capture.mjs")),
+  capture_mjs_sha256: sha256(
+    join(INSTALL, "plugins", "zcode", "task-meta-capture", "scripts", "capture.mjs"),
+  ),
+  worktree_capture_mjs_sha256: sha256(
+    join(REPO, "plugins", "zcode", "task-meta-capture", "scripts", "capture.mjs"),
+  ),
   fixture_template_sha256: sha256(join(REPO, "test", "fixtures", "zcode-hooks", "stop.json")),
   pairs_requested: SMOKE ? 1 : PAIRS,
 };
 {
-  const src = readFileSync(join(INSTALL, "plugins", "zcode", "task-meta-capture", "scripts", "capture.mjs"), "utf8");
+  const src = readFileSync(
+    join(INSTALL, "plugins", "zcode", "task-meta-capture", "scripts", "capture.mjs"),
+    "utf8",
+  );
   const pv = /PLUGIN_VERSION = "([^"]+)"/.exec(src);
   envReceipt.plugin_version = pv ? pv[1] : null;
 }
 
 envReceipt.install_reused = inst.reused;
-envReceipt.install_config = JSON.parse(readFileSync(join(INSTALL, "config", "auto-report.json"), "utf8"));
+envReceipt.install_config = JSON.parse(
+  readFileSync(join(INSTALL, "config", "auto-report.json"), "utf8"),
+);
 console.log(`[env] ${JSON.stringify(envReceipt)}`);
 appendNdjson(join(ROOT, "runs.ndjson"), { type: "env", ...envReceipt });
 
-const sessionBase = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+const sessionBase = new Date()
+  .toISOString()
+  .replace(/[-:.TZ]/g, "")
+  .slice(0, 14);
 const pairs = SMOKE ? 1 : PAIRS;
 const records = [];
 let seq = 0;
@@ -299,32 +337,21 @@ for (let p = 1; p <= pairs; p++) {
     const rec = await runOne(kind, seq, sessionBase);
     rec.pair = p;
     records.push(rec);
-    console.log(`[run ${seq}/pair ${p} ${kind}] exit=${rec.exit_code} hook_wall_ms=${rec.hook_wall_ms} stop_to_outbox_ms=${rec.stop_to_outbox_ms} outbox=${rec.outbox?.state ?? (kind === "OFF" ? (rec.absence_witnessed ? "ABSENT_WITNESSED" : "UNEXPECTED!") : "MISSING!")}`);
+    console.log(
+      `[run ${seq}/pair ${p} ${kind}] exit=${rec.exit_code} hook_wall_ms=${rec.hook_wall_ms} stop_to_outbox_ms=${rec.stop_to_outbox_ms} outbox=${rec.outbox?.state ?? (kind === "OFF" ? (rec.absence_witnessed ? "ABSENT_WITNESSED" : "UNEXPECTED!") : "MISSING!")}`,
+    );
     appendNdjson(join(ROOT, "runs.ndjson"), { type: "run", ...rec });
   }
 }
 
-const summarize = (kind) => {
-  const rs = records.filter((r) => r.kind === kind);
-  const walls = rs.map((r) => r.hook_wall_ms).sort((a, b) => a - b);
-  const s2o = rs.map((r) => r.stop_to_outbox_ms).filter((v) => typeof v === "number").sort((a, b) => a - b);
-  const pick = (a) => (a.length ? { n: a.length, min: a[0], median: a[Math.floor(a.length / 2)], max: a[a.length - 1] } : { n: 0 });
-  return {
-    runs: rs.length,
-    exits: rs.map((r) => r.exit_code),
-    hook_wall_ms: pick(walls),
-    stop_to_outbox_ms: kind === "ON" ? pick(s2o) : undefined,
-    spool_bytes: kind === "ON" ? rs.map((r) => r.spool_bytes) : undefined,
-    outbox_states: kind === "ON" ? rs.map((r) => r.outbox?.state ?? "MISSING") : undefined,
-    absence_witnessed: kind === "OFF" ? rs.every((r) => r.absence_witnessed === true) : undefined,
-  };
-};
 const summary = {
   env: envReceipt,
   pairs,
-  order_plan: Array.from({ length: pairs }, (_, i) => (i % 2 === 0 ? ["ON", "OFF"] : ["OFF", "ON"])),
-  ON: summarize("ON"),
-  OFF: summarize("OFF"),
+  order_plan: Array.from({ length: pairs }, (_, i) =>
+    i % 2 === 0 ? ["ON", "OFF"] : ["OFF", "ON"],
+  ),
+  ON: summarize(records, "ON"),
+  OFF: summarize(records, "OFF"),
   finished_at: new Date().toISOString(),
 };
 writeFileSync(join(ROOT, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
