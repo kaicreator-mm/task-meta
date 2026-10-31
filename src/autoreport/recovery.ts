@@ -640,14 +640,27 @@ export class RecoveryJournal {
       return { granted: false };
     }
     try {
+      // R4 P1: the charge history is mirrored on the report-level budget ledger
+      // (a separate file), so deleting or rewriting the pages sidecar can never
+      // restart the GET budget. Fail closed on any inconsistency.
+      let ledger: RecoveryCounters;
+      try {
+        ledger = await this.loadLedger(reportId);
+      } catch {
+        return { granted: false }; // unreadable/corrupt ledger: no page admitted
+      }
       let raw: string | null = null;
       try {
         raw = await readFile(this.pagesPath(reportId), "utf8");
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code !== "ENOENT") return { granted: false };
       }
-      let used = 0;
-      if (raw !== null) {
+      let used: number;
+      if (raw === null) {
+        // No sidecar: legitimate only when there is no charging history either.
+        if (ledger.getPage > 0) return { granted: false };
+        used = 0;
+      } else {
         let parsed: unknown;
         try {
           parsed = JSON.parse(raw);
@@ -664,6 +677,7 @@ export class RecoveryJournal {
         ) {
           return { granted: false };
         }
+        if (charged < ledger.getPage) return { granted: false }; // rewound sidecar
         used = charged;
       }
       if (used >= this.budgets.getPage) return { granted: false };
@@ -671,6 +685,9 @@ export class RecoveryJournal {
       const tmp = join(this.dir, `.${key}.tmp-${nonce}`);
       await writeFile(tmp, `${JSON.stringify({ getPage: used + 1 })}\n`, "utf8");
       await rename(tmp, this.pagesPath(reportId));
+      // Persist the mirrored history AFTER the sidecar so a crash between the
+      // two writes leaves the mirror at most behind, never ahead.
+      await this.persistLedger(reportId, { ...ledger, getPage: used + 1 });
       return { granted: true };
     } finally {
       await this.releaseLock(key);

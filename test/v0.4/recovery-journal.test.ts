@@ -684,3 +684,60 @@ test("B2 R3 P2: an entry that fails canonicalization is skipped and holds the so
   assert.ok(rec.replay_skipped.includes("line2:entry not canonicalizable"));
   await rm(dir, { recursive: true, force: true });
 });
+
+test("B2 R4: GET budget 1 — grant persists; a deleted sidecar never restarts counting", async () => {
+  const dir = await tmpDir();
+  const cap1 = new RecoveryJournal(dir, {
+    ...DEFAULT_BUDGETS,
+    getPage: 1,
+    post: 3,
+    wallMs: 600_000,
+    cycles: 3,
+  });
+  // First GET of a fresh report: granted and persisted on sidecar AND ledger.
+  assert.deepEqual(await cap1.chargeForPage("fresh-report", 1), { granted: true });
+  const sidecar = JSON.parse(
+    await readFile(join(dir, `${reportIdHash("fresh-report")}.pages.json`), "utf8"),
+  ) as { getPage: number };
+  assert.equal(sidecar.getPage, 1);
+  const ledger = JSON.parse(
+    await readFile(join(dir, `${reportIdHash("fresh-report")}.budget.json`), "utf8"),
+  ) as { getPage: number };
+  assert.equal(ledger.getPage, 1, "charge history is mirrored on the ledger");
+  // Delete the sidecar: the second GET must refuse, not recount from zero.
+  const { rm: rmFile } = await import("node:fs/promises");
+  await rmFile(join(dir, `${reportIdHash("fresh-report")}.pages.json`), { force: true });
+  assert.deepEqual(await cap1.chargeForPage("fresh-report", 1), { granted: false });
+  const again = new RecoveryJournal(dir, {
+    ...DEFAULT_BUDGETS,
+    getPage: 1,
+    post: 3,
+    wallMs: 600_000,
+    cycles: 3,
+  });
+  assert.deepEqual(await again.chargeForPage("fresh-report", 1), { granted: false });
+  // A genuinely fresh report (no files at all) still gets its first GET granted.
+  assert.deepEqual(await again.chargeForPage("another-fresh-report", 1), { granted: true });
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R4: a rewound sidecar below the mirrored history refuses", async () => {
+  const dir = await tmpDir();
+  const j = new RecoveryJournal(dir, {
+    ...DEFAULT_BUDGETS,
+    getPage: 5,
+    post: 3,
+    wallMs: 600_000,
+    cycles: 3,
+  });
+  for (let i = 0; i < 3; i++) await j.chargeForPage("rewind", 1);
+  // Roll the sidecar back below the ledger-mirrored count of 3.
+  const { writeFile: wf } = await import("node:fs/promises");
+  await wf(
+    join(dir, `${reportIdHash("rewind")}.pages.json`),
+    JSON.stringify({ getPage: 0 }),
+    "utf8",
+  );
+  assert.deepEqual(await j.chargeForPage("rewind", 1), { granted: false });
+  await rm(dir, { recursive: true, force: true });
+});
