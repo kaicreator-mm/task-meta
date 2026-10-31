@@ -312,10 +312,27 @@ export async function publishReport(
     lastHttpStatus,
   });
   const recordEffectSafe = async (effect: PostEffect, outcomeState: string) => {
+    // Best-effort certainty recording: a broken recorder must never change the
+    // transport truth already established (and can never "prove" non-send).
     if (governed) {
-      await ctx.hooks.recordEffect(effect, { attempts, lastHttpStatus, outcomeState });
+      try {
+        await ctx.hooks.recordEffect(effect, { attempts, lastHttpStatus, outcomeState });
+      } catch {
+        /* conservative effect semantics are preserved in the returned effectMeta */
+      }
     }
   };
+  /** Remote summary says the report already exists: equal digest => REMOTE_SAME,
+   *  differing digest (CONFLICT) => REMOTE_DIFFERENT_OR_DAMAGED, never REMOTE_SAME. */
+  const effectForExisting = (outcome: PublishOutcome): PostEffect =>
+    outcome.state === "CONFLICT" ? "REMOTE_DIFFERENT_OR_DAMAGED" : "REMOTE_SAME";
+  /** A durable reservation receipt must be a present non-blank token, else the
+   *  governed mode refuses to POST at all (fail closed). */
+  const validReservation = (r: unknown): r is { token: string } =>
+    typeof r === "object" &&
+    r !== null &&
+    typeof (r as { token?: unknown }).token === "string" &&
+    ((r as { token: string }).token.trim().length ?? 0) > 0;
 
   // R3 fail-closed mode selection: invalid/missing governed hooks => zero network
   // POST and never a silent downgrade to the direct path.
@@ -470,8 +487,9 @@ export async function publishReport(
   try {
     const pre = await readback();
     if (pre.found) {
-      await recordEffectSafe("REMOTE_SAME", pre.outcome.state);
-      return { ...pre.outcome, effectMeta: metaFor("REMOTE_SAME", null) };
+      const existingEffect = effectForExisting(pre.outcome);
+      await recordEffectSafe(existingEffect, pre.outcome.state);
+      return { ...pre.outcome, effectMeta: metaFor(existingEffect, null) };
     }
     const reportId = String(data.report_id);
     const broken = (lastFind as FindResult | null)?.damaged.find((d) => d.reportId === reportId);
@@ -492,7 +510,20 @@ export async function publishReport(
       // fail-closed zero-POST outcome, never a direct fallback.
       if (hooks) {
         try {
-          await hooks.reservePrePost({ repo, issue, reportId, dataDigest: digest });
+          const reserved: unknown = await hooks.reservePrePost({
+            repo,
+            issue,
+            reportId,
+            dataDigest: digest,
+          });
+          if (!validReservation(reserved)) {
+            return {
+              state: "NOT_PUBLISHED",
+              reason:
+                "PRE_POST_RESERVATION_REFUSED: reservation receipt missing/blank/invalid; governed mode failed closed before POST",
+              effectMeta: metaFor("PROVEN_NOT_SENT", "PRE_POST_RESERVATION_REFUSED"),
+            };
+          }
         } catch {
           return {
             state: "NOT_PUBLISHED",
@@ -522,16 +553,18 @@ export async function publishReport(
         const post = await readback();
         if (post.found) {
           const outcome = reconciled(post);
-          await recordEffectSafe("REMOTE_SAME", outcome.state);
-          return { ...outcome, effectMeta: metaFor("REMOTE_SAME", null) };
+          const foundEffect = effectForExisting(outcome);
+          await recordEffectSafe(foundEffect, outcome.state);
+          return { ...outcome, effectMeta: metaFor(foundEffect, null) };
         }
         const backoff = Math.min(1000 * 2 ** attempt, MAX_BACKOFF_MS);
         await sleep(c.waitMs === null ? backoff : Math.min(c.waitMs, MAX_RETRY_AFTER_MS));
         const again = await readback();
         if (again.found) {
           const outcome = reconciled(again);
-          await recordEffectSafe("REMOTE_SAME", outcome.state);
-          return { ...outcome, effectMeta: metaFor("REMOTE_SAME", null) };
+          const foundEffect = effectForExisting(outcome);
+          await recordEffectSafe(foundEffect, outcome.state);
+          return { ...outcome, effectMeta: metaFor(foundEffect, null) };
         }
         await recordEffectSafe("SENT_OR_MAY_HAVE_SENT", "NOT_PUBLISHED");
         return {

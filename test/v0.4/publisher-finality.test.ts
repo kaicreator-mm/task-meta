@@ -290,3 +290,66 @@ test("B1: governed lost-ACK reconciles to PUBLISHED with a single POST", async (
   assert.equal(c.creates, 1);
   assert.equal(c.comments.length, 1);
 });
+
+test("B1 R1: a differing remote digest is CONFLICT with REMOTE_DIFFERENT_OR_DAMAGED, never REMOTE_SAME", async () => {
+  // Pre-existing same-identity comment with a different digest (native edit).
+  const fresh = new CountingClient();
+  fresh.comments.push({
+    id: 9001,
+    html_url: "https://example.invalid/c/9001",
+    body: bodyFor().replace("synthetic fixture", "edited in place"),
+    user_login: "someone",
+  });
+  const { hooks, calls } = recordingHooks();
+  const o = await publish(fresh, { publicationContext: { kind: "governed_outbox", hooks } });
+  assert.equal(o.state, "CONFLICT");
+  assert.equal(o.effectMeta?.effect, "REMOTE_DIFFERENT_OR_DAMAGED");
+  assert.equal(o.effectMeta?.status, "CONFLICT");
+  assert.equal(fresh.creates, 0);
+  assert.deepEqual(
+    calls.effects.map(([e]) => e),
+    ["REMOTE_DIFFERENT_OR_DAMAGED"],
+  );
+});
+
+test("B1 R1: missing/blank/invalid reservation receipts are zero-POST refusals", async () => {
+  for (const bad of [
+    undefined,
+    null,
+    {},
+    { token: "" },
+    { token: "   " },
+    { token: 42 },
+    "res-1",
+  ]) {
+    const c = new CountingClient();
+    const { hooks } = recordingHooks({
+      reservePrePost: (async () => bad) as never,
+    });
+    const o = await publish(c, { publicationContext: { kind: "governed_outbox", hooks } });
+    assert.equal(o.state, "NOT_PUBLISHED", `receipt=${JSON.stringify(bad)}`);
+    if (o.state === "NOT_PUBLISHED") {
+      assert.match(o.reason, /^PRE_POST_RESERVATION_REFUSED/);
+    }
+    assert.equal(o.effectMeta?.effect, "PROVEN_NOT_SENT");
+    assert.equal(c.creates, 0);
+  }
+});
+
+test("B1 R1: a failing recordEffect never flips ambiguous transport to proven-not-sent", async () => {
+  const c = new CountingClient();
+  c.failBefore.push(new GitHubHttpError(503, "unavailable"));
+  const { hooks } = recordingHooks({
+    recordEffect: async () => {
+      throw new Error("journal write failed");
+    },
+  });
+  const o = await publish(c, { publicationContext: { kind: "governed_outbox", hooks } });
+  assert.equal(o.state, "NOT_PUBLISHED");
+  if (o.state === "NOT_PUBLISHED") {
+    assert.match(o.reason, /^AMBIGUOUS_TRANSPORT/);
+  }
+  assert.equal(o.effectMeta?.effect, "SENT_OR_MAY_HAVE_SENT");
+  assert.equal(o.effectMeta?.status, "UNKNOWN");
+  assert.equal(c.creates, 1);
+});
