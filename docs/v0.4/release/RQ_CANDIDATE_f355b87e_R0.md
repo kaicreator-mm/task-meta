@@ -63,6 +63,58 @@ only the reported result, not a new Web-run physical measurement.
 - REAL_HOST_GITHUB live publication = NOT_RUN (no separate clearance);
   REAL_TALLY_APP = NOT_RUN; DESKTOP_ONLY = NOT_RUN.
 
+## 2.1 New local ZCode evidence — conflicting scope labels (2026-11-01)
+
+Two subsequent local receipts were appended to [Issue #74](https://github.com/kaicreator-mm/task-meta/issues/74)
+*after* the initial R0 Host evidence was staged:
+
+- [#6556604986](https://github.com/kaicreator-mm/task-meta/issues/74#issuecomment-6556604986)
+  records a real **standalone ZCode CLI** 3.14.3 / banner 0.16.9 check.
+  The management, doctor and plugin validation commands returned exit 0, but
+  every actual agent-bearing `--prompt` / `app-server` invocation failed
+  EXIT=1 with `Bundled 与 Active ZCode Built-in Release 均不可用`.
+  Both bundled and active CLI built-in descriptors were rejected (revision 30),
+  while refresh could not reach `zcode.z.ai` from that shell. Thus
+  **REAL_AGENT_CLI=NOT_RUN** and no safe-recovery negative was executed via
+  a live CLI agent session. The candidate worktree's ZCode scoped tests
+  reported 60/60 PASS; this is source-only evidence.
+- [#6556737470](https://github.com/kaicreator-mm/task-meta/issues/74#issuecomment-6556737470)
+  reports a **real ZCode Desktop Agent session** through
+  `ZCode.exe` with automatically triggered candidate-byte-identical plugin
+  hooks, metadata Spool, and fail-closed HELD Outbox; an isolated source
+  diff was reported as EXIT 0. This is a valuable **DESKTOP_ONLY real agent
+  integration** observation, not a successful standalone CLI headless run.
+  The receipt itself reports `ZCode.exe --help` has no supported agent/headless
+  option and no new headless CLI session was started. Its literal
+  `REAL_AGENT_CLI=PASS` assertion is therefore **not accepted for the frozen
+  Product A19/§7 and L2 release gate**.
+  The receipt's HELD Outbox line was from an older date, with multiple-repo
+  identity ambiguity; correlation to the specific live session and a
+  **candidate-v0.4 executor** was not independently established. Existing
+  `~/.task-meta/app` v0.3-era executor must never substitute for that proof.
+
+Both receipts are locally self-reported, not independently rerun via Web.
+The live desktop Spool observations are **not discarded**; they are
+recorded in the correct DESKTOP_ONLY category, including their genuine privacy
+and fail-closed observations. The source/CI/fixture gates remain qualified
+at their own level; **REAL_AGENT_CLI stays NOT_RUN**.
+
+Potential vendor remedy (diagnostic lead, not a fix already performed):
+[upstream ZCode README](https://github.com/zai-org/ZCode)
+lists 3.17.1 released by 2026-10-30, newer than the failing standalone
+3.14.3. Its [CLI quickstart](https://github.com/zai-org/ZCode/blob/main/apps/zcode-cli/docs/usage/01-quickstart.md)
+shows an actual `--prompt` Agent entrypoint, and the
+[CLI source packaging notes](https://github.com/zai-org/ZCode/blob/main/README.en.md)
+distinguish standalone distribution from Electron Desktop. A **read-only**
+local comparison of effective `ZCODE_*_PROVIDER_CONFIG_FILE` overrides,
+CLI package/bundle versions, official distribution and active descriptor
+validation is the minimal next investigation. Do **not** copy Desktop's newer
+descriptor into an older incompatible CLI, bypass validator, patch launcher,
+overwrite the active user install, or claim that a vendor update is
+guaranteed to fix the error. Any isolated candidate CLI test must bind the
+exact task-meta version and use a genuinely available already-approved
+model entitlement; no unapproved paid requests.
+
 ## 3. Release qualification gates
 
 | Gate | Current state | Evidence / next action |
@@ -72,7 +124,7 @@ only the reported result, not a new Web-run physical measurement.
 | Product/L2/DAG and runtime adoption source pins | PASS (source readback) | Blob/pin values above |
 | Candidate Windows n≥5 Hook ON/OFF | REPORTED PASS (HOOK_FIXTURE) | n=6; primary local receipt #6555702454 |
 | Candidate safe recovery negative + privacy | REPORTED PASS (fixture scope) | 40/40; no real public POST |
-| Installed candidate Agent CLI session/Hook→Spool→Outbox | **NOT_RUN / RELEASE BLOCKER** | Do not substitute Claude plugin validate or Codex help |
+| Installed candidate Agent CLI session/Hook→Spool→Outbox | **NOT_RUN / RELEASE BLOCKER** | Standalone ZCode 3.14.3 agent boot failed; Desktop hook session is DESKTOP_ONLY, not Product A19 CLI acceptance |
 | Independent whole-version exact-SHA RQ | **NOT_RUN / RELEASE BLOCKER** | Distinct reviewer must assess all mandatory scope |
 | Real GitHub production publishing | NOT_RUN; no unapproved POST | Never infer grant from `HELD` |
 | Actual Tally consumer | NOT_RUN | Explicit boundary; no synthetic Tally PASS |
