@@ -207,6 +207,47 @@ publication clearance/issue target, JCS digest and no POST. Reuse the existing
 licensed model quota if authorized, rather than rerunning unrelated tests.
 Independent whole-version RQ must not call the mismatched session full PASS.
 
+## 2.4 Real same-session candidate integration observed — final Host gap closed (2026-11-01)
+
+[Issue #74 comment 6559949050](https://github.com/kaicreator-mm/task-meta/issues/74#issuecomment-6559949050)
+provides new candidate-pinned **real Windows Node v24.21.0 / ZCode headless CLI**
+evidence, distinct from the intentionally mismatched §2.3 experiment.
+
+- Source before/after: `f355b87e6b91a5e10ad1b0aa9d9b11e282b12f2b`,
+  clean checkout. `TASK_META_HOME` points to the candidate checkout.
+  `TASK_META_ZCODE_SPOOL` is deliberately unset, so the Hook writes to
+  `~/.task-meta/zcode-spool` and the candidate's
+  `config/auto-report.json` reads **the same directory**.
+- A genuine CLI Agent invocation exited **0**, yielding `RQ_V4_ALIGNED`,
+  with unique session `sess_98178a6a-23fa-4147-b155-27b4a1001bcc`.
+  The already-enabled capture plugin was byte-compared with the candidate
+  and automatically recorded SessionStart, UserPromptSubmit, Stop.
+- The Host observed one live OS PID 64224 executing this **candidate's**
+  `src/cli.ts auto-report --agent zcode --session sess_98178a6a…`
+  through the settle window. Spool filename, three JCS envelope
+  session IDs, process argument, and **new Outbox entry session all agree**.
+  Spool digest **3/3** and new Outbox JCS digest **1/1** recomputed exact.
+- A single **new** Outbox entry after settle was `HELD` for
+  `no issue reference` (not `no hook spool entries`). Reported
+  binding recognized `kaicreator-mm/task-meta` from the observed Spool
+  metadata, confirming candidate executor **consumed this same real session**.
+  `comment_url=null`, no public POST. Privacy checks on new Spool/Outbox
+  metadata reported PASS.
+- Existing legitimate CLI kill-switch negative, separate session
+  `sess_006ae812…`, remains [#6557497316](https://github.com/kaicreator-mm/task-meta/issues/74#issuecomment-6557497316);
+  no unnecessary repeat charge.
+
+**Source/evidence taxonomy:** Host-reported
+`REAL_AGENT_CLI + CANDIDATE_V04_AUTO_REPORT + SAME_SESSION_SPOOL_TO_HELD_OUTBOX
+= REPORTED_PASS`. The prior failed and path-mismatched experiments remain
+historically accurate at their own time and are **superseded as blockers** by
+the new same-session evidence; neither is retroactively relabeled PASS.
+The Controller did not independently operate the user's Windows host,
+and the independent whole-version exact-SHA RQ **still has not run**.
+This Host test establishes lawful fail-closed refusal, **not** a
+`REAL_HOST_GITHUB` authenticated publication PASS; that external lane and
+`REAL_TALLY_APP` are explicitly NOT_RUN.
+
 ## 3. Release qualification gates
 
 | Gate | Current state | Evidence / next action |
@@ -216,7 +257,9 @@ Independent whole-version RQ must not call the mismatched session full PASS.
 | Product/L2/DAG and runtime adoption source pins | PASS (source readback) | Blob/pin values above |
 | Candidate Windows n≥5 Hook ON/OFF | REPORTED PASS (HOOK_FIXTURE) | n=6; primary local receipt #6555702454 |
 | Candidate safe recovery negative + privacy | REPORTED PASS (fixture scope) | 40/40; no real public POST |
-| Genuine installed ZCode headless CLI→Hook→Spool→Outbox + kill-switch | **REPORTED PASS (real CLI origin)** | #6557497316; positive and negative sessions, no POST; independent Host-verdict review outstanding |\n| Exact v0.4 auto-report executor/home source binding | **REPORTED PASS (live process path)** | #6559074967: PID 11688 spawned candidate `src/cli.ts`, `TASK_META_HOME` pinned; prior CLI HELD was v0.3 |\n| Candidate v0.4 true same-session CLI→Spool→Outbox consumption | **NOT_PROVEN / RQ BLOCKER** | #6559074967 candidate `HELD/no hook spool entries` from isolated Hook Spool vs default executor Spool mismatch; needs aligned-path real CLI evidence |
+| Genuine installed ZCode headless CLI→Hook→Spool→Outbox + kill-switch | **REPORTED PASS (real CLI origin)** | #6557497316; positive and negative sessions, no POST; independent Host-verdict review outstanding |
+| Exact v0.4 auto-report executor/home source binding | **REPORTED PASS (live process path)** | #6559074967: PID 11688 spawned candidate `src/cli.ts`, `TASK_META_HOME` pinned; prior CLI HELD was v0.3 |
+| Candidate v0.4 true same-session CLI→Spool→Outbox consumption | **REPORTED PASS / READY FOR INDEPENDENT RQ** | #6559949050: actual Agent headless session, exact candidate executable PID 64224, matching Session ID at Spool/process/Outbox, JCS 3/3 + 1/1 and HELD without POST |
 | Independent whole-version exact-SHA RQ | **NOT_RUN / RELEASE BLOCKER** | Distinct reviewer must assess all mandatory scope |
 | Real GitHub production publishing | NOT_RUN; no unapproved POST | Never infer grant from `HELD` |
 | Actual Tally consumer | NOT_RUN | Explicit boundary; no synthetic Tally PASS |
@@ -228,17 +271,15 @@ Independent whole-version RQ must not call the mismatched session full PASS.
    ([Issue #74 comment 6555475885](https://github.com/kaicreator-mm/task-meta/issues/74#issuecomment-6555475885)).
    This evidence branch is **not** the candidate SHA; merging this documentation
    would create a *new version SHA* requiring source-currentness re-evaluation.
-2. Review headless ZCode receipt #6557497316 and independent candidate
-   executor process-path proof #6559074967 as distinct scopes. They now
-   establish actual CLI-origin Hook capture and the candidate v0.4 executable
-   launch, respectively. The candidate session's intentionally isolated Hook
-   Spool and default executor Spool were mismatched, yielding expected HELD.
-   To qualify end-to-end same-session *consumption*, collect a minimal
-   process-local, aligned-Spool real CLI receipt; never infer READY from
-   either a v0.3 executor or a safe mismatch refusal.
+2. Present #6557497316, #6559074967 and final aligned-path real CLI
+   integration #6559949050 to an **independent** whole-version RQ reviewer
+   with explicit source/evidence levels; RQ verifies the current 10-node
+   native DAG, Product/L2, CI, Windows n=6, Golden, security and privacy.
+   The same-session Host requirement is now reported fulfilled. Never infer
+   authenticated public GitHub POST or actual external Tally use.
 3. Perform distinct independent whole-version exact-source RQ (P0/P1/P2,
    READY/BLOCK) against an unchanged version SHA after all required Host evidence.
 4. Only a true READY may authorize a separate guarded `main` merge. Tag/public
    release is a separate subsequent gate.
 
-The current result is **R0 PREQUALIFICATION ONLY: HOLD pending independent exact-candidate RQ and executor source qualification**.
+The current result is **R0 HOST EVIDENCE COMPLETE (reported), awaiting independent exact-candidate whole-version RQ**. Release eligibility remains HOLD until independent PASS.
