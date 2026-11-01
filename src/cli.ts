@@ -277,9 +277,7 @@ async function runDoctorCli(rest: string[], out: (s: string) => void): Promise<n
       const e = object(v, ["client", "help_output_available"]);
       const client = string(e.client);
       return {
-        client: ["codex", "claude", "zcode"].includes(client)
-          ? client
-          : "unsupported",
+        client: ["codex", "claude", "zcode"].includes(client) ? client : "unsupported",
         help_output_available: boolean(e.help_output_available),
       };
     }),
