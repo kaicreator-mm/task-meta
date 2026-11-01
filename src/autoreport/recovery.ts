@@ -391,6 +391,47 @@ export class RecoveryJournal {
     await unlink(this.lockPath(key)).catch(() => undefined);
   }
 
+  /**
+   * Bounded-retry acquisition for SHORT critical sections (budget/pages RMW).
+   * Unlike the single-winner admission lock, concurrent holders of these leaf
+   * locks must eventually proceed; exhaustion fails closed.
+   */
+  private async acquireLockWithRetry(key: string, nonce: string, attempts = 60): Promise<boolean> {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        await this.acquireLock(key, nonce);
+        return true;
+      } catch (err) {
+        if (!(err instanceof RecoveryRefusedError)) throw err;
+        await new Promise((r) => setTimeout(r, 2));
+      }
+    }
+    return false;
+  }
+
+  /** Report-level budget lock key; the innermost lock in every ordering. */
+  private budgetLockKey(reportId: string): string {
+    return `${reportIdHash(reportId)}.budget`;
+  }
+
+  /**
+   * R5 P1: every read-modify-write of .budget.json runs under this report-level
+   * exclusive lock (leaf in the lock order: record -> budget, pages -> budget),
+   * so concurrent reserve()/recordEffect()/chargeForPage() can never lose each
+   * other's counter updates (post/getPage/wallMs/anchor).
+   */
+  private async withBudgetLock<T>(reportId: string, fn: () => Promise<T>): Promise<T> {
+    const key = this.budgetLockKey(reportId);
+    const nonce = randomBytes(8).toString("hex");
+    const ok = await this.acquireLockWithRetry(key, nonce);
+    if (!ok) throw new RecoveryRefusedError("JOURNAL_LOCK_HELD");
+    try {
+      return await fn();
+    } finally {
+      await this.releaseLock(key);
+    }
+  }
+
   /** Strict raw read: ENOENT -> null; any other failure is UNREADABLE; bad shape CORRUPT. */
   private async readRaw(reportId: string, revision: number): Promise<JournalRecord | null> {
     let raw: string;
@@ -562,43 +603,52 @@ export class RecoveryJournal {
         }
       }
       const now = this.now();
-      const ledger = await this.loadLedger(target.reportId);
-      // R3 P1: the wall anchor is established exactly ONCE, on the first
-      // admission. When any durable evidence of prior admissions exists but the
-      // ledger's anchor is missing (lost/reset/legacy ledger without
-      // started_at_ms), the elapsed budget is UNPROVED — refuse instead of
-      // restarting the 10-minute clock.
-      const priorAdmissions =
-        ledger.post > 0 ||
-        ledger.cycles > 0 ||
-        ledger.wallMs > 0 ||
-        predecessorTerminal ||
-        (existing !== null && (existing.state === "TERMINAL" || existing.counters.post > 0));
-      if (
-        priorAdmissions &&
-        (ledger.started_at_ms === undefined || ledger.started_at_ms === null)
-      ) {
-        throw new RecoveryRefusedError("WALL_BUDGET_UNPROVED");
-      }
-      // P1-02: persistent 10-minute wall budget across ALL recovery cycles and
-      // revisions: an absolute first-admission deadline plus accumulated
-      // measured elapsed time, both stored on the report-level ledger.
-      if (
-        (ledger.started_at_ms !== undefined &&
-          ledger.started_at_ms !== null &&
-          now - ledger.started_at_ms > this.budgets.wallMs) ||
-        ledger.wallMs >= this.budgets.wallMs
-      ) {
-        throw new RecoveryRefusedError("WALL_BUDGET_EXHAUSTED");
-      }
-      if (ledger.post >= this.budgets.post) {
-        throw new RecoveryRefusedError("POST_BUDGET_EXHAUSTED");
-      }
-      // A new admission after prior POSTs is a new recovery cycle (P2-01).
-      const cycles = ledger.post > 0 ? ledger.cycles + 1 : 1;
-      if (cycles > this.budgets.cycles) {
-        throw new RecoveryRefusedError("CYCLE_BUDGET_EXHAUSTED");
-      }
+      const ledger = await this.withBudgetLock(target.reportId, async () => {
+        const locked = await this.loadLedger(target.reportId);
+        // R3 P1: the wall anchor is established exactly ONCE, on the first
+        // admission. When any durable evidence of prior admissions exists but
+        // the ledger's anchor is missing (lost/reset/legacy ledger without
+        // started_at_ms), the elapsed budget is UNPROVED — refuse instead of
+        // restarting the 10-minute clock.
+        const priorAdmissions =
+          locked.post > 0 ||
+          locked.cycles > 0 ||
+          locked.wallMs > 0 ||
+          predecessorTerminal ||
+          (existing !== null && (existing.state === "TERMINAL" || existing.counters.post > 0));
+        if (
+          priorAdmissions &&
+          (locked.started_at_ms === undefined || locked.started_at_ms === null)
+        ) {
+          throw new RecoveryRefusedError("WALL_BUDGET_UNPROVED");
+        }
+        // P1-02: persistent 10-minute wall budget across ALL recovery cycles
+        // and revisions: an absolute first-admission deadline plus accumulated
+        // measured elapsed time, both stored on the report-level ledger.
+        if (
+          (locked.started_at_ms !== undefined &&
+            locked.started_at_ms !== null &&
+            now - locked.started_at_ms > this.budgets.wallMs) ||
+          locked.wallMs >= this.budgets.wallMs
+        ) {
+          throw new RecoveryRefusedError("WALL_BUDGET_EXHAUSTED");
+        }
+        if (locked.post >= this.budgets.post) {
+          throw new RecoveryRefusedError("POST_BUDGET_EXHAUSTED");
+        }
+        // A new admission after prior POSTs is a new recovery cycle (P2-01).
+        const cycles = locked.post > 0 ? locked.cycles + 1 : 1;
+        if (cycles > this.budgets.cycles) {
+          throw new RecoveryRefusedError("CYCLE_BUDGET_EXHAUSTED");
+        }
+        await this.persistLedger(target.reportId, {
+          ...locked,
+          post: locked.post + 1,
+          cycles,
+          started_at_ms: locked.started_at_ms ?? now,
+        });
+        return locked;
+      });
       const base = existing ?? this.freshRecord(target.reportId, revision);
       const next: JournalRecord = {
         ...base,
@@ -608,12 +658,6 @@ export class RecoveryJournal {
         counters: { ...base.counters, post: base.counters.post + 1 },
         updated_at_ms: now,
       };
-      await this.persistLedger(target.reportId, {
-        ...ledger,
-        post: ledger.post + 1,
-        cycles,
-        started_at_ms: ledger.started_at_ms ?? now,
-      });
       await this.persist(next);
       this.liveNonce = nonce;
       return { token: `${next.record_key}:${next.epoch}:${next.seq}:${nonce}` };
@@ -634,61 +678,59 @@ export class RecoveryJournal {
     if (page < 1) return { granted: false };
     const key = `${reportIdHash(reportId)}.pages`;
     const nonce = randomBytes(8).toString("hex");
-    try {
-      await this.acquireLock(key, nonce);
-    } catch {
-      return { granted: false };
-    }
+    if (!(await this.acquireLockWithRetry(key, nonce))) return { granted: false };
     try {
       // R4 P1: the charge history is mirrored on the report-level budget ledger
       // (a separate file), so deleting or rewriting the pages sidecar can never
       // restart the GET budget. Fail closed on any inconsistency.
-      let ledger: RecoveryCounters;
-      try {
-        ledger = await this.loadLedger(reportId);
-      } catch {
-        return { granted: false }; // unreadable/corrupt ledger: no page admitted
-      }
-      let raw: string | null = null;
-      try {
-        raw = await readFile(this.pagesPath(reportId), "utf8");
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== "ENOENT") return { granted: false };
-      }
-      let used: number;
-      if (raw === null) {
-        // No sidecar: legitimate only when there is no charging history either.
-        if (ledger.getPage > 0) return { granted: false };
-        used = 0;
-      } else {
-        let parsed: unknown;
+      return await this.withBudgetLock(reportId, async (): Promise<{ granted: boolean }> => {
+        let ledger: RecoveryCounters;
         try {
-          parsed = JSON.parse(raw);
+          ledger = await this.loadLedger(reportId);
         } catch {
-          return { granted: false }; // corrupt sidecar: refuse, never reset
+          return { granted: false }; // unreadable/corrupt ledger: no page admitted
         }
-        const charged = (parsed as { getPage?: unknown }).getPage;
-        if (
-          typeof parsed !== "object" ||
-          parsed === null ||
-          typeof charged !== "number" ||
-          !Number.isSafeInteger(charged) ||
-          charged < 0
-        ) {
-          return { granted: false };
+        let raw: string | null = null;
+        try {
+          raw = await readFile(this.pagesPath(reportId), "utf8");
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code !== "ENOENT") return { granted: false };
         }
-        if (charged < ledger.getPage) return { granted: false }; // rewound sidecar
-        used = charged;
-      }
-      if (used >= this.budgets.getPage) return { granted: false };
-      await mkdir(this.dir, { recursive: true });
-      const tmp = join(this.dir, `.${key}.tmp-${nonce}`);
-      await writeFile(tmp, `${JSON.stringify({ getPage: used + 1 })}\n`, "utf8");
-      await rename(tmp, this.pagesPath(reportId));
-      // Persist the mirrored history AFTER the sidecar so a crash between the
-      // two writes leaves the mirror at most behind, never ahead.
-      await this.persistLedger(reportId, { ...ledger, getPage: used + 1 });
-      return { granted: true };
+        let used: number;
+        if (raw === null) {
+          // No sidecar: legitimate only when there is no charging history either.
+          if (ledger.getPage > 0) return { granted: false };
+          used = 0;
+        } else {
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(raw);
+          } catch {
+            return { granted: false }; // corrupt sidecar: refuse, never reset
+          }
+          const charged = (parsed as { getPage?: unknown }).getPage;
+          if (
+            typeof parsed !== "object" ||
+            parsed === null ||
+            typeof charged !== "number" ||
+            !Number.isSafeInteger(charged) ||
+            charged < 0
+          ) {
+            return { granted: false };
+          }
+          if (charged < ledger.getPage) return { granted: false }; // rewound sidecar
+          used = charged;
+        }
+        if (used >= this.budgets.getPage) return { granted: false };
+        await mkdir(this.dir, { recursive: true });
+        const tmp = join(this.dir, `.${key}.tmp-${nonce}`);
+        await writeFile(tmp, `${JSON.stringify({ getPage: used + 1 })}\n`, "utf8");
+        await rename(tmp, this.pagesPath(reportId));
+        // Persist the mirrored history AFTER the sidecar so a crash between the
+        // two writes leaves the mirror at most behind, never ahead.
+        await this.persistLedger(reportId, { ...ledger, getPage: used + 1 });
+        return { granted: true };
+      });
     } finally {
       await this.releaseLock(key);
     }
@@ -727,12 +769,15 @@ export class RecoveryJournal {
     };
     await this.persist(next);
     this.liveNonce = null;
-    // Charge the measured admission duration into the persistent wall budget.
+    // Charge the measured admission duration into the persistent wall budget,
+    // under the same report-level budget lock as every other ledger writer.
     try {
-      const ledger = await this.loadLedger(reportId);
-      await this.persistLedger(reportId, {
-        ...ledger,
-        wallMs: ledger.wallMs + (now - rec.updated_at_ms),
+      await this.withBudgetLock(reportId, async () => {
+        const ledger = await this.loadLedger(reportId);
+        await this.persistLedger(reportId, {
+          ...ledger,
+          wallMs: ledger.wallMs + (now - rec.updated_at_ms),
+        });
       });
     } catch {
       // A ledger charge failure never fabricates a terminal state; the wall

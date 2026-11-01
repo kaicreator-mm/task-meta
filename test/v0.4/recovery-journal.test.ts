@@ -741,3 +741,85 @@ test("B2 R4: a rewound sidecar below the mirrored history refuses", async () => 
   assert.deepEqual(await j.chargeForPage("rewind", 1), { granted: false });
   await rm(dir, { recursive: true, force: true });
 });
+
+test("B2 R5: concurrent cross-instance charges grant exactly the budget, counters never regress", async () => {
+  const dir = await tmpDir();
+  const budgets = { ...DEFAULT_BUDGETS, getPage: 3, post: 3, wallMs: 600_000, cycles: 3 };
+  const j1 = new RecoveryJournal(dir, budgets);
+  const j2 = new RecoveryJournal(dir, budgets);
+  const j3 = new RecoveryJournal(dir, budgets);
+  // Six concurrent page charges across three instances; budget is exactly 3.
+  const grants = await Promise.all(
+    Array.from({ length: 6 }, (_, i) =>
+      (i % 3 === 0 ? j1 : i % 3 === 1 ? j2 : j3).chargeForPage("concurrent-get", 1),
+    ),
+  );
+  assert.equal(
+    grants.filter((g) => g.granted).length,
+    3,
+    "exactly the budget is granted, no lost updates",
+  );
+  const ledger = JSON.parse(
+    await readFile(join(dir, `${reportIdHash("concurrent-get")}.budget.json`), "utf8"),
+  ) as { getPage: number };
+  assert.equal(ledger.getPage, 3, "ledger mirror equals the granted count");
+  const sidecar = JSON.parse(
+    await readFile(join(dir, `${reportIdHash("concurrent-get")}.pages.json`), "utf8"),
+  ) as { getPage: number };
+  assert.equal(sidecar.getPage, 3);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R5: reserve racing page charges loses neither the POST nor the GET counter", async () => {
+  const dir = await tmpDir();
+  const budgets = { ...DEFAULT_BUDGETS, getPage: 5, post: 3, wallMs: 600_000, cycles: 3 };
+  const j1 = new RecoveryJournal(dir, budgets);
+  const j2 = new RecoveryJournal(dir, budgets);
+  const target = {
+    repo: REPO,
+    issue: ISSUE,
+    reportId: "race-post-get",
+    dataDigest: "1".repeat(64),
+  };
+  // One admission races two page charges from another instance.
+  const [, g1, g2] = await Promise.all([
+    j1.reserve(target),
+    j2.chargeForPage("race-post-get", 1),
+    j2.chargeForPage("race-post-get", 1),
+  ]);
+  assert.equal(g1.granted, true);
+  assert.equal(g2.granted, true);
+  const ledger = JSON.parse(
+    await readFile(join(dir, `${reportIdHash("race-post-get")}.budget.json`), "utf8"),
+  ) as { post: number; getPage: number; started_at_ms: number | null };
+  assert.equal(ledger.post, 1, "the admission survived the concurrent GET charges");
+  assert.equal(ledger.getPage, 2, "the GET charges survived the concurrent admission");
+  assert.ok(typeof ledger.started_at_ms === "number", "the wall anchor survived");
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R5: recordEffect racing page charges keeps both wallMs and getPage", async () => {
+  const dir = await tmpDir();
+  let clock = 5_000_000;
+  const budgets = { ...DEFAULT_BUDGETS, getPage: 5, post: 3, wallMs: 600_000, cycles: 3 };
+  const j1 = new RecoveryJournal(dir, budgets, () => clock);
+  const reportId = "race-wall-get";
+  await j1.reserve({ repo: REPO, issue: ISSUE, reportId, dataDigest: "1".repeat(64) });
+  clock += 1000;
+  const j2 = new RecoveryJournal(dir, budgets, () => clock);
+  await Promise.all([
+    j1.recordEffect(reportId, "REMOTE_SAME", {
+      attempts: 1,
+      lastHttpStatus: null,
+      outcomeState: "PUBLISHED",
+    }),
+    j2.chargeForPage(reportId, 1),
+    j2.chargeForPage(reportId, 1),
+  ]);
+  const ledger = JSON.parse(
+    await readFile(join(dir, `${reportIdHash(reportId)}.budget.json`), "utf8"),
+  ) as { getPage: number; wallMs: number };
+  assert.equal(ledger.getPage, 2);
+  assert.ok(ledger.wallMs >= 1000, "the measured wall charge survived the racing GET charges");
+  await rm(dir, { recursive: true, force: true });
+});
