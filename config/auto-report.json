@@ -26,5 +26,12 @@
     "kaicreator-mm/task-meta-e2e": [
       "test"
     ]
+  },
+  "recovery": {
+    "enabled": false,
+    "post_budget": 3,
+    "get_page_budget": 200,
+    "wall_budget_ms": 600000,
+    "max_cycles": 3
   }
 }

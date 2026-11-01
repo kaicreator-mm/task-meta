@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { parseRecoveryConfig, type ValidatedRecoveryConfig } from "./recovery.ts";
 
 export interface AutoReportConfig {
   enabled: boolean;
@@ -30,6 +31,8 @@ export interface AutoReportConfig {
    * never inferred from what a gate happened to run.
    */
   verifier_scope: Record<string, string[]>;
+  /** B2 opt-in durable recovery (validated; absent/disabled keeps legacy direct mode). */
+  recovery: ValidatedRecoveryConfig;
 }
 
 export const DEFAULT_CONFIG_PATH = join(
@@ -89,6 +92,7 @@ export function loadAutoReportConfig(path?: string, home: string = homedir()): A
     gate_log_root: gate === null ? null : expandHome(gate, home),
     publisher_source_sha: str(j.publisher_source_sha, "auto"),
     verifier_scope: verifierScope(j.verifier_scope),
+    recovery: parseRecoveryConfig(j.recovery),
   };
 }
 
