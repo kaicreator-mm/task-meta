@@ -27,6 +27,7 @@ import {
   persistRevision,
   readManifestOrNull,
 } from "./collect-core.ts";
+import { DIAGNOSTIC_CATALOG, type DoctorInput, runDoctor } from "./doctor/index.ts";
 import type { ManifestPointer } from "./model.ts";
 import { assertNoForbiddenContent } from "./privacy.ts";
 import type { PublicationPolicyProvider } from "./publish/authority.ts";
@@ -76,7 +77,8 @@ const USAGE = `usage: collect --repo <owner/name> --issue <n> --headless <file>
        auto-report --agent zcode|claude|codex --session <id> [--trigger stop|session-end]
                [--spool-dir <dir>] [--rollout-dir <dir>] [--projects-dir <dir>]
                [--store <dir>] [--outbox <dir>] [--config <file>] [--dry-run]
-       auto-report --retry [--config <file>] [--outbox <dir>] [--dry-run]`;
+       auto-report --retry [--config <file>] [--outbox <dir>] [--dry-run]
+       doctor --catalog | --input <preclassified-evidence.json> (read-only; no live scan)`;
 
 class UsageError extends Error {}
 const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -122,6 +124,195 @@ function optionsFrom(argv: string[]) {
   return { values, positionals };
 }
 
+/**
+ * v0.4 I: a read-only CLI adapter to A1's single canonical Doctor catalog.
+ * Input is explicitly preclassified evidence, NEVER a claim that a live repo,
+ * Agent CLI, Hook or credential store was scanned. All user-supplied identifiers
+ * are replaced with bounded opaque references before calling runDoctor.
+ */
+async function runDoctorCli(rest: string[], out: (s: string) => void): Promise<number> {
+  let args: ReturnType<typeof parseArgs>;
+  try {
+    args = parseArgs({
+      args: rest,
+      strict: true,
+      allowPositionals: false,
+      options: {
+        catalog: { type: "boolean" },
+        input: { type: "string" },
+      },
+    });
+  } catch {
+    throw new UsageError("doctor accepts exactly --catalog or --input <file>");
+  }
+  const catalog = args.values.catalog === true;
+  const path = args.values.input;
+  if (catalog === (path !== undefined)) {
+    throw new UsageError("doctor requires exactly one of --catalog or --input <file>");
+  }
+  if (catalog) {
+    out(
+      `${JSON.stringify({
+        mode: "CATALOG_ONLY",
+        evidence: "NOT_RUN",
+        catalog: DIAGNOSTIC_CATALOG,
+        network_used: false,
+        writes_performed: [],
+        repairs_performed: [],
+      })}\n`,
+    );
+    return EXIT.OK;
+  }
+
+  let parsed: unknown;
+  try {
+    const file = resolve(path as string);
+    if ((await stat(file)).size > 256 * 1024) throw new Error("oversized");
+    parsed = JSON.parse(await readFile(file, "utf8"));
+  } catch {
+    // Do not echo paths, source text or JSON parser snippets.
+    throw new UsageError("doctor input unreadable, oversized or invalid JSON");
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new UsageError("doctor input must be a preclassified evidence object");
+  }
+  const record = parsed as Record<string, unknown>;
+  const fields = [
+    "spool",
+    "hook_errors",
+    "paths",
+    "credentials",
+    "clients",
+    "publication_statuses",
+    "post_effects",
+  ] as const;
+  if (Object.keys(record).some((key) => !fields.includes(key as (typeof fields)[number]))) {
+    throw new UsageError("doctor input contains unsupported fields");
+  }
+  const list = (field: (typeof fields)[number]): unknown[] => {
+    const v = record[field];
+    if (v === undefined) return [];
+    if (!Array.isArray(v) || v.length > 200) {
+      throw new UsageError("doctor input requires bounded evidence arrays");
+    }
+    return v as unknown[];
+  };
+  const object = (v: unknown, keys: readonly string[]): Record<string, unknown> => {
+    if (v === null || typeof v !== "object" || Array.isArray(v)) {
+      throw new UsageError("doctor evidence item has invalid shape");
+    }
+    const item = v as Record<string, unknown>;
+    if (Object.keys(item).some((key) => !keys.includes(key))) {
+      throw new UsageError("doctor evidence item contains unsupported fields");
+    }
+    if (keys.some((key) => !Object.hasOwn(item, key))) {
+      throw new UsageError("doctor evidence item is missing required fields");
+    }
+    return item;
+  };
+  const boolean = (v: unknown): boolean => {
+    if (typeof v !== "boolean") throw new UsageError("doctor requires typed evidence");
+    return v;
+  };
+  const string = (v: unknown): string => {
+    if (typeof v !== "string") throw new UsageError("doctor requires typed evidence");
+    return v;
+  };
+  const statuses = new Set([
+    "PENDING",
+    "IN_FLIGHT",
+    "PUBLISHED",
+    "ALREADY_PUBLISHED",
+    "DENIED",
+    "CONFLICT",
+    "HELD",
+    "UNKNOWN",
+    "JOURNAL_INCOMPLETE",
+    "FAILED_PROVEN_PRE_SEND",
+  ]);
+  const effects = new Set([
+    "PROVEN_NOT_SENT",
+    "REMOTE_SAME",
+    "REMOTE_DIFFERENT_OR_DAMAGED",
+    "SENT_OR_MAY_HAVE_SENT",
+  ]);
+  const input: DoctorInput = {
+    repo_root: "repo:redacted",
+    spool: list("spool").map((v, i) => {
+      const e = object(v, ["path", "parse_ok"]);
+      string(e.path);
+      return { path: `spool:${i + 1}`, parse_ok: boolean(e.parse_ok) };
+    }),
+    hook_errors: list("hook_errors").map((v) => {
+      const e = object(v, ["source", "error_class"]);
+      if (e.error_class !== null && typeof e.error_class !== "string") {
+        throw new UsageError("doctor requires typed evidence");
+      }
+      if (e.source !== "TRUSTED_WITNESS" && e.source !== "RAW_LOG") {
+        throw new UsageError("doctor hook source must be typed");
+      }
+      // A JSON assertion of TRUSTED_WITNESS is not source-backed authority.
+      // No externally supplied class token may be reflected into a diagnostic.
+      return { source: "RAW_LOG" as const, error_class: null };
+    }),
+    paths: list("paths").map((v, i) => {
+      const e = object(v, ["path", "is_symlink", "target_inside_repo"]);
+      string(e.path);
+      const inside = e.target_inside_repo;
+      if (inside !== null && inside !== true && inside !== false) {
+        throw new UsageError("doctor path evidence must be typed");
+      }
+      return {
+        path: `path:${i + 1}`,
+        is_symlink: boolean(e.is_symlink),
+        target_inside_repo: inside,
+      };
+    }),
+    credentials: list("credentials").map((v, i) => {
+      const e = object(v, ["name", "looks_like_secret"]);
+      string(e.name);
+      return { name: `credential:${i + 1}`, looks_like_secret: boolean(e.looks_like_secret) };
+    }),
+    clients: list("clients").map((v) => {
+      const e = object(v, ["client", "help_output_available"]);
+      const client = string(e.client);
+      return {
+        client: ["codex", "claude", "zcode"].includes(client) ? client : "unsupported",
+        help_output_available: boolean(e.help_output_available),
+      };
+    }),
+    publication_statuses: list("publication_statuses").map((v, i) => {
+      const e = object(v, ["status", "target_ref"]);
+      string(e.target_ref);
+      if (!statuses.has(e.status as string)) throw new UsageError("doctor status unknown");
+      return {
+        status: e.status as DoctorInput["publication_statuses"][number]["status"],
+        target_ref: `publication:${i + 1}`,
+      };
+    }),
+    post_effects: list("post_effects").map((v, i) => {
+      const e = object(v, ["effect", "target_ref"]);
+      string(e.target_ref);
+      if (!effects.has(e.effect as string)) throw new UsageError("doctor effect unknown");
+      return {
+        effect: e.effect as DoctorInput["post_effects"][number]["effect"],
+        target_ref: `effect:${i + 1}`,
+      };
+    }),
+  };
+  const report = runDoctor(input);
+  out(
+    `${JSON.stringify({
+      mode: "PRECLASSIFIED_EVIDENCE_ONLY",
+      evidence: "SOURCE_ONLY",
+      missing_fields: fields.filter((field) => record[field] === undefined),
+      limits: ["No live repo/Host/Agent scan performed", "Missing evidence is not a PASS"],
+      ...report,
+    })}\n`,
+  );
+  return EXIT.OK;
+}
+
 interface GateSpec {
   file: string;
   sha: string | null;
@@ -147,6 +338,7 @@ async function readText(path: string, what: string): Promise<string> {
 async function run(argv: string[], deps: CliDeps, out: (s: string) => void): Promise<number> {
   const now = deps.now ?? (() => new Date());
   const [command, ...rest] = argv;
+  if (command === "doctor") return runDoctorCli(rest, out);
   if (command === "auto-report") return runAutoReportCommand(rest, deps, out);
   if (command !== "collect" && command !== "collect-codex" && command !== "collect-claude") {
     throw new UsageError(`unknown or missing command: ${command ?? ""}`);

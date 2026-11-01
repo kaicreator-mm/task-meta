@@ -1,0 +1,825 @@
+// v0.4 B2 (#69) R1 — crash-safe journal, interprocess CAS, strict reads,
+// revision binding, chain integrity, budgets, full-hash locks.
+import assert from "node:assert/strict";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { test } from "node:test";
+import {
+  classifyRecoveryError,
+  computeChainEvidence,
+  DEFAULT_BUDGETS,
+  parseRecoveryConfig,
+  RecoveryJournal,
+  RecoveryRefusedError,
+  recordKey,
+  recoveryHooks,
+  reportIdHash,
+} from "../../src/autoreport/recovery.ts";
+import { canonicalDigest, canonicalize } from "../../src/canonical.ts";
+import type { AttemptSummary, ManifestPointer } from "../../src/model.ts";
+import { type GitHubClient, type IssueComment, publishReport } from "../../src/publish/index.ts";
+import { buildReportDocument, renderReportComment } from "../../src/report/index.ts";
+
+const REPO = "example-org/example-repo";
+const ISSUE = 42;
+
+function summaryFor(): AttemptSummary {
+  return {
+    repository: REPO,
+    issue_number: ISSUE,
+    task_ref: `${REPO}#${ISSUE}`,
+    attempt_ref: "sess-b2-0001",
+    attempt_binding: "COLLECTOR_ONLY",
+    source_sha: "1234567890abcdef1234567890abcdef12345678",
+    actor: {
+      role: "builder",
+      operator_kind: "zcode",
+      operator_id: "zcode:synthetic",
+      session_ref: "sess-b2-0001",
+      transport_actor: null,
+    },
+    observed_at: "2026-10-22T10:00:00Z",
+    observation_refs: ["zcode:evt-1"],
+    capture_coverage: "PARTIAL",
+    limits: ["synthetic fixture"],
+    metrics: [],
+    cost: {
+      value: null,
+      currency: null,
+      basis: "UNKNOWN",
+      pricing_basis: null,
+      epistemic: "UNKNOWN",
+      source_refs: [],
+    },
+    attempt_refs: ["sess-b2-0001"],
+    excluded_attempt_refs: [],
+    verifier: {
+      status: "PARTIAL",
+      subject_sha: null,
+      checked: ["gate"],
+      failed: [],
+      skipped: [],
+      unchecked: ["task acceptance"],
+      coverage: "PARTIAL",
+      epistemic: "OBSERVED",
+      source_refs: ["zcode:gate-1"],
+    },
+    learning: { state: "NONE_MATERIAL", source_refs: [] },
+  };
+}
+
+function bodyFor(): string {
+  const manifest: ManifestPointer = {
+    ref: "object:private/manifests/abc",
+    sha256: "c".repeat(64),
+    access: "PROJECT_PRIVATE",
+  };
+  const doc = buildReportDocument(summaryFor(), manifest, {
+    profile: "v4",
+    revision: 1,
+    supersedes: null,
+  });
+  return renderReportComment(doc);
+}
+
+class ListClient implements GitHubClient {
+  comments: IssueComment[] = [];
+  creates = 0;
+  lists = 0;
+  failCreates: unknown[] = [];
+  async listIssueComments(_r: string, _i: number, page: number, perPage: number) {
+    this.lists++;
+    const start = (page - 1) * perPage;
+    const slice = this.comments.slice(start, start + perPage);
+    return {
+      comments: slice.map((c) => ({ ...c })),
+      hasNext: start + perPage < this.comments.length,
+    };
+  }
+  async createIssueComment(_r: string, _i: number, body: string) {
+    this.creates++;
+    const before = this.failCreates.shift();
+    if (before) throw before;
+    const c: IssueComment = {
+      id: 3000 + this.creates,
+      html_url: `https://example.invalid/c/${this.creates}`,
+      body,
+      user_login: "bot",
+    };
+    this.comments.push(c);
+    return { ...c };
+  }
+}
+
+const noSleep = async () => {};
+let seq = 0;
+async function tmpDir(): Promise<string> {
+  return mkdtemp(join(tmpdir(), `tm-b2r1-${seq++}-`));
+}
+const REPORT_ID = "task-meta:sess-b2-0001"; // the document's actual report_id
+const isRefusal = (code: string) => (e: unknown) =>
+  e instanceof RecoveryRefusedError && e.code === code;
+
+test("B2 R1: journal AND lock names use full hashes; legacy-truncation collisions impossible", () => {
+  const a = "task-meta:x".padEnd(200, "A");
+  const b = "task-meta:x".padEnd(200, "B");
+  assert.equal(a.slice(0, 128) !== b.slice(0, 128), true);
+  assert.notEqual(reportIdHash(a), reportIdHash(b));
+  assert.notEqual(recordKey(a, 1), recordKey(b, 1));
+  assert.equal(recordKey(a, 1).length, 64);
+});
+
+test("B2 R1: config opt-in parses with strict bounds and fails closed on invalid", () => {
+  assert.equal(parseRecoveryConfig(undefined).enabled, false);
+  const on = parseRecoveryConfig({ enabled: true, get_page_budget: 500 });
+  assert.equal(on.enabled, true);
+  assert.equal(on.budgets.getPage, 500);
+  for (const bad of [
+    { enabled: "yes" },
+    { enabled: true, post_budget: 4 },
+    { enabled: true, get_page_budget: 1001 },
+    { enabled: true, wall_budget_ms: 0 },
+    { enabled: true, max_cycles: 4 },
+  ]) {
+    assert.throws(() => parseRecoveryConfig(bad), /RECOVERY_CONFIG_INVALID/);
+  }
+});
+
+test("B2 R1: two interleaved instances reserve exactly once (interprocess single winner)", async () => {
+  const dir = await tmpDir();
+  const j1 = new RecoveryJournal(dir);
+  const j2 = new RecoveryJournal(dir);
+  const target = { repo: REPO, issue: ISSUE, reportId: REPORT_ID, dataDigest: "a".repeat(64) };
+  const results = await Promise.allSettled([
+    j1.reserve(target),
+    j2.reserve(target),
+    j2.reserve(target),
+  ]);
+  const fulfilled = results.filter((r) => r.status === "fulfilled");
+  const rejected = results.filter((r) => r.status === "rejected");
+  assert.equal(fulfilled.length, 1);
+  assert.equal(rejected.length, 2);
+  // The winner's IN_FLIGHT is durable; every loser saw a fail-closed refusal.
+  const raw = JSON.parse(await readFile(join(dir, `${recordKey(REPORT_ID, 1)}.json`), "utf8")) as {
+    state: string;
+  };
+  assert.equal(raw.state, "IN_FLIGHT");
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R1: a read failure is never a fresh PENDING (fail closed, no POST claim)", async () => {
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir);
+  // A directory in the record path makes readFile fail with a non-ENOENT code.
+  await mkdir(join(dir, `${recordKey(REPORT_ID, 1)}.json`), { recursive: true });
+  await assert.rejects(
+    journal.reserve({ repo: REPO, issue: ISSUE, reportId: REPORT_ID, dataDigest: "a".repeat(64) }),
+    isRefusal("JOURNAL_UNREADABLE"),
+  );
+  const projection = await journal.projectRecovery(REPORT_ID, 1);
+  assert.equal(projection.state, "HELD");
+  assert.equal(projection.last_cause, "JOURNAL_UNREADABLE");
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R1: malformed persisted records are JOURNAL_CORRUPT, never admitted", async () => {
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir);
+  const path = join(dir, `${recordKey(REPORT_ID, 1)}.json`);
+  await writeFile(
+    path,
+    JSON.stringify({ schema: "task-meta/recovery-journal/v1", counters: "bad" }),
+    "utf8",
+  );
+  await assert.rejects(
+    journal.reserve({ repo: REPO, issue: ISSUE, reportId: REPORT_ID, dataDigest: "a".repeat(64) }),
+    isRefusal("JOURNAL_CORRUPT"),
+  );
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R1: corrupt or concurrently raced GET sidecar never resets nor over-admits", async () => {
+  const dir = await tmpDir();
+  const cap1 = new RecoveryJournal(dir, {
+    ...DEFAULT_BUDGETS,
+    getPage: 1,
+    post: 3,
+    wallMs: 600_000,
+    cycles: 3,
+  });
+  // Concurrent charges with cap=1: exactly one winner.
+  const grants = await Promise.all([
+    cap1.chargeForPage(REPORT_ID, 1),
+    cap1.chargeForPage(REPORT_ID, 1),
+    cap1.chargeForPage(REPORT_ID, 1),
+  ]);
+  assert.equal(grants.filter((g) => g.granted).length, 1);
+  // Corrupt the sidecar: further charges refuse (no reset to zero).
+  await writeFile(join(dir, `${reportIdHash(REPORT_ID)}.pages.json`), "{torn", "utf8");
+  assert.deepEqual(await cap1.chargeForPage(REPORT_ID, 2), { granted: false });
+  const stillOne = new RecoveryJournal(dir, {
+    ...DEFAULT_BUDGETS,
+    getPage: 1,
+    post: 3,
+    wallMs: 600_000,
+    cycles: 3,
+  });
+  assert.deepEqual(await stillOne.chargeForPage(REPORT_ID, 3), { granted: false });
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R1 P1-05 golden: revision 2 is admissible; same-revision conflict is not", async () => {
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir);
+  const d1 = "1".repeat(64);
+  const d2 = "2".repeat(64);
+  await (await journal.reserve({ repo: REPO, issue: ISSUE, reportId: REPORT_ID, dataDigest: d1 }))
+    .token;
+  await journal.recordEffect(
+    REPORT_ID,
+    "REMOTE_SAME",
+    { attempts: 1, lastHttpStatus: null, outcomeState: "PUBLISHED" },
+    1,
+  );
+  // Same revision, same digest: never re-post.
+  await assert.rejects(
+    journal.reserve({ repo: REPO, issue: ISSUE, reportId: REPORT_ID, dataDigest: d1 }),
+    isRefusal("JOURNAL_TERMINAL_NO_REPOST"),
+  );
+  // Same revision, differing digest: conflict refusal.
+  await assert.rejects(
+    journal.reserve({ repo: REPO, issue: ISSUE, reportId: REPORT_ID, dataDigest: d2 }),
+    isRefusal("JOURNAL_DIGEST_CONFLICT"),
+  );
+  // A legitimate revision 2 with valid supersedes gets its own admission.
+  const rev2 = await journal.reserve({
+    repo: REPO,
+    issue: ISSUE,
+    reportId: REPORT_ID,
+    dataDigest: d2,
+    revision: 2,
+    supersedes: 1,
+  });
+  assert.ok(rev2.token.length > 0);
+  // The aggregated POST budget charged both admissions.
+  const ledger = JSON.parse(
+    await readFile(join(dir, `${reportIdHash(REPORT_ID)}.budget.json`), "utf8"),
+  ) as { post: number; cycles: number };
+  assert.equal(ledger.post, 2);
+  assert.equal(ledger.cycles, 2, "a new admission after prior POSTs is a new cycle");
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R1: ambiguous prior revision blocks a later revision (no bypass)", async () => {
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir);
+  await (
+    await journal.reserve({
+      repo: REPO,
+      issue: ISSUE,
+      reportId: REPORT_ID,
+      dataDigest: "1".repeat(64),
+    })
+  ).token;
+  await journal.recordEffect(
+    REPORT_ID,
+    "SENT_OR_MAY_HAVE_SENT",
+    { attempts: 1, lastHttpStatus: 503, outcomeState: "NOT_PUBLISHED" },
+    1,
+  );
+  await assert.rejects(
+    journal.reserve({
+      repo: REPO,
+      issue: ISSUE,
+      reportId: REPORT_ID,
+      dataDigest: "2".repeat(64),
+      revision: 2,
+      supersedes: 1,
+    }),
+    isRefusal("CHAIN_PREDECESSOR_UNRESOLVED"),
+  );
+  // And revision 2 without any predecessor record at all refuses the same way.
+  await assert.rejects(
+    journal.reserve({
+      repo: REPO,
+      issue: ISSUE,
+      reportId: REPORT_ID,
+      dataDigest: "3".repeat(64),
+      revision: 3,
+      supersedes: 2,
+    }),
+    isRefusal("CHAIN_PREDECESSOR_UNRESOLVED"),
+  );
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R1: recovery cycles advance and hit the persistent cycle ceiling", async () => {
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir, {
+    ...DEFAULT_BUDGETS,
+    post: 3,
+    getPage: 50,
+    wallMs: 600_000,
+    cycles: 2,
+  });
+  const t = (digest: string, revision: number) => ({
+    repo: REPO,
+    issue: ISSUE,
+    reportId: REPORT_ID,
+    dataDigest: digest,
+    revision,
+    supersedes: revision > 1 ? revision - 1 : null,
+  });
+  for (const rev of [1, 2]) {
+    await (await journal.reserve(t(`${rev}`.repeat(64), rev))).token;
+    await journal.recordEffect(
+      REPORT_ID,
+      "REMOTE_SAME",
+      { attempts: 1, lastHttpStatus: null, outcomeState: "PUBLISHED" },
+      rev,
+    );
+  }
+  // Third admission would be cycle 3 > ceiling 2.
+  await assert.rejects(journal.reserve(t("3".repeat(64), 3)), isRefusal("CYCLE_BUDGET_EXHAUSTED"));
+  await rm(dir, { recursive: true, force: true });
+});
+
+const NEWLINE = String.fromCharCode(10);
+const spoolLine = (entry: Record<string, unknown>): string =>
+  `{"d":"${canonicalDigest(entry)}","e":${canonicalize(entry)}}` + NEWLINE;
+
+function validSpool(count: number, offset = 0): string {
+  let out = "";
+  for (let i = 1; i <= count; i++) {
+    out += spoolLine({ n: offset + i, event: "Stop", session_id: "s" });
+  }
+  return out;
+}
+
+test("B2 R2: spool integrity mirrors Spool.replay byte-for-byte; unproved source holds with zero POST", async () => {
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir);
+  const good = validSpool(2);
+  await journal.attachReplayEvidence(REPORT_ID, computeChainEvidence(good));
+  const rec = await journal.load(REPORT_ID);
+  assert.equal(rec.state, "PENDING");
+  assert.equal(rec.chain_len, 2);
+
+  // Byte-level negatives, each with the authoritative skip reason.
+  const badLine = (line: string) => computeChainEvidence(validSpool(1) + line + NEWLINE);
+  // 1) malformed shape: JSON object without {d,e}
+  const malformed = badLine(JSON.stringify({ no: "envelope" }));
+  assert.deepEqual(malformed.skipped, [{ line: 2, reason: "malformed line" }]);
+  // 2) digest mismatch: valid envelope, wrong digest
+  const mismatch = badLine(`{"d":"${"0".repeat(64)}","e":${canonicalize({ x: 1 })}}` + NEWLINE);
+  assert.deepEqual(mismatch.skipped, [{ line: 2, reason: "digest mismatch" }]);
+  // 3) parseable last line missing its terminating newline (crash mid-append)
+  const truncated = computeChainEvidence(
+    `${validSpool(1)}{"d":"${canonicalDigest({ y: 1 })}","e":${canonicalize({ y: 1 })}}`,
+  );
+  assert.deepEqual(truncated.skipped, [{ line: 2, reason: "truncated trailing line" }]);
+  // 4) invalid JSON
+  const invalid = badLine("not-json" + NEWLINE);
+  assert.deepEqual(invalid.skipped, [{ line: 2, reason: "invalid JSON" }]);
+
+  for (const ev of [malformed, mismatch, truncated, invalid]) {
+    await journal.attachReplayEvidence(`unproved-${ev.skipped[0]?.reason}`, ev);
+  }
+  for (const id of [
+    "unproved-malformed line",
+    "unproved-digest mismatch",
+    "unproved-truncated trailing line",
+    "unproved-invalid JSON",
+  ]) {
+    const held = await journal.load(id);
+    assert.equal(held.state, "HELD", id);
+    assert.equal(held.last_cause, "SOURCE_UNPROVED", id);
+    assert.ok(held.replay_skipped.length > 0, `${id} retains its skip tokens`);
+    await assert.rejects(
+      journal.reserve({ repo: REPO, issue: ISSUE, reportId: id, dataDigest: "a".repeat(64) }),
+      isRefusal("CHAIN_INTEGRITY_BROKEN"),
+    );
+  }
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R2: a tampered but well-formed segment still breaks the chain (HELD)", async () => {
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir);
+  await journal.attachReplayEvidence(REPORT_ID, computeChainEvidence(validSpool(2)));
+  const tampered =
+    spoolLine({ n: 1, event: "Stop", session_id: "tampered" }) +
+    spoolLine({ n: 2, event: "Stop", session_id: "s" });
+  await journal.attachReplayEvidence(REPORT_ID, computeChainEvidence(tampered));
+  const rec = await journal.load(REPORT_ID);
+  assert.equal(rec.state, "HELD");
+  assert.equal(rec.last_cause, "CHAIN_INTEGRITY_BROKEN");
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R2: legitimate chains longer than the 64-entry tail still extend", async () => {
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir);
+  await journal.attachReplayEvidence(REPORT_ID, computeChainEvidence(validSpool(70)));
+  let rec = await journal.load(REPORT_ID);
+  assert.equal(rec.chain_len, 70);
+  assert.equal(rec.chain.length, 64); // bounded storage retained
+  // Appending 30 more segments is a valid extension of the 70-line chain.
+  await journal.attachReplayEvidence(REPORT_ID, computeChainEvidence(validSpool(100)));
+  rec = await journal.load(REPORT_ID);
+  assert.equal(rec.state, "PENDING");
+  assert.equal(rec.chain_len, 100);
+  assert.equal(rec.chain.length, 64);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R2: persistent wall budget spans cycles and revisions (fake clock)", async () => {
+  const dir = await tmpDir();
+  let clock = 1_000_000;
+  const j1 = new RecoveryJournal(
+    dir,
+    { ...DEFAULT_BUDGETS, post: 3, getPage: 50, wallMs: 10 * 60_000, cycles: 3 },
+    () => clock,
+  );
+  const t = (digest: string, revision: number) => ({
+    repo: REPO,
+    issue: ISSUE,
+    reportId: REPORT_ID,
+    dataDigest: digest,
+    revision,
+    supersedes: revision > 1 ? revision - 1 : null,
+  });
+  await j1.reserve(t("1".repeat(64), 1));
+  clock += 60_000; // one minute of measured admission time
+  await j1.recordEffect(
+    REPORT_ID,
+    "REMOTE_SAME",
+    { attempts: 1, lastHttpStatus: null, outcomeState: "PUBLISHED" },
+    1,
+  );
+  // A new journal instance 11 minutes after first admission: past the deadline.
+  const j2 = new RecoveryJournal(
+    dir,
+    { ...DEFAULT_BUDGETS, post: 3, getPage: 50, wallMs: 10 * 60_000, cycles: 3 },
+    () => clock + 11 * 60_000,
+  );
+  await assert.rejects(j2.reserve(t("2".repeat(64), 2)), isRefusal("WALL_BUDGET_EXHAUSTED"));
+  // And accumulated measured time beyond the budget also refuses.
+  const j3 = new RecoveryJournal(
+    dir,
+    { ...DEFAULT_BUDGETS, post: 3, getPage: 50, wallMs: 90_000, cycles: 3 },
+    () => clock + 5 * 60_000,
+  );
+  await assert.rejects(j3.reserve(t("3".repeat(64), 2)), isRefusal("WALL_BUDGET_EXHAUSTED"));
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R1: governed integration publishes once and journals terminal with page charges", async () => {
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir);
+  const client = new ListClient();
+  const hooks = recoveryHooks(journal, REPORT_ID, 1);
+  const o = await publishReport(client, {
+    repo: REPO,
+    issue: ISSUE,
+    body: bodyFor(),
+    publish: true,
+    sleep: noSleep,
+    publicationContext: { kind: "governed_outbox", hooks },
+  });
+  assert.equal(o.state, "PUBLISHED");
+  assert.equal(client.creates, 1);
+  const rec = await journal.load(REPORT_ID);
+  assert.equal(rec.state, "TERMINAL");
+  assert.equal(rec.effect, "REMOTE_SAME");
+  const pages = JSON.parse(
+    await readFile(join(dir, `${reportIdHash(REPORT_ID)}.pages.json`), "utf8"),
+  ) as { getPage: number };
+  assert.ok(pages.getPage >= 2, "every physical GET page was charged");
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R1: torn IN_FLIGHT is UNKNOWN/HELD, GET-only reconciliation, zero POST", async () => {
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir);
+  await (
+    await journal.reserve({
+      repo: REPO,
+      issue: ISSUE,
+      reportId: REPORT_ID,
+      dataDigest: "d".repeat(64),
+    })
+  ).token;
+  // Simulate the crash: a NEW journal instance (no live nonce) sees IN_FLIGHT.
+  const fresh = new RecoveryJournal(dir);
+  const client = new ListClient();
+  const o = await publishReport(client, {
+    repo: REPO,
+    issue: ISSUE,
+    body: bodyFor(),
+    publish: true,
+    sleep: noSleep,
+    publicationContext: { kind: "governed_outbox", hooks: recoveryHooks(fresh, REPORT_ID, 1) },
+  });
+  assert.equal(o.state, "NOT_PUBLISHED");
+  if (o.state === "NOT_PUBLISHED") {
+    assert.match(o.reason, /^PRE_POST_RESERVATION_REFUSED/);
+  }
+  assert.equal(o.effectMeta?.effect, "PROVEN_NOT_SENT");
+  assert.ok(client.lists >= 1);
+  assert.equal(client.creates, 0);
+  const projection = await fresh.projectRecovery(REPORT_ID, 1);
+  assert.equal(projection.state, "UNKNOWN");
+  assert.equal(projection.last_cause, "JOURNAL_TORN_IN_FLIGHT");
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R1: ambiguous transport persists UNKNOWN-terminal with a single POST", async () => {
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir);
+  const client = new ListClient();
+  client.failCreates.push(new Error("network: connection reset"));
+  const o = await publishReport(client, {
+    repo: REPO,
+    issue: ISSUE,
+    body: bodyFor(),
+    publish: true,
+    sleep: noSleep,
+    publicationContext: { kind: "governed_outbox", hooks: recoveryHooks(journal, REPORT_ID, 1) },
+  });
+  assert.equal(o.state, "NOT_PUBLISHED");
+  assert.equal(o.effectMeta?.effect, "SENT_OR_MAY_HAVE_SENT");
+  assert.equal(client.creates, 1);
+  const rec = await journal.load(REPORT_ID);
+  assert.equal(rec.state, "TERMINAL");
+  assert.equal(rec.effect, "SENT_OR_MAY_HAVE_SENT");
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R1: A21 resource errors classify to bounded tokens, never raw text", () => {
+  assert.equal(
+    classifyRecoveryError(Object.assign(new Error("x"), { code: "ENOSPC" })),
+    "A21_DISK_FULL",
+  );
+  assert.equal(
+    classifyRecoveryError(Object.assign(new Error("x"), { code: "EDQUOT" })),
+    "A21_DISK_FULL",
+  );
+  assert.equal(
+    classifyRecoveryError(Object.assign(new Error("x"), { code: "EBUSY" })),
+    "A21_STALE_LOCK",
+  );
+  assert.equal(classifyRecoveryError(new Error("spool: whatever /raw/path")), "UNKNOWN_CAUSE");
+});
+
+test("B2 R3: a lost/reset ledger never restarts the wall budget (cross-revision reset)", async () => {
+  const dir = await tmpDir();
+  let clock = 1_000_000;
+  const budgets = { ...DEFAULT_BUDGETS, post: 3, getPage: 50, wallMs: 10 * 60_000, cycles: 3 };
+  const j1 = new RecoveryJournal(dir, budgets, () => clock);
+  await j1.reserve({ repo: REPO, issue: ISSUE, reportId: REPORT_ID, dataDigest: "1".repeat(64) });
+  clock += 1000;
+  await j1.recordEffect(
+    REPORT_ID,
+    "REMOTE_SAME",
+    { attempts: 1, lastHttpStatus: null, outcomeState: "PUBLISHED" },
+    1,
+  );
+  // The reviewer's counterexample: the budget ledger AND pages sidecar are lost,
+  // then a new process admits revision 2 eleven minutes later.
+  const { rm: rmFile } = await import("node:fs/promises");
+  await rmFile(join(dir, `${reportIdHash(REPORT_ID)}.budget.json`), { force: true });
+  await rmFile(join(dir, `${reportIdHash(REPORT_ID)}.pages.json`), { force: true });
+  clock += 11 * 60_000;
+  const j2 = new RecoveryJournal(dir, budgets, () => clock);
+  await assert.rejects(
+    j2.reserve({
+      repo: REPO,
+      issue: ISSUE,
+      reportId: REPORT_ID,
+      dataDigest: "2".repeat(64),
+      revision: 2,
+      supersedes: 1,
+    }),
+    isRefusal("WALL_BUDGET_UNPROVED"),
+  );
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R3: a legacy ledger without started_at_ms and prior posts fails closed", async () => {
+  const dir = await tmpDir();
+  let clock = 2_000_000;
+  const budgets = { ...DEFAULT_BUDGETS, post: 3, getPage: 50, wallMs: 10 * 60_000, cycles: 3 };
+  const j1 = new RecoveryJournal(dir, budgets, () => clock);
+  await j1.reserve({ repo: REPO, issue: ISSUE, reportId: REPORT_ID, dataDigest: "1".repeat(64) });
+  clock += 1000;
+  await j1.recordEffect(
+    REPORT_ID,
+    "REMOTE_SAME",
+    { attempts: 1, lastHttpStatus: null, outcomeState: "PUBLISHED" },
+    1,
+  );
+  // Legacy-shape ledger: counters survived, the wall anchor field did not.
+  const { writeFile: wf } = await import("node:fs/promises");
+  await wf(
+    join(dir, `${reportIdHash(REPORT_ID)}.budget.json`),
+    JSON.stringify({ post: 1, getPage: 0, wallMs: 0, cycles: 1 }),
+    "utf8",
+  );
+  const j2 = new RecoveryJournal(dir, budgets, () => clock + 5_000);
+  await assert.rejects(
+    j2.reserve({
+      repo: REPO,
+      issue: ISSUE,
+      reportId: REPORT_ID,
+      dataDigest: "2".repeat(64),
+      revision: 2,
+      supersedes: 1,
+    }),
+    isRefusal("WALL_BUDGET_UNPROVED"),
+  );
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R3: intact anchor still admits an in-budget later revision (no over-blocking)", async () => {
+  const dir = await tmpDir();
+  let clock = 3_000_000;
+  const budgets = { ...DEFAULT_BUDGETS, post: 3, getPage: 50, wallMs: 10 * 60_000, cycles: 3 };
+  const j1 = new RecoveryJournal(dir, budgets, () => clock);
+  await j1.reserve({ repo: REPO, issue: ISSUE, reportId: REPORT_ID, dataDigest: "1".repeat(64) });
+  clock += 60_000;
+  await j1.recordEffect(
+    REPORT_ID,
+    "REMOTE_SAME",
+    { attempts: 1, lastHttpStatus: null, outcomeState: "PUBLISHED" },
+    1,
+  );
+  clock += 60_000; // 2 minutes since first admission: inside the 10-minute budget
+  const j2 = new RecoveryJournal(dir, budgets, () => clock);
+  const rev2 = await j2.reserve({
+    repo: REPO,
+    issue: ISSUE,
+    reportId: REPORT_ID,
+    dataDigest: "2".repeat(64),
+    revision: 2,
+    supersedes: 1,
+  });
+  assert.ok(rev2.token.length > 0);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R3 P2: an entry that fails canonicalization is skipped and holds the source", async () => {
+  // JSON.parse succeeds, but the integer exceeds the JCS-safe range, so
+  // canonicalDigest(e) throws -> "entry not canonicalizable" (Spool.replay class).
+  const dir = await tmpDir();
+  const journal = new RecoveryJournal(dir);
+  const line = '{"d":"' + "9".repeat(64) + '","e":{"n":9007199254740993}}' + NEWLINE;
+  const ev = computeChainEvidence(validSpool(1) + line);
+  assert.deepEqual(ev.skipped, [{ line: 2, reason: "entry not canonicalizable" }]);
+  await journal.attachReplayEvidence(REPORT_ID, ev);
+  const rec = await journal.load(REPORT_ID);
+  assert.equal(rec.state, "HELD");
+  assert.equal(rec.last_cause, "SOURCE_UNPROVED");
+  assert.ok(rec.replay_skipped.includes("line2:entry not canonicalizable"));
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R4: GET budget 1 — grant persists; a deleted sidecar never restarts counting", async () => {
+  const dir = await tmpDir();
+  const cap1 = new RecoveryJournal(dir, {
+    ...DEFAULT_BUDGETS,
+    getPage: 1,
+    post: 3,
+    wallMs: 600_000,
+    cycles: 3,
+  });
+  // First GET of a fresh report: granted and persisted on sidecar AND ledger.
+  assert.deepEqual(await cap1.chargeForPage("fresh-report", 1), { granted: true });
+  const sidecar = JSON.parse(
+    await readFile(join(dir, `${reportIdHash("fresh-report")}.pages.json`), "utf8"),
+  ) as { getPage: number };
+  assert.equal(sidecar.getPage, 1);
+  const ledger = JSON.parse(
+    await readFile(join(dir, `${reportIdHash("fresh-report")}.budget.json`), "utf8"),
+  ) as { getPage: number };
+  assert.equal(ledger.getPage, 1, "charge history is mirrored on the ledger");
+  // Delete the sidecar: the second GET must refuse, not recount from zero.
+  const { rm: rmFile } = await import("node:fs/promises");
+  await rmFile(join(dir, `${reportIdHash("fresh-report")}.pages.json`), { force: true });
+  assert.deepEqual(await cap1.chargeForPage("fresh-report", 1), { granted: false });
+  const again = new RecoveryJournal(dir, {
+    ...DEFAULT_BUDGETS,
+    getPage: 1,
+    post: 3,
+    wallMs: 600_000,
+    cycles: 3,
+  });
+  assert.deepEqual(await again.chargeForPage("fresh-report", 1), { granted: false });
+  // A genuinely fresh report (no files at all) still gets its first GET granted.
+  assert.deepEqual(await again.chargeForPage("another-fresh-report", 1), { granted: true });
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R4: a rewound sidecar below the mirrored history refuses", async () => {
+  const dir = await tmpDir();
+  const j = new RecoveryJournal(dir, {
+    ...DEFAULT_BUDGETS,
+    getPage: 5,
+    post: 3,
+    wallMs: 600_000,
+    cycles: 3,
+  });
+  for (let i = 0; i < 3; i++) await j.chargeForPage("rewind", 1);
+  // Roll the sidecar back below the ledger-mirrored count of 3.
+  const { writeFile: wf } = await import("node:fs/promises");
+  await wf(
+    join(dir, `${reportIdHash("rewind")}.pages.json`),
+    JSON.stringify({ getPage: 0 }),
+    "utf8",
+  );
+  assert.deepEqual(await j.chargeForPage("rewind", 1), { granted: false });
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R5: concurrent cross-instance charges grant exactly the budget, counters never regress", async () => {
+  const dir = await tmpDir();
+  const budgets = { ...DEFAULT_BUDGETS, getPage: 3, post: 3, wallMs: 600_000, cycles: 3 };
+  const j1 = new RecoveryJournal(dir, budgets);
+  const j2 = new RecoveryJournal(dir, budgets);
+  const j3 = new RecoveryJournal(dir, budgets);
+  // Six concurrent page charges across three instances; budget is exactly 3.
+  const grants = await Promise.all(
+    Array.from({ length: 6 }, (_, i) =>
+      (i % 3 === 0 ? j1 : i % 3 === 1 ? j2 : j3).chargeForPage("concurrent-get", 1),
+    ),
+  );
+  assert.equal(
+    grants.filter((g) => g.granted).length,
+    3,
+    "exactly the budget is granted, no lost updates",
+  );
+  const ledger = JSON.parse(
+    await readFile(join(dir, `${reportIdHash("concurrent-get")}.budget.json`), "utf8"),
+  ) as { getPage: number };
+  assert.equal(ledger.getPage, 3, "ledger mirror equals the granted count");
+  const sidecar = JSON.parse(
+    await readFile(join(dir, `${reportIdHash("concurrent-get")}.pages.json`), "utf8"),
+  ) as { getPage: number };
+  assert.equal(sidecar.getPage, 3);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R5: reserve racing page charges loses neither the POST nor the GET counter", async () => {
+  const dir = await tmpDir();
+  const budgets = { ...DEFAULT_BUDGETS, getPage: 5, post: 3, wallMs: 600_000, cycles: 3 };
+  const j1 = new RecoveryJournal(dir, budgets);
+  const j2 = new RecoveryJournal(dir, budgets);
+  const target = {
+    repo: REPO,
+    issue: ISSUE,
+    reportId: "race-post-get",
+    dataDigest: "1".repeat(64),
+  };
+  // One admission races two page charges from another instance.
+  const [, g1, g2] = await Promise.all([
+    j1.reserve(target),
+    j2.chargeForPage("race-post-get", 1),
+    j2.chargeForPage("race-post-get", 1),
+  ]);
+  assert.equal(g1.granted, true);
+  assert.equal(g2.granted, true);
+  const ledger = JSON.parse(
+    await readFile(join(dir, `${reportIdHash("race-post-get")}.budget.json`), "utf8"),
+  ) as { post: number; getPage: number; started_at_ms: number | null };
+  assert.equal(ledger.post, 1, "the admission survived the concurrent GET charges");
+  assert.equal(ledger.getPage, 2, "the GET charges survived the concurrent admission");
+  assert.ok(typeof ledger.started_at_ms === "number", "the wall anchor survived");
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("B2 R5: recordEffect racing page charges keeps both wallMs and getPage", async () => {
+  const dir = await tmpDir();
+  let clock = 5_000_000;
+  const budgets = { ...DEFAULT_BUDGETS, getPage: 5, post: 3, wallMs: 600_000, cycles: 3 };
+  const j1 = new RecoveryJournal(dir, budgets, () => clock);
+  const reportId = "race-wall-get";
+  await j1.reserve({ repo: REPO, issue: ISSUE, reportId, dataDigest: "1".repeat(64) });
+  clock += 1000;
+  const j2 = new RecoveryJournal(dir, budgets, () => clock);
+  await Promise.all([
+    j1.recordEffect(reportId, "REMOTE_SAME", {
+      attempts: 1,
+      lastHttpStatus: null,
+      outcomeState: "PUBLISHED",
+    }),
+    j2.chargeForPage(reportId, 1),
+    j2.chargeForPage(reportId, 1),
+  ]);
+  const ledger = JSON.parse(
+    await readFile(join(dir, `${reportIdHash(reportId)}.budget.json`), "utf8"),
+  ) as { getPage: number; wallMs: number };
+  assert.equal(ledger.getPage, 2);
+  assert.ok(ledger.wallMs >= 1000, "the measured wall charge survived the racing GET charges");
+  await rm(dir, { recursive: true, force: true });
+});

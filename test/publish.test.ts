@@ -207,7 +207,7 @@ describe("publishReport", () => {
     assert.ok(c.lists >= 3);
   });
 
-  it("429 with Retry-After=7 sleeps 7s then succeeds", async () => {
+  it("B1 429 with Retry-After=7 honours the delay once, then stops the same-call POST", async () => {
     const c = new FakeClient();
     c.createErrors = [new GitHubHttpError(429, "slow down", 7)];
     const sleeps: number[] = [];
@@ -216,12 +216,14 @@ describe("publishReport", () => {
         sleeps.push(ms);
       },
     });
-    assert.equal(r.state, "PUBLISHED");
+    assert.equal(r.state, "NOT_PUBLISHED");
+    assert.match((r as { reason: string }).reason, /^AMBIGUOUS_TRANSPORT/);
     assert.deepEqual(sleeps, [7000]);
-    assert.equal(c.comments.length, 1);
+    assert.equal(c.creates, 1);
+    assert.equal(c.comments.length, 0);
   });
 
-  it("exponential backoff without Retry-After starts at 1s", async () => {
+  it("B1 backoff without Retry-After starts at 1s for the reconciliation wait, then stops", async () => {
     const c = new FakeClient();
     c.createErrors = [new GitHubHttpError(502, "bad gateway"), new GitHubHttpError(503, "x")];
     const sleeps: number[] = [];
@@ -230,8 +232,10 @@ describe("publishReport", () => {
         sleeps.push(ms);
       },
     });
-    assert.equal(r.state, "PUBLISHED");
-    assert.deepEqual(sleeps, [1000, 2000]);
+    assert.equal(r.state, "NOT_PUBLISHED");
+    assert.deepEqual(sleeps, [1000]);
+    // Only the first physical POST happened; the queued second error is never reached.
+    assert.equal(c.creates, 1);
   });
 
   it("lost ACK: create stores the comment then throws a network error -> exactly one comment", async () => {
@@ -243,13 +247,15 @@ describe("publishReport", () => {
     assert.equal(c.creates, 1);
   });
 
-  it("persistent 503 gives NOT_PUBLISHED after maxRetries with bounded attempts", async () => {
+  it("B1 persistent 503 stops after exactly one ambiguous POST attempt", async () => {
     const c = new FakeClient();
     c.createErrors = Array.from({ length: 50 }, () => new GitHubHttpError(503, "down"));
     const r = await run(c, bodyFor(), { maxRetries: 2 });
     assert.equal(r.state, "NOT_PUBLISHED");
-    assert.equal(c.creates, 3);
+    assert.equal(c.creates, 1);
     assert.equal(c.comments.length, 0);
+    const meta = (r as { effectMeta?: { effect: string } }).effectMeta;
+    assert.equal(meta?.effect, "SENT_OR_MAY_HAVE_SENT");
   });
 
   it("422 is NOT_PUBLISHED immediately; plain 403 is not retried", async () => {

@@ -11,7 +11,8 @@
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
     "sync-plugins": "node scripts/sync-plugin-shared.mjs",
-    "test": "node --test \"test/**/*.test.ts\""
+    "test": "node --test \"test/**/*.test.ts\"",
+    "doctor": "node src/cli.ts doctor --catalog"
   },
   "dependencies": {
     "ajv": "8.20.0",

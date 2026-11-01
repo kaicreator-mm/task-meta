@@ -383,3 +383,146 @@ export interface TaskBinding {
   /** Why the binding is AMBIGUOUS/UNRESOLVED (bounded, no content). */
   reasons: string[];
 }
+
+// ---- v0.4 T0: versioned private evidence/quality and safe effect vocabulary. ----
+// These types are NOT fields in ADS public v4/v5 reports. Existing v0.3 source
+// records remain readable; consumers opt in to these separate private facts.
+
+/** Not-observed is never proof of non-instrumentation or proof of zero events. */
+export type MissingReason =
+  | "NOT_INSTRUMENTED"
+  | "HOST_EVENT_NOT_OBSERVED"
+  | "ADAPTER_FAILURE"
+  | "UNBOUND"
+  | "SOURCE_DROPPED"
+  | "CLOCK_UNTRUSTED"
+  | "OUT_OF_SCOPE"
+  | "UNKNOWN";
+
+export type EvidenceLevel =
+  | "SOURCE_ONLY"
+  | "HOOK_FIXTURE"
+  | "REAL_AGENT_CLI"
+  | "REAL_HOST_GITHUB"
+  | "DESKTOP_ONLY"
+  | "REAL_TALLY_APP";
+
+export type CoverageKind = "CONDITIONAL" | "ABSOLUTE";
+export type PrivateDiagnosticVersion = "task-meta/private-diagnostics/v1";
+
+/** Private, source-qualified fact: epistemic and missing_reason are orthogonal. */
+export interface DiagnosticFact {
+  schema: PrivateDiagnosticVersion;
+  source_ref: string;
+  source_revision: number;
+  agent: "zcode" | "claude" | "codex";
+  plugin_version: string | null;
+  host_class: string | null;
+  evidence_level: EvidenceLevel;
+  epistemic: Epistemic;
+  missing_reason: MissingReason | null;
+  clock: { domain: string; precision: string; synchronized: boolean | null };
+}
+
+/** Numerator/denominator are null if unproved; an observed-only cohort is conditional. */
+export interface CaptureQuality {
+  schema: PrivateDiagnosticVersion;
+  metric_name:
+    | "binding"
+    | "tool_pair"
+    | "lifecycle"
+    | "token_cost_basis"
+    | "publication_reconciliation"
+    | "verifier_source";
+  numerator: number | null;
+  denominator: number | null;
+  denominator_source_refs: string[];
+  coverage_kind: CoverageKind;
+  eligible_scope_ref: string | null;
+  capability_ref: string | null;
+  reason: MissingReason | null;
+  epistemic: Epistemic;
+  source_refs: string[];
+  comparability: "COMPARABLE" | "NOT_COMPARABLE" | "UNKNOWN";
+  limits: string[];
+}
+
+/**
+ * Private transport-effect certainty, NOT an HTTP status and NOT a GitHub
+ * permission decision. A complete zero-match native readback after a delayed
+ * POST does NOT prove PROVEN_NOT_SENT. No caller may re-POST on uncertainty.
+ */
+export type PostEffect =
+  | "PROVEN_NOT_SENT"
+  | "REMOTE_SAME"
+  | "REMOTE_DIFFERENT_OR_DAMAGED"
+  | "SENT_OR_MAY_HAVE_SENT";
+
+/**
+ * T0-shared vocabulary only: B2 exclusively owns persisted Outbox transitions,
+ * journal CAS and mapping of legacy FAILED to modern conservative states.
+ * JOURNAL_INCOMPLETE is journal-integrity evidence, never a PostEffect or proof
+ * of non-send. B2 must persist its conservative UNKNOWN/HELD projection and
+ * prove zero follow-on POST after damaged/missing journal data (even when an
+ * older PENDING survives or remote readback is empty). T0's pure classifier
+ * neither reads journals nor verifies those persistence/runtime guarantees.
+ */
+export type PrivatePublicationStatus =
+  | "PENDING"
+  | "IN_FLIGHT"
+  | "PUBLISHED"
+  | "ALREADY_PUBLISHED"
+  | "DENIED"
+  | "CONFLICT"
+  | "HELD"
+  | "UNKNOWN"
+  | "JOURNAL_INCOMPLETE"
+  | "FAILED_PROVEN_PRE_SEND";
+
+/** Classification is a pure evidence projection, never a grant or retry action. */
+export interface PostEffectAssessment {
+  effect: PostEffect;
+  status: PrivatePublicationStatus;
+  /** May be reconsidered ONLY with fresh permission and positive non-send proof. */
+  fresh_admission_required: boolean;
+  /** Uncertain effect: reconciliation-only; no physical POST. */
+  reconciliation_only: boolean;
+}
+
+/**
+ * Classify externally justified effect evidence, without touching the network.
+ * For PROVEN_NOT_SENT the caller still needs positive proof + new admission;
+ * this function never authorizes transport just by returning that label.
+ */
+export function assessPostEffect(effect: PostEffect): PostEffectAssessment {
+  switch (effect) {
+    case "PROVEN_NOT_SENT":
+      return {
+        effect,
+        status: "FAILED_PROVEN_PRE_SEND",
+        fresh_admission_required: true,
+        reconciliation_only: false,
+      };
+    case "REMOTE_SAME":
+      return {
+        effect,
+        status: "ALREADY_PUBLISHED",
+        fresh_admission_required: false,
+        reconciliation_only: false,
+      };
+    case "REMOTE_DIFFERENT_OR_DAMAGED":
+      return {
+        effect,
+        status: "CONFLICT",
+        fresh_admission_required: false,
+        reconciliation_only: true,
+      };
+    case "SENT_OR_MAY_HAVE_SENT":
+      return {
+        effect,
+        status: "UNKNOWN",
+        fresh_admission_required: false,
+        reconciliation_only: true,
+      };
+  }
+}

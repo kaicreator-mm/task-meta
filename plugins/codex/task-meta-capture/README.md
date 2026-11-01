@@ -78,7 +78,7 @@ nothing and logs only an error class name to `_errors.log`. Use it with
 
 ## Install / remove — verify the actual Host command first
 
-**VERIFY_AT_RUNTIME:** the following command is an *earlier installation example*,
+**VERIFY_AT_RUNTIME:** the following command is an _earlier installation example_,
 not a confirmed command on every `codex` CLI build. Check the exact executable's
 `codex --help` and `codex plugin --help` before using any subcommand:
 
