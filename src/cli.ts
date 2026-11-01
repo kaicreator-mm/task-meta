@@ -151,14 +151,16 @@ async function runDoctorCli(rest: string[], out: (s: string) => void): Promise<n
     throw new UsageError("doctor requires exactly one of --catalog or --input <file>");
   }
   if (catalog) {
-    out(`${JSON.stringify({
-      mode: "CATALOG_ONLY",
-      evidence: "NOT_RUN",
-      catalog: DIAGNOSTIC_CATALOG,
-      network_used: false,
-      writes_performed: [],
-      repairs_performed: [],
-    })}\n`);
+    out(
+      `${JSON.stringify({
+        mode: "CATALOG_ONLY",
+        evidence: "NOT_RUN",
+        catalog: DIAGNOSTIC_CATALOG,
+        network_used: false,
+        writes_performed: [],
+        repairs_performed: [],
+      })}\n`,
+    );
     return EXIT.OK;
   }
 
@@ -206,11 +208,21 @@ async function runDoctorCli(rest: string[], out: (s: string) => void): Promise<n
     return v;
   };
   const statuses = new Set([
-    "PENDING", "IN_FLIGHT", "PUBLISHED", "ALREADY_PUBLISHED", "DENIED",
-    "CONFLICT", "HELD", "UNKNOWN", "JOURNAL_INCOMPLETE", "FAILED_PROVEN_PRE_SEND",
+    "PENDING",
+    "IN_FLIGHT",
+    "PUBLISHED",
+    "ALREADY_PUBLISHED",
+    "DENIED",
+    "CONFLICT",
+    "HELD",
+    "UNKNOWN",
+    "JOURNAL_INCOMPLETE",
+    "FAILED_PROVEN_PRE_SEND",
   ]);
   const effects = new Set([
-    "PROVEN_NOT_SENT", "REMOTE_SAME", "REMOTE_DIFFERENT_OR_DAMAGED",
+    "PROVEN_NOT_SENT",
+    "REMOTE_SAME",
+    "REMOTE_DIFFERENT_OR_DAMAGED",
     "SENT_OR_MAY_HAVE_SENT",
   ]);
   const input: DoctorInput = {
@@ -236,7 +248,11 @@ async function runDoctorCli(rest: string[], out: (s: string) => void): Promise<n
       if (inside !== null && inside !== true && inside !== false) {
         throw new UsageError("doctor path evidence must be typed");
       }
-      return { path: `path:${i + 1}`, is_symlink: boolean(e.is_symlink), target_inside_repo: inside };
+      return {
+        path: `path:${i + 1}`,
+        is_symlink: boolean(e.is_symlink),
+        target_inside_repo: inside,
+      };
     }),
     credentials: list("credentials").map((v, i) => {
       const e = object(v);
@@ -269,13 +285,15 @@ async function runDoctorCli(rest: string[], out: (s: string) => void): Promise<n
     }),
   };
   const report = runDoctor(input);
-  out(`${JSON.stringify({
-    mode: "PRECLASSIFIED_EVIDENCE_ONLY",
-    evidence: "SOURCE_ONLY",
-    missing_fields: fields.filter((field) => record[field] === undefined),
-    limits: ["No live repo/Host/Agent scan performed", "Missing evidence is not a PASS"],
-    ...report,
-  })}\n`);
+  out(
+    `${JSON.stringify({
+      mode: "PRECLASSIFIED_EVIDENCE_ONLY",
+      evidence: "SOURCE_ONLY",
+      missing_fields: fields.filter((field) => record[field] === undefined),
+      limits: ["No live repo/Host/Agent scan performed", "Missing evidence is not a PASS"],
+      ...report,
+    })}\n`,
+  );
   return EXIT.OK;
 }
 
