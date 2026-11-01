@@ -170,12 +170,16 @@ test("I R1 P2: every nested evidence array rejects extra fields and malformed ty
     }
     for (const [field, item] of samples) {
       const bad = { ...item } as Record<string, unknown>;
-      const key = field === "spool" ? "parse_ok" :
-        field === "hook_errors" ? "error_class" :
-        field === "paths" ? "target_inside_repo" :
-        field === "credentials" ? "looks_like_secret" :
-        field === "clients" ? "client" :
-        field === "publication_statuses" ? "status" : "effect";
+      const typeKey: Record<string, string> = {
+        spool: "parse_ok",
+        hook_errors: "error_class",
+        paths: "target_inside_repo",
+        credentials: "looks_like_secret",
+        clients: "client",
+        publication_statuses: "status",
+        post_effects: "effect",
+      };
+      const key = typeKey[field] as string;
       bad[key] = { raw_prompt: sentinel };
       await writeFile(file, JSON.stringify({ [field]: [bad] }));
       const invalid = await invoke(["doctor", "--input", file]);
