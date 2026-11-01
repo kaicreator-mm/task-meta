@@ -160,6 +160,53 @@ independent RQ reviewer must check this scoped currentness point before
 asserting `CANDIDATE_EXECUTOR_REAL_HOST_E2E=PASS`. The source-only
 and n=6 fixture-host gates remain independent.
 
+## 2.3 Exact v0.4 auto-report executor provenance and remaining integrated-session gap (2026-11-01)
+
+The [new local proof on Issue #74, comment 6559074967](https://github.com/kaicreator-mm/task-meta/issues/74#issuecomment-6559074967)
+resolves *which program was actually spawned* and also reveals an important
+isolation/configuration boundary:
+
+- **Prior successful headless session** `sess_851907fb…` did not set
+  `TASK_META_HOME`, so its Hook fell back to plugin
+  `config.json.taskMetaHome=~/.task-meta/app`. The local Host verified that
+  installed home is v0.3 source `9731b03e…` (and lacks `doctor --catalog`).
+  The previous `HELD / no issue reference` is a real CLI-origin publication
+  refusal by **v0.3**, not v0.4; its Headless Agent and Hook/Spool evidence
+  nevertheless remains genuine.
+- **New candidate executable positive, with a deliberate isolation mismatch:**
+  an actual headless ZCode CLI Agent EXIT 0 with response `RQ_V4`,
+  session `sess_f89b7c95-a9fa-4c15-8231-f6bcdf06e79b`,
+  `TASK_META_HOME=<candidate checkout>`, and separate
+  `TASK_META_ZCODE_SPOOL=<isolated v4-spool>`. The Host observed a **live
+  OS process** PID 11688 executing that candidate's
+  `src/cli.ts auto-report --agent zcode --session … --trigger stop`.
+  The checkout was pinned to exact `f355b87e…`. This is concrete candidate
+  executable **launch provenance**, not an inferred `--cwd` path.
+- **Why this is not the full same-session successful integration:** the Hook
+  writes to `TASK_META_ZCODE_SPOOL=<isolated v4-spool>`, while the
+  candidate executor reads the configured `config/auto-report.json`
+  `zcode.spool_dir=~/.task-meta/zcode-spool`. Consequently the candidate
+  returned `HELD / no hook spool entries for this session`,
+  `comment_url=null` (zero POST): a legitimate **fail-closed mismatch
+  negative**. It does not prove the candidate executor consumed the three
+  actual Spool events from that session.
+- Earlier candidate n=6 Hook ON/OFF fixture benchmark did configure isolated
+  Spool and Outbox consistently and observed candidate HELD; this is still
+  **HOOK_FIXTURE**, never a real installed Agent session.
+
+Current explicit level separation: `REAL_AGENT_CLI` Headless session and Hook
+**REPORTED PASS**; `AUTO_REPORT_V04_EXECUTOR_LAUNCH` **REPORTED PASS**;
+`CANDIDATE_V04_SINGLE_SESSION_HOOK_TO_OUTBOX_CONSUMPTION` **NOT_PROVEN**;
+candidate real session with mismatched Spool demonstrated **safe HELD**. A
+minimal remaining real Host check may reuse the isolated candidate checkout,
+keep `TASK_META_HOME` pinned and **align** Hook writer/auto-report reader
+Spool directories using permitted process-local environment/default paths
+(no source patch, no new global install); require a unique real CLI session,
+same Session ID at Spool and settled Outbox, `HELD` due only to absence of
+publication clearance/issue target, JCS digest and no POST. Reuse the existing
+licensed model quota if authorized, rather than rerunning unrelated tests.
+Independent whole-version RQ must not call the mismatched session full PASS.
+
 ## 3. Release qualification gates
 
 | Gate | Current state | Evidence / next action |
@@ -169,7 +216,7 @@ and n=6 fixture-host gates remain independent.
 | Product/L2/DAG and runtime adoption source pins | PASS (source readback) | Blob/pin values above |
 | Candidate Windows n≥5 Hook ON/OFF | REPORTED PASS (HOOK_FIXTURE) | n=6; primary local receipt #6555702454 |
 | Candidate safe recovery negative + privacy | REPORTED PASS (fixture scope) | 40/40; no real public POST |
-| Genuine installed ZCode headless CLI→Hook→Spool→Outbox + kill-switch | **REPORTED PASS (real CLI origin)** | #6557497316; positive and negative sessions, no POST; independent Host-verdict review outstanding |\n| Exact v0.4 auto-report executor/home source binding | **UNPROVEN / RQ CHECK** | Isolated CLI used candidate `--cwd`, but no `TASK_META_HOME`/spawned CLI SHA receipt; no silent currentness promotion |
+| Genuine installed ZCode headless CLI→Hook→Spool→Outbox + kill-switch | **REPORTED PASS (real CLI origin)** | #6557497316; positive and negative sessions, no POST; independent Host-verdict review outstanding |\n| Exact v0.4 auto-report executor/home source binding | **REPORTED PASS (live process path)** | #6559074967: PID 11688 spawned candidate `src/cli.ts`, `TASK_META_HOME` pinned; prior CLI HELD was v0.3 |\n| Candidate v0.4 true same-session CLI→Spool→Outbox consumption | **NOT_PROVEN / RQ BLOCKER** | #6559074967 candidate `HELD/no hook spool entries` from isolated Hook Spool vs default executor Spool mismatch; needs aligned-path real CLI evidence |
 | Independent whole-version exact-SHA RQ | **NOT_RUN / RELEASE BLOCKER** | Distinct reviewer must assess all mandatory scope |
 | Real GitHub production publishing | NOT_RUN; no unapproved POST | Never infer grant from `HELD` |
 | Actual Tally consumer | NOT_RUN | Explicit boundary; no synthetic Tally PASS |
@@ -181,12 +228,14 @@ and n=6 fixture-host gates remain independent.
    ([Issue #74 comment 6555475885](https://github.com/kaicreator-mm/task-meta/issues/74#issuecomment-6555475885)).
    This evidence branch is **not** the candidate SHA; merging this documentation
    would create a *new version SHA* requiring source-currentness re-evaluation.
-2. Review the genuine headless ZCode CLI receipt #6557497316 as a **reported**
-   Agent-origin positive and kill-switch negative; verify the exact source identity
-   of the spawned task-meta auto-report executor on that live Host. The `--cwd`
-   checkout alone does not prove `TASK_META_HOME` and cannot serve as an executor
-   SHA receipt. If absent and required by RQ, collect minimal bounded local
-   evidence; never infer READY from an older home checkout.
+2. Review headless ZCode receipt #6557497316 and independent candidate
+   executor process-path proof #6559074967 as distinct scopes. They now
+   establish actual CLI-origin Hook capture and the candidate v0.4 executable
+   launch, respectively. The candidate session's intentionally isolated Hook
+   Spool and default executor Spool were mismatched, yielding expected HELD.
+   To qualify end-to-end same-session *consumption*, collect a minimal
+   process-local, aligned-Spool real CLI receipt; never infer READY from
+   either a v0.3 executor or a safe mismatch refusal.
 3. Perform distinct independent whole-version exact-source RQ (P0/P1/P2,
    READY/BLOCK) against an unchanged version SHA after all required Host evidence.
 4. Only a true READY may authorize a separate guarded `main` merge. Tag/public
