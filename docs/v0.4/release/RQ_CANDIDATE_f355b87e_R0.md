@@ -115,6 +115,51 @@ guaranteed to fix the error. Any isolated candidate CLI test must bind the
 exact task-meta version and use a genuinely available already-approved
 model entitlement; no unapproved paid requests.
 
+## 2.2 New headless ZCode CLI proof resolves the earlier CLI blocker (2026-11-01)
+
+The earlier **NOT_RUN** assertions in §2.1 are a time-bounded history of the
+failed CLI boot, **not the current status** after this later receipt.
+[Issue #74 comment 6557497316](https://github.com/kaicreator-mm/task-meta/issues/74#issuecomment-6557497316)
+reports a successful **genuine standalone/headless ZCode CLI** session
+on the same frozen candidate `f355b87e…` and Windows Node v24.21.0,
+using the already-authorized model quota.
+
+- Root cause of earlier EXIT=1: a 3.14.3 CLI process inherited
+  `ZCODE_BUILTIN_PROVIDER_CONFIG_FILE` pointing at a non-existent Desktop
+  3.16.3 provider configuration. Removing this inherited environment override
+  **for the isolated child** allowed the unchanged official 3.14.3 CLI bundle
+  to perform its own provider selection. No descriptor, user config, trust
+  validator, CLI launcher or plugin was rewritten.
+- Positive: actual headless `bin/zcode.mjs -p` EXIT=0, model response
+  `RQ_OK`; session `sess_851907fb-7fa0-4704-a782-b757ba6b9b58`.
+  The real CLI automatically emitted **SessionStart×1, UserPromptSubmit×1,
+  Stop×1** to append-only JCS-digested ZCode Spool through the
+  candidate-byte-identical installed plugin (version 0.3.0). After normal
+  settling the Outbox recorded `HELD` / `no issue reference`;
+  **no unauthorized GitHub POST**. CLI-originated Hook and stop-to-outbox
+  observed by the local Host, not a synthetic Hook fixture or Desktop session.
+- Negative: second true CLI Agent session
+  `sess_006ae812-6f64-4e89-bc8e-d823d26282f5` EXIT=0 with
+  `TASK_META_AUTO_REPORT=0`; Spool captured the same three event categories,
+  **no new Outbox entry** after settle. This supplies a separate isolated
+  publication kill-switch negative.
+- Host reports privacy-safe metadata rather than a prompt/transcript or
+  secrets dump. Nonfatal provider-refresh warning
+  `invalid schema at providerRules.8…access.mode` remains recorded for vendor
+  follow-up; it did not prevent the observed session.
+
+**Evidence scope:** `REAL_AGENT_CLI=REPORTED_PASS` for real ZCode headless
+CLI→installed Hook→Spool→Outbox positive + kill-switch negative, based on
+Host receipts; Web has **not independently reproduced** those physical events.
+The actual auto-report executable/home was **not identified by exact source
+SHA in the receipt**. ZCode capture.mjs chooses `TASK_META_HOME` from the
+Hook process environment, otherwise plugin-local `config.json.taskMetaHome`.
+The headless command shows `--cwd` at the candidate checkout, which **does
+not by itself prove the detached auto-report executor used v0.4**. An
+independent RQ reviewer must check this scoped currentness point before
+asserting `CANDIDATE_EXECUTOR_REAL_HOST_E2E=PASS`. The source-only
+and n=6 fixture-host gates remain independent.
+
 ## 3. Release qualification gates
 
 | Gate | Current state | Evidence / next action |
@@ -124,7 +169,7 @@ model entitlement; no unapproved paid requests.
 | Product/L2/DAG and runtime adoption source pins | PASS (source readback) | Blob/pin values above |
 | Candidate Windows n≥5 Hook ON/OFF | REPORTED PASS (HOOK_FIXTURE) | n=6; primary local receipt #6555702454 |
 | Candidate safe recovery negative + privacy | REPORTED PASS (fixture scope) | 40/40; no real public POST |
-| Installed candidate Agent CLI session/Hook→Spool→Outbox | **NOT_RUN / RELEASE BLOCKER** | Standalone ZCode 3.14.3 agent boot failed; Desktop hook session is DESKTOP_ONLY, not Product A19 CLI acceptance |
+| Genuine installed ZCode headless CLI→Hook→Spool→Outbox + kill-switch | **REPORTED PASS (real CLI origin)** | #6557497316; positive and negative sessions, no POST; independent Host-verdict review outstanding |\n| Exact v0.4 auto-report executor/home source binding | **UNPROVEN / RQ CHECK** | Isolated CLI used candidate `--cwd`, but no `TASK_META_HOME`/spawned CLI SHA receipt; no silent currentness promotion |
 | Independent whole-version exact-SHA RQ | **NOT_RUN / RELEASE BLOCKER** | Distinct reviewer must assess all mandatory scope |
 | Real GitHub production publishing | NOT_RUN; no unapproved POST | Never infer grant from `HELD` |
 | Actual Tally consumer | NOT_RUN | Explicit boundary; no synthetic Tally PASS |
@@ -136,14 +181,15 @@ model entitlement; no unapproved paid requests.
    ([Issue #74 comment 6555475885](https://github.com/kaicreator-mm/task-meta/issues/74#issuecomment-6555475885)).
    This evidence branch is **not** the candidate SHA; merging this documentation
    would create a *new version SHA* requiring source-currentness re-evaluation.
-2. Resolve REAL_AGENT_CLI using a genuinely installed, candidate-qualified
-   Agent session with metadata-only event receipts and a fail-closed HELD Outbox,
-   under a separately valid model-use policy and explicitly authorized installation
-   changes, **or** obtain a specifically scoped release-owner waiver where
-   permitted by the frozen Product/L2 acceptance. Absent that, do not claim READY.
+2. Review the genuine headless ZCode CLI receipt #6557497316 as a **reported**
+   Agent-origin positive and kill-switch negative; verify the exact source identity
+   of the spawned task-meta auto-report executor on that live Host. The `--cwd`
+   checkout alone does not prove `TASK_META_HOME` and cannot serve as an executor
+   SHA receipt. If absent and required by RQ, collect minimal bounded local
+   evidence; never infer READY from an older home checkout.
 3. Perform distinct independent whole-version exact-source RQ (P0/P1/P2,
    READY/BLOCK) against an unchanged version SHA after all required Host evidence.
 4. Only a true READY may authorize a separate guarded `main` merge. Tag/public
    release is a separate subsequent gate.
 
-The current result is **R0 PREQUALIFICATION ONLY: HOLD**.
+The current result is **R0 PREQUALIFICATION ONLY: HOLD pending independent exact-candidate RQ and executor source qualification**.
