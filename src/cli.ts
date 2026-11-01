@@ -197,14 +197,25 @@ async function runDoctorCli(rest: string[], out: (s: string) => void): Promise<n
     }
     return v as unknown[];
   };
-  const object = (v: unknown): Record<string, unknown> => {
+  const object = (v: unknown, keys: readonly string[]): Record<string, unknown> => {
     if (v === null || typeof v !== "object" || Array.isArray(v)) {
       throw new UsageError("doctor evidence item has invalid shape");
     }
-    return v as Record<string, unknown>;
+    const item = v as Record<string, unknown>;
+    if (Object.keys(item).some((key) => !keys.includes(key))) {
+      throw new UsageError("doctor evidence item contains unsupported fields");
+    }
+    if (keys.some((key) => !Object.hasOwn(item, key))) {
+      throw new UsageError("doctor evidence item is missing required fields");
+    }
+    return item;
   };
   const boolean = (v: unknown): boolean => {
     if (typeof v !== "boolean") throw new UsageError("doctor requires typed evidence");
+    return v;
+  };
+  const string = (v: unknown): string => {
+    if (typeof v !== "string") throw new UsageError("doctor requires typed evidence");
     return v;
   };
   const statuses = new Set([
@@ -228,22 +239,25 @@ async function runDoctorCli(rest: string[], out: (s: string) => void): Promise<n
   const input: DoctorInput = {
     repo_root: "repo:redacted",
     spool: list("spool").map((v, i) => {
-      const e = object(v);
+      const e = object(v, ["path", "parse_ok"]);
+      string(e.path);
       return { path: `spool:${i + 1}`, parse_ok: boolean(e.parse_ok) };
     }),
     hook_errors: list("hook_errors").map((v) => {
-      const e = object(v);
+      const e = object(v, ["source", "error_class"]);
+      if (e.error_class !== null && typeof e.error_class !== "string") {
+        throw new UsageError("doctor requires typed evidence");
+      }
       if (e.source !== "TRUSTED_WITNESS" && e.source !== "RAW_LOG") {
         throw new UsageError("doctor hook source must be typed");
       }
-      if (e.source === "RAW_LOG") return { source: "RAW_LOG" as const, error_class: null };
-      return {
-        source: "TRUSTED_WITNESS" as const,
-        error_class: typeof e.error_class === "string" ? e.error_class : null,
-      };
+      // A JSON assertion of TRUSTED_WITNESS is not source-backed authority.
+      // No externally supplied class token may be reflected into a diagnostic.
+      return { source: "RAW_LOG" as const, error_class: null };
     }),
     paths: list("paths").map((v, i) => {
-      const e = object(v);
+      const e = object(v, ["path", "is_symlink", "target_inside_repo"]);
+      string(e.path);
       const inside = e.target_inside_repo;
       if (inside !== null && inside !== true && inside !== false) {
         throw new UsageError("doctor path evidence must be typed");
@@ -255,20 +269,23 @@ async function runDoctorCli(rest: string[], out: (s: string) => void): Promise<n
       };
     }),
     credentials: list("credentials").map((v, i) => {
-      const e = object(v);
+      const e = object(v, ["name", "looks_like_secret"]);
+      string(e.name);
       return { name: `credential:${i + 1}`, looks_like_secret: boolean(e.looks_like_secret) };
     }),
     clients: list("clients").map((v) => {
-      const e = object(v);
+      const e = object(v, ["client", "help_output_available"]);
+      const client = string(e.client);
       return {
-        client: ["codex", "claude", "zcode"].includes(e.client as string)
-          ? (e.client as string)
+        client: ["codex", "claude", "zcode"].includes(client)
+          ? client
           : "unsupported",
         help_output_available: boolean(e.help_output_available),
       };
     }),
     publication_statuses: list("publication_statuses").map((v, i) => {
-      const e = object(v);
+      const e = object(v, ["status", "target_ref"]);
+      string(e.target_ref);
       if (!statuses.has(e.status as string)) throw new UsageError("doctor status unknown");
       return {
         status: e.status as DoctorInput["publication_statuses"][number]["status"],
@@ -276,7 +293,8 @@ async function runDoctorCli(rest: string[], out: (s: string) => void): Promise<n
       };
     }),
     post_effects: list("post_effects").map((v, i) => {
-      const e = object(v);
+      const e = object(v, ["effect", "target_ref"]);
+      string(e.target_ref);
       if (!effects.has(e.effect as string)) throw new UsageError("doctor effect unknown");
       return {
         effect: e.effect as DoctorInput["post_effects"][number]["effect"],
