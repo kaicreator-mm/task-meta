@@ -108,3 +108,7 @@ P0_P1_P2_AND_INDEPENDENT_REVIEW=<distinct review or NOT_RUN>
 ```
 
 Record a useful discovery once with its exact binary/version/OS, path/source proof, exit code and failure remedy in the Skill PR or a subsequent small Skill-only PR. Reuse prior evidence when exact subject is unchanged; **never repeatedly explore GUI or invent CLI abilities**. Before modifying this Skill, independently check its two Agent discovery entrypoints, the live plugin manifests and the frozen ADS policy.
+
+## v0.4 I — read-only central Doctor CLI
+
+`node src/cli.ts doctor --catalog` (or `npm run doctor`) enumerates the one A1 typed catalog. `node src/cli.ts doctor --input <preclassified-evidence.json>` accepts bounded, typed evidence arrays (`spool`, `hook_errors`, `paths`, `credentials`, `clients`, `publication_statuses`, `post_effects`), sanitizes all user-controlled identifiers to opaque references and runs only A1's pure `runDoctor`. This does **not** scan a real repository, read secrets, install plugins, collect real Hook/Agent evidence, change Outbox, or grant GitHub publishing rights. It returns `SOURCE_ONLY` for supplied evidence, and any omitted field stays unknown. Unknown flags or invalid shapes fail closed without echoing input bytes or paths. Do not call synthetic Doctor output a verified `REAL_AGENT_CLI` result. Follow the existing CLI-first steps above for true installed Agent evidence; R #74 must recheck the exact release candidate separately from C2's pre-change baseline.
